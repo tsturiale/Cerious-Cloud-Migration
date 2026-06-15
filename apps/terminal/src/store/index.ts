@@ -8,6 +8,14 @@ import type {
   SimAlgoRole, SimOrderType,
 } from '../types'
 import { normalizeModel } from '../types'
+import {
+  calculateOpenFuturesPnl,
+  futuresContractSpecFor,
+  isKnownFuturesProduct,
+  isRawFuturesPriceValue,
+  resolveFuturesMultiplier,
+  type FuturesContractSpec,
+} from '../utils/futuresPnl'
 
 interface TerminalState {
   // Asset selection
@@ -163,33 +171,13 @@ const initRecord = <T>(v: T) => Object.fromEntries(ASSETS.map(a => [a, v])) as R
 const SIM_EXCHANGE = 'Sim Exchange' as const
 const MIN_SIM_TRADE_EVIDENCE = 2
 
-type SimProductSpec = {
-  tickSize: number
-  multiplier: number
-  tickValue: number
-}
-
-const SIM_PRODUCT_SPECS: Record<string, SimProductSpec> = {
-  ES: { tickSize: 0.25, multiplier: 50, tickValue: 12.5 },
-  NQ: { tickSize: 0.25, multiplier: 20, tickValue: 5 },
-  YM: { tickSize: 1, multiplier: 5, tickValue: 5 },
-  RTY: { tickSize: 0.1, multiplier: 50, tickValue: 5 },
-  CL: { tickSize: 0.01, multiplier: 1000, tickValue: 10 },
-  GC: { tickSize: 0.1, multiplier: 100, tickValue: 10 },
-  ZM: { tickSize: 0.1, multiplier: 100, tickValue: 10 },
-  ZS: { tickSize: 0.25, multiplier: 50, tickValue: 12.5 },
-  ES_NQ: { tickSize: 0.25, multiplier: 150, tickValue: 37.5 },
-  YM_ES: { tickSize: 1, multiplier: 15, tickValue: 15 },
-  RTY_ES: { tickSize: 0.1, multiplier: 350, tickValue: 35 },
-}
-
 function priceForOutcome(tick: PolyTradeTick, outcome: 'yes' | 'no'): number {
   if (tick.side === outcome) return tick.price
   return 100 - tick.price
 }
 
 function isRawFuturesPrice(price: number): boolean {
-  return Number.isFinite(price) && (price < 0 || price > 1)
+  return isRawFuturesPriceValue(price)
 }
 
 function bookUsesRawPrices(book: PolyBook | undefined, ticks?: PolyTradeTick[]): boolean {
@@ -207,27 +195,17 @@ function simDisplayPrice(price: number, rawPrices: boolean): number {
   return rawPrices ? price : cents(price)
 }
 
-function simProductSpec(marketKey: string, price?: number): SimProductSpec {
-  const spec = SIM_PRODUCT_SPECS[marketKey.toUpperCase()]
-  if (spec) return spec
-  const rawPrices = typeof price === 'number' && isRawFuturesPrice(price)
-  const tickSize = rawPrices ? 0.01 : 1
-  const multiplier = rawPrices ? 1 : 0.01
-  return { tickSize, multiplier, tickValue: tickSize * multiplier }
+function simProductSpec(marketKey: string, price?: number): FuturesContractSpec {
+  return futuresContractSpecFor(marketKey, price)
 }
 
 function simContractMultiplier(orderOrPosition: Pick<SimOrder | SimPosition | SimFill, 'marketKey' | 'multiplier'>, price: number): number {
-  if (Number.isFinite(orderOrPosition.multiplier ?? NaN) && Number(orderOrPosition.multiplier) > 0) {
-    return Number(orderOrPosition.multiplier)
-  }
-  return simProductSpec(orderOrPosition.marketKey, price).multiplier
+  return resolveFuturesMultiplier(orderOrPosition.marketKey, orderOrPosition.multiplier, price)
 }
 
 function simDollarPnl(marketKey: string, fromPrice: number, toPrice: number, size: number, multiplier?: number): number {
-  const appliedMultiplier = Number.isFinite(multiplier ?? NaN) && Number(multiplier) > 0
-    ? Number(multiplier)
-    : simProductSpec(marketKey, fromPrice).multiplier
-  return (toPrice - fromPrice) * size * appliedMultiplier
+  const appliedMultiplier = resolveFuturesMultiplier(marketKey, multiplier, fromPrice)
+  return calculateOpenFuturesPnl(fromPrice, toPrice, size, appliedMultiplier)
 }
 
 function finiteNumber(value: unknown): number | null {
@@ -241,7 +219,7 @@ function simPriceLabel(price: number): string {
 }
 
 function simUsesRawProduct(order: Pick<SimOrder, 'marketKey' | 'price' | 'multiplier'>): boolean {
-  return Boolean(SIM_PRODUCT_SPECS[order.marketKey.toUpperCase()])
+  return isKnownFuturesProduct(order.marketKey)
     || isRawFuturesPrice(order.price)
     || (Number.isFinite(order.multiplier ?? NaN) && Number(order.multiplier) > 1)
 }
@@ -657,6 +635,65 @@ function markOpenSimPositions(positions: SimPosition[], marketKey: string, tick:
   })
 }
 
+function signedExecutionPositionSize(direction: string, size: number): number {
+  const normalized = direction.toUpperCase()
+  if (normalized.includes('DOWN') || normalized.includes('SHORT') || normalized.includes('SELL')) return -Math.abs(size)
+  return Math.abs(size)
+}
+
+function executionPositionMatchesMarket(position: ExecutionPosition, marketKey: string): boolean {
+  return String(position.asset || '').trim().toUpperCase() === String(marketKey || '').trim().toUpperCase()
+}
+
+function markOpenExecutionPositionsToPrice(
+  positions: ExecutionPosition[],
+  marketKey: string,
+  markPrice: number | null,
+): ExecutionPosition[] {
+  if (markPrice === null || !Number.isFinite(markPrice)) return positions
+  let changed = false
+  const next = positions.map(position => {
+    if (!executionPositionMatchesMarket(position, marketKey) || /closed|filled|cancel/i.test(position.status)) return position
+    const entryPrice = Number(position.entry_price)
+    const contracts = signedExecutionPositionSize(position.direction, Number(position.size) || 0)
+    if (!Number.isFinite(entryPrice) || !Number.isFinite(contracts)) return position
+    const multiplier = resolveFuturesMultiplier(position.asset, (position as ExecutionPosition & { multiplier?: number }).multiplier, entryPrice)
+    const openPnl = calculateOpenFuturesPnl(entryPrice, markPrice, contracts, multiplier)
+    if (position.current_price === markPrice && position.unrealized_pnl === openPnl) return position
+    changed = true
+    return {
+      ...position,
+      current_price: markPrice,
+      unrealized_pnl: openPnl,
+    }
+  })
+  return changed ? next : positions
+}
+
+function markOpenExecutionPositionsFromBook(positions: ExecutionPosition[], marketKey: string, book: PolyBook): ExecutionPosition[] {
+  return markOpenExecutionPositionsToPrice(positions, marketKey, yesPriceFromBook(book))
+}
+
+function markOpenExecutionPositions(positions: ExecutionPosition[], marketKey: string, tick: PolyTradeTick): ExecutionPosition[] {
+  return markOpenExecutionPositionsToPrice(positions, marketKey, tick.price)
+}
+
+function markOpenExecutionPositionsFromKnownMarkets(
+  positions: ExecutionPosition[],
+  books: Record<string, PolyBook>,
+  ticks: Record<string, PolyTradeTick[]>,
+): ExecutionPosition[] {
+  let next = positions
+  for (const [marketKey, book] of Object.entries(books)) {
+    next = markOpenExecutionPositionsFromBook(next, marketKey, book)
+  }
+  for (const [marketKey, series] of Object.entries(ticks)) {
+    const latest = series.at(-1)
+    if (latest) next = markOpenExecutionPositions(next, marketKey, latest)
+  }
+  return next
+}
+
 export const useStore = create<TerminalState>((set, get) => ({
   activeAsset: 'ES',
   setActiveAsset: (a) => {
@@ -778,7 +815,9 @@ export const useStore = create<TerminalState>((set, get) => ({
   setCopyStatus: (c) => set({ copyStatus: c }),
 
   // ExecutionAgent
-  setExecutionPositions: (p) => set({ executionPositions: p }),
+  setExecutionPositions: (p) => set(s => ({
+    executionPositions: markOpenExecutionPositionsFromKnownMarkets(p, s.polyBooks, s.polyTicks),
+  })),
   setExecutionRisk: (r) => set({ executionRisk: r }),
 
   setSimulationEnabled: (v) => set(s => ({
@@ -1033,10 +1072,12 @@ export const useStore = create<TerminalState>((set, get) => ({
     }
     const nextPolyBooks = { ...s.polyBooks, [key]: book }
     const markedPositions = markOpenSimPositionsFromBook(s.simPositions, key, book)
+    const markedExecutionPositions = markOpenExecutionPositionsFromBook(s.executionPositions, key, book)
+    const executionPositionPatch = markedExecutionPositions === s.executionPositions ? {} : { executionPositions: markedExecutionPositions }
     if (!s.simulationEnabled) {
       return markedPositions === s.simPositions
-        ? { polyBooks: nextPolyBooks }
-        : { polyBooks: nextPolyBooks, simPositions: markedPositions }
+        ? { polyBooks: nextPolyBooks, ...executionPositionPatch }
+        : { polyBooks: nextPolyBooks, simPositions: markedPositions, ...executionPositionPatch }
     }
 
     const messages: string[] = []
@@ -1057,6 +1098,7 @@ export const useStore = create<TerminalState>((set, get) => ({
       fills: matched.fills,
       polyTicks: matched.polyTicks,
       simPositions: matched.simPositions,
+      ...executionPositionPatch,
       ...(messages.length ? { simMessages: [...messages, ...s.simMessages].slice(0, 50) } : {}),
     }
   }),
@@ -1078,10 +1120,12 @@ export const useStore = create<TerminalState>((set, get) => ({
       [key]: [...prev.slice(-199), tick],
     }
     let simPositions = markOpenSimPositions(s.simPositions, key, tick)
+    const markedExecutionPositions = markOpenExecutionPositions(s.executionPositions, key, tick)
+    const executionPositionPatch = markedExecutionPositions === s.executionPositions ? {} : { executionPositions: markedExecutionPositions }
     if (!s.simulationEnabled) {
       return simPositions === s.simPositions
-        ? { polyTicks: nextPolyTicks }
-        : { polyTicks: nextPolyTicks, simPositions }
+        ? { polyTicks: nextPolyTicks, ...executionPositionPatch }
+        : { polyTicks: nextPolyTicks, simPositions, ...executionPositionPatch }
     }
     const messages: string[] = []
     const matched = fillWorkingOrdersFromVisibleMarket(
@@ -1100,6 +1144,7 @@ export const useStore = create<TerminalState>((set, get) => ({
       simOrders: matched.simOrders,
       fills: matched.fills,
       simPositions: matched.simPositions,
+      ...executionPositionPatch,
       ...(messages.length ? { simMessages: [...messages, ...s.simMessages].slice(0, 50) } : {}),
     }
   }),
@@ -1112,11 +1157,15 @@ export const useStore = create<TerminalState>((set, get) => ({
     if (exists) return s
     // Cap at 100 most recent trades (prevents unbounded growth)
     const capped = [...prev, tick].slice(-100)
+    const markedSimPositions = markOpenSimPositions(s.simPositions, key, tick)
+    const markedExecutionPositions = markOpenExecutionPositions(s.executionPositions, key, tick)
     return {
       fills: {
         ...s.fills,
         [key]: capped,
       },
+      ...(markedSimPositions === s.simPositions ? {} : { simPositions: markedSimPositions }),
+      ...(markedExecutionPositions === s.executionPositions ? {} : { executionPositions: markedExecutionPositions }),
     }
   }),
 
@@ -1134,6 +1183,13 @@ export const useStore = create<TerminalState>((set, get) => ({
 
   loadSnapshot: (asset, data) => {
     const s = get()
+    const snapshotPolyBooks = { ...s.polyBooks, ...(data.poly_books ?? {}) }
+    const snapshotPolyTicks = { ...s.polyTicks, ...(data.poly_ticks ?? {}) }
+    const snapshotExecutionPositions = markOpenExecutionPositionsFromKnownMarkets(
+      (data.execution_positions ?? []) as ExecutionPosition[],
+      snapshotPolyBooks,
+      snapshotPolyTicks,
+    )
     const newState: Partial<TerminalState> = {
       bars: { ...s.bars, [asset]: data.bars ?? [] },
       bands: { ...s.bands, [asset]: data.bands ?? null },
@@ -1144,10 +1200,10 @@ export const useStore = create<TerminalState>((set, get) => ({
       metrics: data.metrics ?? null,
       copyStatus: data.copy_status ?? null,
       // ExecutionAgent — these arrive in the WS snapshot as execution_positions
-      executionPositions: (data.execution_positions ?? []) as ExecutionPosition[],
+      executionPositions: snapshotExecutionPositions,
       executionRisk: (data.execution_risk ?? null) as ExecutionRisk | null,
-      polyBooks: { ...s.polyBooks, ...(data.poly_books ?? {}) },
-      polyTicks: { ...s.polyTicks, ...(data.poly_ticks ?? {}) },
+      polyBooks: snapshotPolyBooks,
+      polyTicks: snapshotPolyTicks,
     }
     if (data.markets) {
       // Inline setMarkets logic for snapshot

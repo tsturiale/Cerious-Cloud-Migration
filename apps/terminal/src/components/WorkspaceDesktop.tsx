@@ -33,6 +33,12 @@ import { TimeAndSales } from './TimeAndSales'
 import { fetchBars } from '../utils/bars'
 import ceriousLogo from '../assets/branding/cerious-logo.png'
 import {
+  calculateFuturesMarketValue,
+  calculateOpenFuturesPnl,
+  isKnownFuturesProduct,
+  resolveFuturesMultiplier,
+} from '../utils/futuresPnl'
+import {
   GREEK_ENGINES,
   PRODUCT_ASSETS,
   PROVIDERS,
@@ -4088,22 +4094,8 @@ function inferSource(raw: Record<string, unknown>, model?: string | null): Execu
   return 'algo'
 }
 
-const EXECUTION_CONTRACT_SPECS: Record<string, { tickSize: number; multiplier: number; tickValue: number }> = {
-  ES: { tickSize: 0.25, multiplier: 50, tickValue: 12.5 },
-  NQ: { tickSize: 0.25, multiplier: 20, tickValue: 5 },
-  YM: { tickSize: 1, multiplier: 5, tickValue: 5 },
-  RTY: { tickSize: 0.1, multiplier: 50, tickValue: 5 },
-  CL: { tickSize: 0.01, multiplier: 1000, tickValue: 10 },
-  GC: { tickSize: 0.1, multiplier: 100, tickValue: 10 },
-  ZM: { tickSize: 0.1, multiplier: 100, tickValue: 10 },
-  ZS: { tickSize: 0.25, multiplier: 50, tickValue: 12.5 },
-  ES_NQ: { tickSize: 0.25, multiplier: 150, tickValue: 37.5 },
-  YM_ES: { tickSize: 1, multiplier: 15, tickValue: 15 },
-  RTY_ES: { tickSize: 0.1, multiplier: 350, tickValue: 35 },
-}
-
 function executionRawPrice(price: number, marketKey: string, raw?: Record<string, unknown>): boolean {
-  return Boolean(EXECUTION_CONTRACT_SPECS[marketKey.toUpperCase()])
+  return isKnownFuturesProduct(marketKey)
     || (typeof raw?.multiplier === 'number' && raw.multiplier > 1)
     || (Number.isFinite(price) && (price < 0 || price > 100))
 }
@@ -4111,8 +4103,8 @@ function executionRawPrice(price: number, marketKey: string, raw?: Record<string
 function executionMultiplier(marketKey: string, raw: Record<string, unknown> | undefined, price: number): number {
   const rawMultiplier = Number(raw?.multiplier)
   if (Number.isFinite(rawMultiplier) && rawMultiplier > 0) return rawMultiplier
-  if (EXECUTION_CONTRACT_SPECS[marketKey.toUpperCase()]) return EXECUTION_CONTRACT_SPECS[marketKey.toUpperCase()].multiplier
-  return executionRawPrice(price, marketKey, raw) ? 1 : 0.01
+  if (executionRawPrice(price, marketKey, raw)) return resolveFuturesMultiplier(marketKey, rawMultiplier, price)
+  return 0.01
 }
 
 function executionPriceLabel(price: number, marketKey: string, raw?: Record<string, unknown>): string {
@@ -4122,7 +4114,7 @@ function executionPriceLabel(price: number, marketKey: string, raw?: Record<stri
 }
 
 function executionNotional(price: number, size: number, marketKey: string, raw?: Record<string, unknown>): number {
-  return Math.abs(price * size * executionMultiplier(marketKey, raw, price))
+  return calculateFuturesMarketValue(price, size, executionMultiplier(marketKey, raw, price))
 }
 
 function isAccountFillTick(raw: Record<string, unknown>): boolean {
@@ -4212,6 +4204,8 @@ function simOrderToAcmeOrderRow(order: SimOrder, option: ProductOption | undefin
 }
 
 function simPositionToAcmePositionRow(position: SimPosition, option: ProductOption | undefined): AcmePositionRow {
+  const multiplier = executionMultiplier(position.marketKey, position as unknown as Record<string, unknown>, position.avgPrice)
+  const openPnl = calculateOpenFuturesPnl(position.avgPrice, position.markPrice, position.size, multiplier)
   return {
     instrumentId: option?.label ?? position.marketKey,
     label: `${position.source === 'algo' ? (position.algoName ?? position.strategy) : 'Manual'}${position.algoRole ? ` / ${position.algoRole}` : ''}`,
@@ -4219,8 +4213,8 @@ function simPositionToAcmePositionRow(position: SimPosition, option: ProductOpti
     avgPrice: position.avgPrice,
     markPrice: position.markPrice,
     markLive: true,
-    multiplier: position.multiplier,
-    openPnl: position.openPnl,
+    multiplier,
+    openPnl,
     realizedPnl: position.realizedPnl,
     account: position.operator,
     lastFillAt: new Date(position.closedAt ?? position.openedAt).toISOString(),
@@ -4715,6 +4709,7 @@ function monitorPriceLabel(price: number, marketKey: string, raw?: Record<string
 
 function simPositionToMonitorRow(position: SimPosition, option: ProductOption | undefined): PositionMonitorRow {
   const multiplier = executionMultiplier(position.marketKey, position as unknown as Record<string, unknown>, position.avgPrice)
+  const openPnl = calculateOpenFuturesPnl(position.avgPrice, position.markPrice, position.size, multiplier)
   return {
     id: `sim-position-${position.id}`,
     provider: 'sim',
@@ -4725,10 +4720,10 @@ function simPositionToMonitorRow(position: SimPosition, option: ProductOption | 
     position: position.status === 'closed' ? 0 : position.size,
     avgPrice: position.avgPrice,
     marketPrice: position.markPrice,
-    marketValue: Math.abs(position.markPrice * position.size * multiplier),
-    openPnl: position.openPnl,
+    marketValue: calculateFuturesMarketValue(position.markPrice, position.size, multiplier),
+    openPnl,
     closedPnl: position.realizedPnl,
-    dayPnl: position.totalPnl,
+    dayPnl: position.realizedPnl + openPnl,
     status: position.status,
     source: position.source,
     strategy: position.algoName ?? position.strategy,
@@ -4744,7 +4739,15 @@ function executionPositionToMonitorRow(
   const marketKey = option?.marketKey ?? position.asset
   const signedSize = signedExecutionPositionSize(position.direction, Number(position.size) || 0)
   const multiplier = executionMultiplier(marketKey, position as unknown as Record<string, unknown>, Number(position.entry_price) || 0)
-  const openPnl = Number(position.unrealized_pnl ?? 0)
+  const entryPrice = Number(position.entry_price)
+  const currentPrice = Number(position.current_price)
+  const hasLiveMark = Number.isFinite(entryPrice) && Number.isFinite(currentPrice)
+  const backendOpenPnl = Number(position.unrealized_pnl)
+  const openPnl = hasLiveMark
+    ? calculateOpenFuturesPnl(entryPrice, currentPrice, signedSize, multiplier)
+    : Number.isFinite(backendOpenPnl) ? backendOpenPnl : 0
+  const displayEntryPrice = Number.isFinite(entryPrice) ? entryPrice : 0
+  const displayCurrentPrice = Number.isFinite(currentPrice) ? currentPrice : displayEntryPrice
   return {
     id: `execution-position-${position.position_id}`,
     provider: option?.provider ?? 'execution',
@@ -4753,9 +4756,9 @@ function executionPositionToMonitorRow(
     symbol: option?.asset ?? option?.symbol ?? position.asset,
     marketKey,
     position: /closed|filled|cancel/i.test(position.status) ? 0 : signedSize,
-    avgPrice: Number(position.entry_price) || 0,
-    marketPrice: Number(position.current_price) || Number(position.entry_price) || 0,
-    marketValue: Math.abs((Number(position.current_price) || Number(position.entry_price) || 0) * signedSize * multiplier),
+    avgPrice: displayEntryPrice,
+    marketPrice: displayCurrentPrice,
+    marketValue: calculateFuturesMarketValue(displayCurrentPrice, signedSize, multiplier),
     openPnl,
     closedPnl: /closed|filled|cancel/i.test(position.status) ? openPnl : 0,
     dayPnl: openPnl,
