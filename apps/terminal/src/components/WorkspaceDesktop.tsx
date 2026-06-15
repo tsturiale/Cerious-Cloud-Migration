@@ -39,6 +39,13 @@ import {
   resolveFuturesMultiplier,
 } from '../utils/futuresPnl'
 import {
+  depthMultiplierOptionsForTickSize as depthMultiplierOptionsForTick,
+  finiteMarketPrice as finiteDepthPrice,
+  formatMarketPrice as fmtLadderPrice,
+  resolveDepthDisplayContract,
+  roundToPriceIncrement as roundToTick,
+} from '../utils/marketDisplay'
+import {
   GREEK_ENGINES,
   PRODUCT_ASSETS,
   PROVIDERS,
@@ -1702,6 +1709,8 @@ function ProductSelector({
   const activeProvider = normalizeProviderKey(provider)
   const providerOptions = options.filter(option => option.provider === activeProvider)
   const selected = options.find(option => option.provider === activeProvider && option.symbol === symbol)
+  const loadedProviders = new Set(options.map(option => option.provider))
+  const selectableProviders = PROVIDERS.filter(item => item.key === activeProvider || loadedProviders.has(item.key))
 
   const selectProvider = (nextProvider: ProviderKey) => {
     const normalizedProvider = normalizeProviderKey(nextProvider)
@@ -1728,7 +1737,7 @@ function ProductSelector({
         onChange={event => selectProvider(event.target.value as ProviderKey)}
         className="input-field py-1 text-[11px]"
       >
-        {PROVIDERS.map(item => (
+        {selectableProviders.map(item => (
           <option key={item.key} value={item.key}>{item.label}</option>
         ))}
       </select>
@@ -2685,72 +2694,6 @@ type LocalDepthOrder = {
   multiplier?: number
 }
 
-function finiteDepthPrice(value: unknown): number | undefined {
-  const number = Number(value)
-  return Number.isFinite(number) ? number : undefined
-}
-
-function futuresTickForSymbol(symbol: string, fallbackPrice: number): number {
-  const upper = symbol.toUpperCase()
-  if (upper.includes('YM')) return 1
-  if (upper.includes('CL')) return 0.01
-  if (upper.includes('GC')) return 0.1
-  if (upper.includes('ZM')) return 0.1
-  if (upper.includes('ZS')) return 0.25
-  if (upper.includes('RTY')) return 0.1
-  if (upper.includes('ES') || upper.includes('NQ')) return 0.25
-  if (Math.abs(fallbackPrice) >= 1000) return 0.25
-  if (Math.abs(fallbackPrice) >= 100) return 0.1
-  return 0.01
-}
-
-function inferBookTick(book: { bids?: Array<{ price: number }>; asks?: Array<{ price: number }>; tickSize?: number } | undefined, symbol: string, fallbackPrice: number): number {
-  const publishedTick = Number(book?.tickSize)
-  if (Number.isFinite(publishedTick) && publishedTick > 0) return publishedTick
-
-  const sideDiffs = (levels: Array<{ price: number }>) => {
-    const prices = levels
-      .map(level => finiteDepthPrice(level.price))
-      .filter((price): price is number => price !== undefined)
-      .sort((a, b) => a - b)
-    const diffs: number[] = []
-    for (let index = 1; index < prices.length; index += 1) {
-      const diff = Math.abs(prices[index] - prices[index - 1])
-      if (diff > 1e-9) diffs.push(diff)
-    }
-    return diffs
-  }
-  const diffs = [...sideDiffs(book?.bids ?? []), ...sideDiffs(book?.asks ?? [])]
-
-  const inferred = diffs
-    .filter(diff => diff <= Math.max(10, Math.abs(fallbackPrice) * 0.025))
-    .sort((a, b) => a - b)[0]
-
-  return inferred && Number.isFinite(inferred) ? inferred : futuresTickForSymbol(symbol, fallbackPrice)
-}
-
-function depthMultiplierOptionsForTick(tickSize: unknown): number[] {
-  const tick = Number(tickSize)
-  if (Number.isFinite(tick) && Math.abs(tick - 0.1) < 1e-9) return [1, 2, 5, 10]
-  return [1, 2, 4, 8, 16]
-}
-
-function roundToTick(price: number, tick: number): number {
-  if (!Number.isFinite(price) || !Number.isFinite(tick) || tick <= 0) return price
-  return Math.round(price / tick) * tick
-}
-
-function normalizeDepthBookPrice(price: unknown, reference: number | undefined): number | undefined {
-  const value = finiteDepthPrice(price)
-  if (value === undefined) return undefined
-  if (reference === undefined || !Number.isFinite(reference) || reference === 0) return value
-  const absReference = Math.abs(reference)
-  const absValue = Math.abs(value)
-  if (absReference > 100 && absValue > 0 && absValue < 100 && absValue < absReference * 0.2) return value * 100
-  if (absReference < 100 && absValue > 1000) return value / 100
-  return value
-}
-
 function isRawDepthPrice(price: unknown): price is number {
   return typeof price === 'number' && Number.isFinite(price) && (price < 0 || price > 1)
 }
@@ -2766,13 +2709,6 @@ function bookUsesRawPrices(book: PolyBook | undefined, ticks?: PolyTradeTick[]):
   return bookPrices.some(isRawDepthPrice) || (ticks ?? []).some(tick => isRawDepthPrice(tick.price))
 }
 
-function fmtLadderPrice(price: number): string {
-  if (!Number.isFinite(price)) return '-'
-  if (Math.abs(price) >= 1000) return price.toFixed(2)
-  if (Math.abs(price) >= 100) return price.toFixed(2)
-  return price.toFixed(3)
-}
-
 function aggregateDepthLevels(
   levels: Array<{ price: number; size: number }> | undefined,
   rowStep: number,
@@ -2783,7 +2719,7 @@ function aggregateDepthLevels(
     const price = finiteDepthPrice(level.price)
     const size = Number(level.size)
     if (price === undefined || !Number.isFinite(size) || size <= 0) continue
-    const key = fmtLadderPrice(roundToTick(price, rowStep))
+    const key = fmtLadderPrice(roundToTick(price, rowStep), rowStep)
     next.set(key, (next.get(key) ?? 0) + size)
   }
   return next
@@ -2950,8 +2886,8 @@ function NormalDepthLadderWindow({
   const book = depthStream.book ?? undefined
   const ticks = depthStream.trades
   const latestDepthTick = ticks?.at(-1)
-  const latestDepthTradePrice = normalizeDepthBookPrice(latestDepthTick?.price, finiteDepthPrice(option?.spot) ?? finiteDepthPrice(option?.priceToBeat))
-  const latestDepthLtp = normalizeDepthBookPrice(book?.ltp, finiteDepthPrice(option?.spot) ?? finiteDepthPrice(option?.priceToBeat))
+  const latestDepthTradePrice = finiteDepthPrice(latestDepthTick?.price)
+  const latestDepthLtp = finiteDepthPrice(book?.ltp)
   const latestDepthTickTs = Number(latestDepthTick?.timestamp ?? 0)
   const latestDepthBookTs = Number(book?.tsMs ?? 0)
   const depthBookLtpIsFresh = latestDepthLtp !== undefined && latestDepthBookTs >= latestDepthTickTs
@@ -3010,12 +2946,15 @@ function NormalDepthLadderWindow({
   const laneGrey = '#4b5563'
   const laneGreyInside = '#64748b'
   const laneText = '#f8fafc'
-  const depthMultiplierTick = useMemo(() => {
-    const publishedTick = Number(book?.tickSize ?? option?.tickSize)
-    if (Number.isFinite(publishedTick) && publishedTick > 0) return publishedTick
-    const referencePrice = latestDepthLastPrice ?? finiteDepthPrice(option?.spot) ?? finiteDepthPrice(option?.priceToBeat) ?? 0
-    return futuresTickForSymbol(String(option?.asset ?? marketKey ?? symbol), referencePrice)
-  }, [book?.tickSize, latestDepthLastPrice, marketKey, option?.asset, option?.priceToBeat, option?.spot, option?.tickSize, symbol])
+  const depthDisplayContract = useMemo(() => {
+    return resolveDepthDisplayContract({
+      publishedTickSize: book?.tickSize,
+      productTickSize: option?.tickSize,
+      bids: book?.bids,
+      asks: book?.asks,
+    })
+  }, [book, option?.tickSize])
+  const depthMultiplierTick = depthDisplayContract.priceIncrement
   const priceMultiplierOptions = useMemo(() => depthMultiplierOptionsForTick(depthMultiplierTick), [depthMultiplierTick])
 
   const setLadderBodyElement = useCallback((node: HTMLDivElement | null) => {
@@ -3087,37 +3026,44 @@ function NormalDepthLadderWindow({
   }, [marketKey])
 
   const ladderModel = useMemo(() => {
-    const optionPrice = finiteDepthPrice(option?.spot) ?? finiteDepthPrice(option?.priceToBeat)
     const latestTick = ticks?.at(-1)
-    const tickLast = normalizeDepthBookPrice(latestTick?.price, optionPrice)
-    const bookLast = normalizeDepthBookPrice(book?.ltp, optionPrice)
+    const tickLast = finiteDepthPrice(latestTick?.price)
+    const bookLast = finiteDepthPrice(book?.ltp)
     const tickTs = Number(latestTick?.timestamp ?? 0)
     const bookTs = Number(book?.tsMs ?? 0)
     const preferBookLast = bookLast !== undefined && bookTs >= tickTs
     const lastTrade = preferBookLast ? bookLast : tickLast ?? bookLast
     const normalizedBids = (book?.bids ?? [])
-      .map(level => ({ price: normalizeDepthBookPrice(level.price, optionPrice), size: Number(level.size) }))
+      .map(level => ({ price: finiteDepthPrice(level.price), size: Number(level.size) }))
       .filter((level): level is { price: number; size: number } => level.price !== undefined && Number.isFinite(level.size))
     const normalizedAsks = (book?.asks ?? [])
-      .map(level => ({ price: normalizeDepthBookPrice(level.price, optionPrice), size: Number(level.size) }))
+      .map(level => ({ price: finiteDepthPrice(level.price), size: Number(level.size) }))
       .filter((level): level is { price: number; size: number } => level.price !== undefined && Number.isFinite(level.size))
-    const bestBid = normalizeDepthBookPrice(book?.bestBid, optionPrice) ?? normalizedBids[0]?.price
-    const bestAsk = normalizeDepthBookPrice(book?.bestAsk, optionPrice) ?? normalizedAsks[0]?.price
-    const bookMid = normalizeDepthBookPrice(book?.mid, optionPrice)
+    const bestBid = finiteDepthPrice(book?.bestBid) ?? normalizedBids[0]?.price
+    const bestAsk = finiteDepthPrice(book?.bestAsk) ?? normalizedAsks[0]?.price
+    const bookMid = finiteDepthPrice(book?.mid)
     const bookCenter = bookMid ?? (bestBid !== undefined && bestAsk !== undefined ? (bestBid + bestAsk) / 2 : undefined)
-    const fallbackLast = lastTrade ?? bookCenter ?? optionPrice ?? 0
-    const tick = inferBookTick(book, option?.asset ?? symbol, fallbackLast)
-    const rowStep = Math.max(tick, tick * priceMultiplier)
-    const bid = bestBid ?? (bestAsk !== undefined ? bestAsk - tick : fallbackLast - tick)
-    const ask = bestAsk ?? (bestBid !== undefined ? bestBid + tick : fallbackLast + tick)
+    const fallbackLast = lastTrade ?? bookCenter ?? finiteDepthPrice(option?.spot) ?? finiteDepthPrice(option?.priceToBeat) ?? 0
+    const contract = resolveDepthDisplayContract({
+      publishedTickSize: book?.tickSize,
+      productTickSize: option?.tickSize,
+      bids: normalizedBids,
+      asks: normalizedAsks,
+    })
+    const tick = contract.priceIncrement ?? 0
+    const rowStep = tick > 0 ? Math.max(tick, tick * priceMultiplier) : 0
+    const bid = bestBid ?? (bestAsk !== undefined && tick > 0 ? bestAsk - tick : fallbackLast)
+    const ask = bestAsk ?? (bestBid !== undefined && tick > 0 ? bestBid + tick : fallbackLast)
     const mid = bookMid ?? (Number.isFinite(bid) && Number.isFinite(ask) ? (bid + ask) / 2 : fallbackLast)
-    const priceKey = (price: number) => fmtLadderPrice(roundToTick(price, rowStep))
+    const priceKey = (price: number) => rowStep > 0 ? fmtLadderPrice(roundToTick(price, rowStep), rowStep) : fmtLadderPrice(price, tick || undefined)
     const bidMap = aggregateDepthLevels(normalizedBids, rowStep)
     const askMap = aggregateDepthLevels(normalizedAsks, rowStep)
     const lastTradeKey = lastTrade !== undefined ? priceKey(lastTrade) : undefined
     const lastTradeSize = Number(preferBookLast ? book?.ltpSize ?? latestTick?.size ?? 0 : latestTick?.size ?? book?.ltpSize ?? 0)
     return { fallbackLast, bid, ask, mid, tick, rowStep, bidMap, askMap, bidKey: priceKey(bid), askKey: priceKey(ask), lastTradeKey, lastTradeSize }
-  }, [book, option?.asset, option?.priceToBeat, option?.spot, option?.yes, priceMultiplier, symbol, ticks])
+  }, [book, option?.priceToBeat, option?.spot, option?.tickSize, priceMultiplier, ticks])
+  const depthDefinitionReady = depthDisplayContract.ready && Number.isFinite(ladderModel.rowStep) && ladderModel.rowStep > 0
+  const depthDefinitionMessage = depthDisplayContract.message ?? 'Waiting for price service product definition.'
 
   const simDepthOrders = useMemo(() => {
     if (!marketKey || !Number.isFinite(ladderModel.rowStep) || ladderModel.rowStep <= 0) return []
@@ -3126,7 +3072,7 @@ function NormalDepthLadderWindow({
       .map(order => ({
         id: order.id,
         side: order.side === 'bid' ? 'BID' as const : 'ASK' as const,
-        priceKey: fmtLadderPrice(roundToTick(order.price, ladderModel.rowStep)),
+        priceKey: fmtLadderPrice(roundToTick(order.price, ladderModel.rowStep), ladderModel.rowStep),
         size: order.remaining,
         orderType: order.orderType,
         status: 'working' as const,
@@ -3212,7 +3158,7 @@ function NormalDepthLadderWindow({
     const centerIndex = Math.floor(rowCount / 2)
     return Array.from({ length: rowCount }, (_, index) => {
       const price = center + (centerIndex - index) * rowStep
-      const key = fmtLadderPrice(roundToTick(price, rowStep))
+      const key = fmtLadderPrice(roundToTick(price, rowStep), rowStep)
       const myBidSize = displayActiveOrders
         .filter(order => order.side === 'BID' && order.priceKey === key && (order.status === 'pending' || order.status === 'working'))
         .reduce((sum, order) => sum + order.size, 0)
@@ -3291,6 +3237,10 @@ function NormalDepthLadderWindow({
 
   const submitDepthOrder = async (side: DepthOrderSide, priceKey: string) => {
     if (!marketKey) return
+    if (!depthDefinitionReady) {
+      setDefaultStatus('Definition pending')
+      return
+    }
     orderSequenceRef.current += 1
     const id = `fut-${marketKey}-${side}-${priceKey}-${Date.now()}-${orderSequenceRef.current}`
     const nextOrderType = simulationEnabled ? 'limit' : actionMode
@@ -3776,10 +3726,10 @@ function NormalDepthLadderWindow({
   }
 
   const bidAskLabel = Number.isFinite(ladderModel.bid) && Number.isFinite(ladderModel.ask)
-    ? `B ${fmtLadderPrice(ladderModel.bid)} / A ${fmtLadderPrice(ladderModel.ask)}`
+    ? `B ${fmtLadderPrice(ladderModel.bid, ladderModel.rowStep || ladderModel.tick)} / A ${fmtLadderPrice(ladderModel.ask, ladderModel.rowStep || ladderModel.tick)}`
     : simulationEnabled ? 'Sim active' : ''
   const lastTradeLabel = latestDepthLastPrice !== undefined
-    ? `Last ${fmtLadderPrice(latestDepthLastPrice)} x${fmtCompact(latestDepthLastSize)}`
+    ? `Last ${fmtLadderPrice(latestDepthLastPrice, ladderModel.rowStep || ladderModel.tick)} x${fmtCompact(latestDepthLastSize)}`
     : ''
   const controlButtonClass = 'h-8 border px-2 text-[11px] font-black uppercase leading-none'
 
@@ -3902,7 +3852,14 @@ function NormalDepthLadderWindow({
           }}
           style={{ fontSize: densitySpec.fontSize }}
         >
-          {levels.map(level => (
+          {!depthDefinitionReady ? (
+            <div className="flex h-full items-center justify-center p-6 text-center">
+              <div className="max-w-sm border bg-[#070a10] p-4" style={{ borderColor: gridLine }}>
+                <div className="text-[12px] font-black uppercase tracking-wide text-[#ffe800]">Product Definition Pending</div>
+                <div className="mt-2 text-[10px] leading-relaxed text-[#aab2c0]">{depthDefinitionMessage}</div>
+              </div>
+            </div>
+          ) : levels.map(level => (
             <div
               key={level.key}
               data-depth-ladder-row="true"
@@ -3959,7 +3916,7 @@ function NormalDepthLadderWindow({
               <div className="truncate text-[10px]">
                 {localDepthPosition.net === 0
                   ? '0'
-                  : `${Math.abs(localDepthPosition.net)} @ ${localDepthPosition.avg !== undefined ? fmtLadderPrice(localDepthPosition.avg) : '-'}`}
+                  : `${Math.abs(localDepthPosition.net)} @ ${localDepthPosition.avg !== undefined ? fmtLadderPrice(localDepthPosition.avg, ladderModel.rowStep || ladderModel.tick) : '-'}`}
               </div>
             </div>
           </div>
@@ -3989,7 +3946,7 @@ function NormalDepthLadderWindow({
             </div>
             <div className="border px-1 py-0.5" style={{ borderColor: gridLine }}>
               <div className="text-[#8b929e]">{latestFill ? 'Last Fill' : 'Pending'}</div>
-              <div className="truncate font-bold text-[#ffe800]">{latestFill ? `${latestFill.side} ${latestFill.size} @ ${fmtLadderPrice(latestFill.fillPrice ?? Number(latestFill.priceKey))}` : activeOrders.filter(order => order.status === 'pending').length}</div>
+              <div className="truncate font-bold text-[#ffe800]">{latestFill ? `${latestFill.side} ${latestFill.size} @ ${fmtLadderPrice(latestFill.fillPrice ?? Number(latestFill.priceKey), ladderModel.rowStep || ladderModel.tick)}` : activeOrders.filter(order => order.status === 'pending').length}</div>
             </div>
           </div>
         )}
@@ -5501,6 +5458,14 @@ function validateAlgoStudyFreshness(algo: AlgoDefinition, stat: AcmeSpreadStat |
   return null
 }
 
+function validateAlgoProductDefinition(algo: AlgoDefinition, option: ProductOption | undefined): string | null {
+  const symbol = algo.marketKey ?? option?.marketKey ?? algo.symbol
+  if (!option) return `${algo.name}: send price not published for ${symbol}; product definition missing`
+  const tick = finiteDepthPrice(option.tickSize)
+  if (tick === undefined || tick <= 0) return `${algo.name}: send price not published for ${symbol}; product tick size not published`
+  return null
+}
+
 function statWithFreshLr27(marketKey: string, lr: AcmeLr27State, fallback?: AcmeSpreadStat): AcmeSpreadStat {
   const last = finiteOptional(lr.lastTraded) ?? fallback?.lastTraded ?? fallback?.spread ?? 0
   return {
@@ -5563,7 +5528,8 @@ function buildAlgoDeploymentOrders(algo: AlgoDefinition, option: ProductOption |
   const entryPeg = algo.entryPeg ?? acmeFields.entryPeg
   const exitPolicy = algo.exitPolicy ?? acmeFields.exitPolicy
   const quote = computeTheoQuote(option, algo.theoModel, algo.quoteWidth)
-  const tick = futuresTickForSymbol(symbol, quote.market)
+  const tick = finiteDepthPrice(option?.tickSize)
+  if (tick === undefined || tick <= 0) return []
   if (validateAlgoStudyFreshness(algo, spreadStat)) return []
   const pegBands = regressionBandsForPeg(spreadStat, entryPeg.period, entryPeg.standardDeviations)
   const layers = clamp(Math.floor(Number(layerPlan.layerCount) || 1), 1, Math.max(1, Number(layerPlan.maxLayers) || 10))
@@ -5707,7 +5673,8 @@ function AlgoManagerWindow() {
         const option = options.find(item => item.provider === algo.provider && item.symbol === algo.symbol)
           ?? options.find(item => item.marketKey === algo.marketKey)
         const marketKey = algo.marketKey ?? option?.marketKey ?? algo.symbol
-        const blocker = validateAlgoStudyFreshness(algo, freshSpreadStatsByKey.get(marketKey))
+        const blocker = validateAlgoProductDefinition(algo, option)
+          ?? validateAlgoStudyFreshness(algo, freshSpreadStatsByKey.get(marketKey))
         if (blocker) blockers.push({ algo, marketKey, reason: blocker })
       })
       if (blockers.length) {
