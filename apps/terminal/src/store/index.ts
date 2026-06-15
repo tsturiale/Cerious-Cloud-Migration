@@ -230,6 +230,11 @@ function simDollarPnl(marketKey: string, fromPrice: number, toPrice: number, siz
   return (toPrice - fromPrice) * size * appliedMultiplier
 }
 
+function finiteNumber(value: unknown): number | null {
+  const numberValue = Number(value)
+  return Number.isFinite(numberValue) ? numberValue : null
+}
+
 function simPriceLabel(price: number): string {
   if (!Number.isFinite(price)) return '-'
   return isRawFuturesPrice(price) ? price.toFixed(Math.abs(price) >= 100 ? 2 : 3) : `${price.toFixed(1)}c`
@@ -599,12 +604,37 @@ function updateSimPositions(
   })
 }
 
-function markOpenSimPositions(positions: SimPosition[], marketKey: string, tick: PolyTradeTick): SimPosition[] {
+function yesPriceFromBook(book: PolyBook): number | null {
+  const ltp = finiteNumber(book.ltp)
+  if (ltp !== null) return ltp
+  const mid = finiteNumber(book.mid)
+  if (mid !== null) return mid
+  const bid = finiteNumber(book.best_bid)
+  const ask = finiteNumber(book.best_ask)
+  if (bid !== null && ask !== null) return (bid + ask) / 2
+  return bid ?? ask
+}
+
+function markPriceForPositionFromBook(position: SimPosition, book: PolyBook): number | null {
+  const yesPrice = yesPriceFromBook(book)
+  if (yesPrice === null) return null
+  if (bookUsesRawPrices(book)) return yesPrice
+  const yesCents = yesPrice > 1 ? yesPrice : cents(yesPrice)
+  return position.outcome === 'yes' ? yesCents : 100 - yesCents
+}
+
+function markOpenSimPositionsToPrice(
+  positions: SimPosition[],
+  marketKey: string,
+  markPriceFor: (position: SimPosition) => number | null,
+): SimPosition[] {
   let changed = false
   const next = positions.map(position => {
     if (position.marketKey !== marketKey || position.status !== 'open') return position
-    const markPrice = isRawFuturesPrice(tick.price) ? tick.price : priceForOutcome(tick, position.outcome)
+    const markPrice = markPriceFor(position)
+    if (markPrice === null || !Number.isFinite(markPrice)) return position
     const openPnl = simDollarPnl(position.marketKey, position.avgPrice, markPrice, position.size, position.multiplier)
+    if (position.markPrice === markPrice && position.openPnl === openPnl && position.totalPnl === position.realizedPnl + openPnl) return position
     changed = true
     return {
       ...position,
@@ -614,6 +644,17 @@ function markOpenSimPositions(positions: SimPosition[], marketKey: string, tick:
     }
   })
   return changed ? next : positions
+}
+
+function markOpenSimPositionsFromBook(positions: SimPosition[], marketKey: string, book: PolyBook): SimPosition[] {
+  return markOpenSimPositionsToPrice(positions, marketKey, position => markPriceForPositionFromBook(position, book))
+}
+
+function markOpenSimPositions(positions: SimPosition[], marketKey: string, tick: PolyTradeTick): SimPosition[] {
+  return markOpenSimPositionsToPrice(positions, marketKey, position => {
+    const markPrice = isRawFuturesPrice(tick.price) ? tick.price : priceForOutcome(tick, position.outcome)
+    return Number.isFinite(markPrice) ? markPrice : null
+  })
 }
 
 export const useStore = create<TerminalState>((set, get) => ({
@@ -991,7 +1032,12 @@ export const useStore = create<TerminalState>((set, get) => ({
       if (nextSeen < prevSeen) return s
     }
     const nextPolyBooks = { ...s.polyBooks, [key]: book }
-    if (!s.simulationEnabled) return { polyBooks: nextPolyBooks }
+    const markedPositions = markOpenSimPositionsFromBook(s.simPositions, key, book)
+    if (!s.simulationEnabled) {
+      return markedPositions === s.simPositions
+        ? { polyBooks: nextPolyBooks }
+        : { polyBooks: nextPolyBooks, simPositions: markedPositions }
+    }
 
     const messages: string[] = []
     const matched = fillWorkingOrdersFromVisibleMarket(
@@ -1001,7 +1047,7 @@ export const useStore = create<TerminalState>((set, get) => ({
       s.polyTicks[key],
       s.fills,
       s.polyTicks,
-      s.simPositions,
+      markedPositions,
       messages,
     )
 
@@ -1031,11 +1077,12 @@ export const useStore = create<TerminalState>((set, get) => ({
       ...s.polyTicks,
       [key]: [...prev.slice(-199), tick],
     }
-    if (!s.simulationEnabled) {
-      return { polyTicks: nextPolyTicks }
-    }
-
     let simPositions = markOpenSimPositions(s.simPositions, key, tick)
+    if (!s.simulationEnabled) {
+      return simPositions === s.simPositions
+        ? { polyTicks: nextPolyTicks }
+        : { polyTicks: nextPolyTicks, simPositions }
+    }
     const messages: string[] = []
     const matched = fillWorkingOrdersFromVisibleMarket(
       s.simOrders,
