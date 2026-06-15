@@ -1,0 +1,8 @@
+{
+  "name": "cerious-systems",
+  "private": true,
+  "scripts": {
+    "dev:frontend": "npm --prefix apps/terminal run dev",
+    "build:frontend": "npm --prefix apps/terminal run build"
+  }
+}

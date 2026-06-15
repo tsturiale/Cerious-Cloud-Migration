@@ -1,0 +1,1 @@
+"""F Systematica core package."""

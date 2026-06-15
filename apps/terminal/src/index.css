@@ -1,0 +1,288 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Design tokens ─────────────────────────────────────────────────────────────
+   Color channel variables (R G B — no commas, no rgb() wrapper).
+   Tailwind uses these as:  rgb(var(--cn-xxx) / <alpha>)
+   index.css uses derived aliases:  --surface, --accent, etc.
+   Theme switcher overwrites the channel vars at runtime.
+──────────────────────────────────────────────────────────────────────────────*/
+:root {
+  /* ── Crimson Console (default) ───────────────────────────────── */
+  --cn-surface:        8 10 14;
+  --cn-surface-panel:  13 16 22;
+  --cn-surface-card:   18 22 30;
+  --cn-surface-border: 67 31 37;
+  --cn-surface-hover:  33 24 31;
+  --cn-accent:         58 237 255;
+  --cn-muted:          112 123 142;
+
+  /* Legacy single-value aliases (used by non-Tailwind CSS below) */
+  --surface:        rgb(var(--cn-surface));
+  --surface-panel:  rgb(var(--cn-surface-panel));
+  --surface-card:   rgb(var(--cn-surface-card));
+  --surface-border: rgb(var(--cn-surface-border));
+  --surface-hover:  rgb(var(--cn-surface-hover));
+  --accent:         rgb(var(--cn-accent));
+  --muted:          rgb(var(--cn-muted));
+  --up:   #00d4a4;
+  --down: #ff4757;
+  --warn: #ffa502;
+}
+
+/* ── Gunmetal ── cold steel gray ──────────────────────────────────────────── */
+:root[data-theme="gunmetal"] {
+  --cn-surface:        11 12 13;
+  --cn-surface-panel:  16 18 20;
+  --cn-surface-card:   22 24 26;
+  --cn-surface-border: 38 42 45;
+  --cn-surface-hover:  27 30 33;
+  --cn-accent:         94 234 212;
+  --cn-muted:          75 85 99;
+}
+
+/* ── Deep Purple ── velvet purple / lavender ─────────────────────────────── */
+:root[data-theme="deep-purple"] {
+  --cn-surface:        13 7 23;
+  --cn-surface-panel:  20 11 34;
+  --cn-surface-card:   31 18 52;
+  --cn-surface-border: 65 45 110;
+  --cn-surface-hover:  42 25 67;
+  --cn-accent:         196 181 253;
+  --cn-muted:          124 104 164;
+}
+
+/* ── Dark Midnight ── near-black navy / steel cyan ───────────────────────── */
+:root[data-theme="dark-midnight"] {
+  --cn-surface:        5 7 12;
+  --cn-surface-panel:  9 13 20;
+  --cn-surface-card:   14 20 31;
+  --cn-surface-border: 36 51 77;
+  --cn-surface-hover:  21 30 45;
+  --cn-accent:         125 211 252;
+  --cn-muted:          104 122 150;
+}
+
+/* ── Abyss ── pure black / violet ─────────────────────────────────────────── */
+:root[data-theme="abyss"] {
+  --cn-surface:        5 5 7;
+  --cn-surface-panel:  8 9 12;
+  --cn-surface-card:   12 13 18;
+  --cn-surface-border: 20 21 29;
+  --cn-surface-hover:  14 15 21;
+  --cn-accent:         167 139 250;
+  --cn-muted:          55 65 81;
+}
+
+/* ── Terminal ── classic green-on-black CRT ───────────────────────────────── */
+:root[data-theme="terminal"] {
+  --cn-surface:        3 11 4;
+  --cn-surface-panel:  5 15 7;
+  --cn-surface-card:   8 20 11;
+  --cn-surface-border: 12 32 17;
+  --cn-surface-hover:  9 24 13;
+  --cn-accent:         0 230 110;
+  --cn-muted:          30 68 40;
+}
+
+@layer base {
+  * { box-sizing: border-box; }
+  html, body {
+    height: 100%;
+    margin: 0;
+  }
+  body {
+    background-color: var(--surface);
+    color: #e2e8f0;
+    font-family: Inter, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    overflow: hidden;
+    user-select: none;
+  }
+  ::-webkit-scrollbar { width: 11px; height: 11px; }
+  ::-webkit-scrollbar-track { background-color: color-mix(in srgb, var(--surface) 84%, #111827); }
+  ::-webkit-scrollbar-thumb {
+    min-height: 36px;
+    min-width: 36px;
+    background-color: color-mix(in srgb, var(--surface-border) 74%, #94a3b8);
+    border: 2px solid var(--surface);
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: color-mix(in srgb, var(--accent) 48%, var(--surface-border));
+  }
+}
+
+@layer components {
+  .panel {
+    background-color: var(--surface-panel);
+    border: 1px solid var(--surface-border);
+    border-radius: 0.5rem;
+  }
+  .panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--surface-border);
+  }
+  .label {
+    font-size: 0.65rem;
+    line-height: 1rem;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .val   { font-family: 'JetBrains Mono', monospace; color: #f1f5f9; }
+  .val-up   { font-family: 'JetBrains Mono', monospace; color: var(--up); }
+  .val-down { font-family: 'JetBrains Mono', monospace; color: var(--down); }
+  .val-warn { font-family: 'JetBrains Mono', monospace; color: var(--warn); }
+
+  .btn {
+    padding: 0.375rem 0.75rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    transition: all 150ms;
+    cursor: pointer;
+  }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-up {
+    background-color: color-mix(in srgb, var(--up) 20%, transparent);
+    color: var(--up);
+    border: 1px solid color-mix(in srgb, var(--up) 40%, transparent);
+  }
+  .btn-up:hover { background-color: color-mix(in srgb, var(--up) 30%, transparent); }
+  .btn-down {
+    background-color: color-mix(in srgb, var(--down) 20%, transparent);
+    color: var(--down);
+    border: 1px solid color-mix(in srgb, var(--down) 40%, transparent);
+  }
+  .btn-down:hover { background-color: color-mix(in srgb, var(--down) 30%, transparent); }
+  .btn-neutral {
+    background-color: var(--surface-card);
+    color: #cbd5e1;
+    border: 1px solid var(--surface-border);
+  }
+  .btn-neutral:hover { background-color: var(--surface-hover); }
+  .btn-danger {
+    background-color: color-mix(in srgb, var(--down) 20%, transparent);
+    color: var(--down);
+    border: 1px solid color-mix(in srgb, var(--down) 40%, transparent);
+  }
+  .btn-danger:hover { background-color: color-mix(in srgb, var(--down) 30%, transparent); }
+  .btn-accent {
+    background-color: color-mix(in srgb, var(--accent) 20%, transparent);
+    color: var(--accent);
+    border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  }
+  .btn-accent:hover { background-color: color-mix(in srgb, var(--accent) 30%, transparent); }
+
+  .input-field {
+    width: 100%;
+    background-color: var(--surface-card);
+    border: 1px solid var(--surface-border);
+    border-radius: 0.25rem;
+    padding: 0.375rem 0.5rem;
+    font-size: 0.75rem;
+    font-family: 'JetBrains Mono', monospace;
+    color: #f1f5f9;
+    outline: none;
+    transition: border-color 150ms;
+  }
+  .input-field::placeholder { color: var(--muted); }
+  .input-field:focus { border-color: var(--accent); }
+
+  select option,
+  select optgroup {
+    color: #000;
+    background-color: #fff;
+  }
+
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.125rem 0.375rem;
+    border-radius: 0.25rem;
+    font-size: 0.65rem;
+    line-height: 1rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+  }
+  .tag-up   { background-color: color-mix(in srgb, var(--up)   15%, transparent); color: var(--up); }
+  .tag-down { background-color: color-mix(in srgb, var(--down) 15%, transparent); color: var(--down); }
+  .tag-low  { background-color: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); }
+  .tag-med  { background-color: color-mix(in srgb, var(--warn) 15%, transparent); color: var(--warn); }
+  .tag-high { background-color: color-mix(in srgb, var(--down) 15%, transparent); color: var(--down); }
+
+  .strength-bar  { height: 0.25rem; border-radius: 9999px; background-color: var(--surface-border); overflow: hidden; }
+  .strength-fill { height: 100%; border-radius: 9999px; transition: all 300ms; }
+
+  .table-row {
+    border-bottom: 1px solid color-mix(in srgb, var(--surface-border) 50%, transparent);
+    transition: background-color 150ms;
+  }
+  .table-row:hover { background-color: var(--surface-hover); }
+  .th { padding: 0.375rem 0.5rem; text-align: left; font-size: 0.65rem; line-height: 1rem; font-family: 'JetBrains Mono', monospace; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .td { padding: 0.375rem 0.5rem; font-size: 0.75rem; font-family: 'JetBrains Mono', monospace; color: #cbd5e1; }
+
+  .blink { animation: blink 0.8s ease-in-out 2; }
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.2; }
+  }
+
+  .pulse-up   { animation: pulse-up 0.5s ease-out; }
+  .pulse-down { animation: pulse-down 0.5s ease-out; }
+  @keyframes pulse-up   { 0% { background-color: rgba(0,212,164,0.3); } 100% { background-color: transparent; } }
+  @keyframes pulse-down { 0% { background-color: rgba(255,71,87,0.3);  } 100% { background-color: transparent; } }
+
+  /* Live indicator dot */
+  .live-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: #00d4a4;
+    box-shadow: 0 0 0 0 rgba(0, 212, 164, 0.7);
+    animation: live-ping 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  .live-dot.stale {
+    background-color: #4a5568;
+    box-shadow: none;
+    animation: none;
+  }
+  @keyframes live-ping {
+    0%   { box-shadow: 0 0 0 0 rgba(0, 212, 164, 0.7); }
+    70%  { box-shadow: 0 0 0 6px rgba(0, 212, 164, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(0, 212, 164, 0); }
+  }
+
+  /* Live badge box */
+  .live-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 0.6rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    background: rgba(0, 212, 164, 0.12);
+    color: #00d4a4;
+    border: 1px solid rgba(0, 212, 164, 0.3);
+  }
+  .live-badge.stale {
+    background: rgba(74, 85, 104, 0.2);
+    color: #4a5568;
+    border-color: rgba(74, 85, 104, 0.3);
+  }
+}

@@ -1,0 +1,90 @@
+{
+  "id": "gus-dermo",
+  "name": "June 3 Overnight complete",
+  "templateId": "mean-reversion-v2",
+  "status": "draft",
+  "version": "2.0",
+  "createdAt": "2026-06-03T17:22:54.375Z",
+  "updatedAt": "2026-06-04T00:02:24.369Z",
+  "engineContract": {
+    "version": "acme.algo-definition.v1",
+    "executionHome": "server-near-exchange",
+    "orderRouting": "disabled-until-deployed",
+    "marketDataSource": "server-subscription",
+    "savedBy": "acme-trader-ui"
+  },
+  "instruments": [
+    "RTY_ES"
+  ],
+  "signalRules": [
+    {
+      "id": "midpoint-ready",
+      "field": "thirtyMinuteVwap",
+      "operator": ">",
+      "value": 0,
+      "action": "pegMidpoint",
+      "enabled": true
+    },
+    {
+      "id": "entry-touch",
+      "field": "marketCanTradeTarget",
+      "operator": "=",
+      "value": true,
+      "action": "releaseSniperEntry",
+      "enabled": true
+    },
+    {
+      "id": "oco-cover",
+      "field": "entryFilled",
+      "operator": "=",
+      "value": true,
+      "action": "attachOcoCover",
+      "enabled": true
+    }
+  ],
+  "risk": {
+    "maxPosition": 1,
+    "maxLossAtr": 2,
+    "clipSchedule": "layered",
+    "requireMarketOpen": true
+  },
+  "midpointPeg": {
+    "enabled": false,
+    "source": "30m-vwap",
+    "label": "Peg VWAP for midpoint"
+  },
+  "layerPlan": {
+    "ticksOffMidpoint": 10,
+    "buyTicksOffMidpoint": 10,
+    "sellTicksOffMidpoint": 13,
+    "layerCount": 5,
+    "layerSpacingTicks": 4,
+    "maxLayers": 5,
+    "applySymmetrically": true,
+    "workBuySide": true,
+    "workSellSide": true
+  },
+  "syntheticOrderManager": {
+    "enabled": true,
+    "containerizedOrders": true,
+    "entryTechnique": "sniper-market-if-target-price-achievable",
+    "holdUntilTriggered": true,
+    "releaseDestination": "exchange-gateway"
+  },
+  "exitPolicy": {
+    "attachOnEntryFill": true,
+    "oco": true,
+    "profitTicksFromEntry": 6,
+    "stopTicksFromEntry": 40,
+    "stopType": "market",
+    "coverLimitPlacement": "above-bid-or-below-offer"
+  },
+  "orderPolicy": {
+    "mode": "synthetic-sniper",
+    "orderType": "synthetic-held-market-release",
+    "priceReference": "30m-vwap-midpoint",
+    "doNotCrossInside": true,
+    "liveOrderEntryEnabled": false
+  },
+  "notes": ""
+}

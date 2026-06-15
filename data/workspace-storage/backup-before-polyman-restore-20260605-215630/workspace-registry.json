@@ -1,0 +1,22 @@
+{
+  "version": "acme.server-workspaces.v1",
+  "activeId": "polyman",
+  "updatedAt": "2026-06-06T02:02:59.241Z",
+  "workspaces": {
+    "polyman": {
+      "id": "polyman",
+      "name": "Polyman",
+      "savedAt": "2026-06-06T02:02:59.225Z",
+      "serverSavedAt": "2026-06-06T02:02:59.231Z",
+      "panelCount": 33,
+      "visiblePanelCount": 32,
+      "meta": {
+        "name": "Polyman",
+        "savedAt": "2026-06-06T02:02:59.225Z",
+        "layoutVersion": "relativeValueSpreadPanelLayoutV5",
+        "panelCount": 33,
+        "visiblePanelCount": 32
+      }
+    }
+  }
+}
