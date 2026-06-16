@@ -1,4 +1,4 @@
-{
+﻿{
     "name":  "Ted S",
     "operator":  "Operator 1",
     "windows":  [
@@ -83,7 +83,7 @@
                         "y":  53,
                         "w":  389.8333740234375,
                         "h":  1038.5000305175781,
-                        "z":  2225,
+                        "z":  2236,
                         "collapsed":  false,
                         "provider":  "cme",
                         "symbol":  "RTY_ES",
@@ -115,7 +115,7 @@
                         "y":  48,
                         "w":  414.000244140625,
                         "h":  1037.9999389648438,
-                        "z":  2217,
+                        "z":  2242,
                         "collapsed":  false,
                         "provider":  "cme",
                         "symbol":  "YM_ES",
@@ -147,7 +147,7 @@
                         "y":  48,
                         "w":  402.6555480957031,
                         "h":  1039.8333740234375,
-                        "z":  2216,
+                        "z":  2239,
                         "collapsed":  false,
                         "provider":  "cme",
                         "symbol":  "ES_NQ",
@@ -314,38 +314,6 @@
                                               "atrMultiplier":  2,
                                               "volumePriceBins":  28
                                           }
-                    },
-                    {
-                        "id":  "depthLadder-1781532316678",
-                        "kind":  "depthLadder",
-                        "title":  "Depth Ladder 4",
-                        "x":  322.04605263157896,
-                        "y":  172,
-                        "w":  600,
-                        "h":  655,
-                        "z":  2227,
-                        "collapsed":  false,
-                        "provider":  "cme",
-                        "symbol":  "YM_ES",
-                        "depthLadderSettings":  {
-                                                    "columnOrder":  [
-                                                                        "bid",
-                                                                        "price",
-                                                                        "ask",
-                                                                        "orders"
-                                                                    ],
-                                                    "columnWidths":  {
-                                                                         "orders":  98.5970472532042,
-                                                                         "bid":  96.29352047418284,
-                                                                         "price":  88.86098782307388,
-                                                                         "ask":  108.2484444495391
-                                                                     },
-                                                    "density":  "small",
-                                                    "priceMultiplier":  1,
-                                                    "softGrid":  true,
-                                                    "actionMode":  "limit",
-                                                    "fastTrade":  true
-                                                }
                     }
                 ],
     "rows":  [
@@ -372,7 +340,9 @@
              ],
     "selectedProvider":  "cme",
     "selectedSymbol":  "YM_ES",
-    "updatedAt":  1781532319925,
-    "serverSavedAt":  "2026-06-16T14:31:48.9762398Z",
-    "serverReason":  "seed recovered Ted S 09 workspace"
+    "updatedAt":  1781621725394,
+    "recoveredFrom":  "leveldb-07-ted-s.json",
+    "sourceUpdatedAt":  1781532487862,
+    "serverSavedAt":  "2026-06-16T14:55:25.4092498Z",
+    "serverReason":  "seed recovered Ted S 09:08 workspace as default"
 }

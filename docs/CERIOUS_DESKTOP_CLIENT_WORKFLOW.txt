@@ -11,7 +11,7 @@ The browser portal is the first entry point. Today it runs locally and later it 
 The Windows thin client is a small launcher that opens the same authenticated terminal in a desktop-style app window. In the current local build it starts the local Cerious services, opens the terminal with the desktop-client flag, and uses the same saved workspace data. Later this launcher will authenticate to the cloud session and connect to services running near the exchange data center.
 
 3. Workspace Migration
-The Ted S workspace recovered from the 09:15 stable workspace set is the desktop seed layout. On first desktop-client launch, all widgets are minimized so the trader can place them deliberately. After the trader saves, the layout is stored locally for fast load and backed up server-side for recovery.
+The Ted S workspace recovered from the 09:08 stable workspace set is the default local/cloud workspace and the desktop seed layout. Browser/local/cloud launch loads it as saved. On first desktop-client launch only, all widgets are minimized so the trader can place them deliberately. After the trader saves, the layout is stored locally for fast load and backed up server-side for recovery.
 
 4. Layout Persistence
 The terminal saves the active layout locally and posts a server-side workspace snapshot through the gateway. Local state gives fast startup. Server-side snapshots protect the layout from browser storage loss and allow future cloud/session roaming.

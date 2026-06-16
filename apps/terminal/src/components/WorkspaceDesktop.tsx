@@ -377,7 +377,7 @@ const WORKSPACE_BACKUPS_KEY = 'cerious.workspace.backups.v1'
 const WORKSPACE_SESSION_TOKEN_KEY = 'cerious.workspace.sessionToken.v1'
 const DESKTOP_FIRST_LAUNCH_KEY = 'cerious.desktop.firstLaunchComplete.v1'
 const DESKTOP_CLIENT_DOWNLOAD_URL = '/downloads/CeriousSystems-Win64-ThinClient.zip'
-const TED_S_0915_RECOVERY_FILE = 'leveldb-09-ted-s.json'
+const TED_S_DEFAULT_RECOVERY_FILE = 'leveldb-07-ted-s.json'
 const ALGO_LIBRARY_KEY = 'cerious.algo.library.v1'
 const DEPTH_LADDER_LAYOUT_KEY = 'cerious.depth-ladder.layout.v1'
 const ALGO_LIBRARY_EVENT = 'cerious-algo-library'
@@ -9105,14 +9105,14 @@ export function WorkspaceDesktop() {
         if (!existing || item.updatedAt > existing.updatedAt) map.set(key, item)
         return map
       }, new Map<string, SavedWorkspace>()).values())
-      const recoveredTedS0915 = recovered
+      const recoveredTedSDefault = recovered
         .filter(item => workspaceKey(item.operator, item.name) === workspaceKey(DEFAULT_OPERATOR, 'Ted S'))
-        .find(item => item.recoveredFrom === TED_S_0915_RECOVERY_FILE)
+        .find(item => item.recoveredFrom === TED_S_DEFAULT_RECOVERY_FILE)
       const latestTedSByDate = latestRecovered
         .filter(item => workspaceKey(item.operator, item.name) === workspaceKey(DEFAULT_OPERATOR, 'Ted S'))
         .sort((a, b) => b.updatedAt - a.updatedAt)[0]
       const latestTedS = needsDesktopFirstLaunchSeed()
-        ? recoveredTedS0915 ?? latestTedSByDate
+        ? recoveredTedSDefault ?? latestTedSByDate
         : latestTedSByDate
 
       setSaved(current => {
@@ -9126,18 +9126,12 @@ export function WorkspaceDesktop() {
 
       if (!latestTedS) return
       const activeKey = workspaceKey(operatorName.trim() || DEFAULT_OPERATOR, workspaceName.trim() || '')
-      const tedSKey = workspaceKey(DEFAULT_OPERATOR, 'Ted S')
       const activeUpdatedAt = Number(initialWorkspace?.updatedAt || 0)
       const shouldActivateTedS =
         needsDesktopFirstLaunchSeed()
-        || (
-          activeKey !== tedSKey
-          && (
-          activeKey === workspaceKey(DEFAULT_OPERATOR, 'Ted')
-          || activeKey === workspaceKey(DEFAULT_OPERATOR, 'Cerious CME Desk')
-          || latestTedS.updatedAt > activeUpdatedAt
-          )
-        )
+        || activeKey === workspaceKey(DEFAULT_OPERATOR, 'Ted')
+        || activeKey === workspaceKey(DEFAULT_OPERATOR, 'Cerious CME Desk')
+        || latestTedS.updatedAt > activeUpdatedAt
       if (!shouldActivateTedS) return
 
       const activated = needsDesktopFirstLaunchSeed()
