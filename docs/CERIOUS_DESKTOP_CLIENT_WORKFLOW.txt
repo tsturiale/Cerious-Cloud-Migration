@@ -8,13 +8,13 @@ Cerious Systems will support two launch paths that share the same workspace, mar
 The browser portal is the first entry point. Today it runs locally and later it will be served from the cloud portal. The launch page shows Cerious branding, accepts a username and password, and starts the authenticated terminal session. The portal does not start market subscriptions until the user has authenticated.
 
 2. Windows Thin Client
-The Windows thin client is a small launcher that opens the same authenticated terminal in a desktop-style app window. In the current local build it starts the local Cerious services, opens the terminal with the desktop-client flag, and uses the same saved workspace data. Later this launcher will authenticate to the cloud session and connect to services running near the exchange data center.
+The Windows thin client is a small launcher that opens a Cerious Desktop toolbar instead of the full canvas. The toolbar can open the saved workspace as individual floating widget windows, open individual windows one at a time, save the workspace, or open the canvas view if needed. In the current local build it starts the local Cerious services, opens the terminal with the desktop-client toolbar flag, and uses the same saved workspace data. Later this launcher will authenticate to the cloud session and connect to services running near the exchange data center.
 
 3. Workspace Migration
 The Ted S workspace recovered from the 09:08 stable workspace set is the default local/cloud workspace and the desktop seed layout. Browser/local/cloud launch loads it as saved. On first desktop-client launch only, all widgets are minimized so the trader can place them deliberately. After the trader saves, the layout is stored locally for fast load and backed up server-side for recovery.
 
 4. Layout Persistence
-The terminal saves the active layout locally and posts a server-side workspace snapshot through the gateway. Local state gives fast startup. Server-side snapshots protect the layout from browser storage loss and allow future cloud/session roaming.
+The terminal saves the active layout locally and posts a server-side workspace snapshot through the gateway. Floating windows save their window bounds back into the workspace, so relaunching the desktop toolbar can reopen the same individual windows. Local state gives fast startup. Server-side snapshots protect the layout from browser storage loss and allow future cloud/session roaming.
 
 5. Market Data and Studies
 CME currently uses Databento through the price-services layer. REST backfill establishes baseline chart/study state, while live market data updates last traded price, top of book, DOM, and rolling OHLCV state. The UI consumes normalized service output and does not introduce product-specific pricing rules.

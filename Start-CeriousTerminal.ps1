@@ -219,7 +219,7 @@ function Open-Terminal {
   param([string]$BaseUrl)
   $launchId = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
   $desktopFlag = ""
-  if ($DesktopClient) { $desktopFlag = "&cerious_client=desktop" }
+  if ($DesktopClient) { $desktopFlag = "&cerious_client=desktop&desktop_toolbar=1" }
   $url = "$BaseUrl/?cerious_launch=$launchId$desktopFlag"
   $chrome = "C:\Program Files\Google\Chrome\Application\chrome.exe"
   if (Test-Path -LiteralPath $chrome) {

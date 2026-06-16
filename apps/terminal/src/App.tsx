@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { Toaster } from 'react-hot-toast'
-import { WorkspaceDesktop } from './components/WorkspaceDesktop'
+import { DesktopToolbar, WorkspaceDesktop, WorkspacePopoutWindow } from './components/WorkspaceDesktop'
 import { PanelWindow } from './components/PanelWindow'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { PortalGate } from './components/PortalGate'
@@ -53,8 +53,36 @@ const toasterStyle = {
 
 // Detect panel type once at module level (doesn't change during app lifetime)
 const PANEL = getPanelType()
+const SEARCH_PARAMS = new URLSearchParams(window.location.search)
+const WORKSPACE_POPOUT = SEARCH_PARAMS.get('workspace_popout')
+const DESKTOP_TOOLBAR = SEARCH_PARAMS.get('desktop_toolbar') === '1'
 
 export default function App() {
+  if (WORKSPACE_POPOUT) {
+    return (
+      <ErrorBoundary>
+        <PortalGate>
+          <AssetConnector />
+          <BroadcastSyncProvider />
+          <WorkspacePopoutWindow windowId={WORKSPACE_POPOUT} />
+        </PortalGate>
+        <Toaster position="bottom-right" toastOptions={{ style: toasterStyle }} />
+      </ErrorBoundary>
+    )
+  }
+
+  if (DESKTOP_TOOLBAR) {
+    return (
+      <ErrorBoundary>
+        <PortalGate>
+          <BroadcastSyncProvider />
+          <DesktopToolbar />
+        </PortalGate>
+        <Toaster position="bottom-right" toastOptions={{ style: toasterStyle }} />
+      </ErrorBoundary>
+    )
+  }
+
   // Panel window — standalone, positioned on a secondary monitor
   if (PANEL) {
     return (

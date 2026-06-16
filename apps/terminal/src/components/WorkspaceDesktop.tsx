@@ -9,6 +9,7 @@ import {
   Copy,
   Database,
   Download,
+  ExternalLink,
   Folder,
   FolderOpen,
   Plus,
@@ -70,6 +71,8 @@ type WorkspaceWindow = {
   provider?: ProviderKey
   symbol?: string
   account?: string
+  poppedOut?: boolean
+  floatingBounds?: FloatingWindowBounds
   chartSettings?: AcmeChartSettings
   depthLadderSettings?: DepthLadderSettings
 }
@@ -333,6 +336,13 @@ type SavedWorkspace = {
   updatedAt: number
   recoveredFrom?: string
   serverFile?: string
+}
+
+type FloatingWindowBounds = {
+  x: number
+  y: number
+  w: number
+  h: number
 }
 
 type RecoveredWorkspacesPayload = {
@@ -848,6 +858,49 @@ function persistWorkspaceSnapshot(next: SavedWorkspace, list: SavedWorkspace[], 
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
   if (makeDefault) window.localStorage.setItem(DEFAULT_WORKSPACE_KEY, JSON.stringify(next))
   backupWorkspace(next, backupReason)
+}
+
+function persistWorkspaceWindowPatch(id: string, patch: Partial<WorkspaceWindow>): SavedWorkspace | null {
+  const active = loadActiveWorkspace()
+  if (!active) return null
+  const next: SavedWorkspace = {
+    ...active,
+    windows: active.windows.map(item => item.id === id ? { ...item, ...patch } : item),
+    updatedAt: Date.now(),
+  }
+  const list = upsertSavedWorkspace(loadSavedWorkspaces(), next)
+  window.localStorage.setItem(WORKSPACE_NAMES_KEY, JSON.stringify(list))
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+  window.localStorage.setItem(DEFAULT_WORKSPACE_KEY, JSON.stringify(next))
+  return next
+}
+
+function currentFloatingBounds(): FloatingWindowBounds {
+  return {
+    x: Math.max(0, Math.round(window.screenX || 0)),
+    y: Math.max(0, Math.round(window.screenY || 0)),
+    w: Math.max(320, Math.round(window.outerWidth || window.innerWidth || 640)),
+    h: Math.max(240, Math.round(window.outerHeight || window.innerHeight || 480)),
+  }
+}
+
+function openWorkspaceFloatingWindow(item: WorkspaceWindow): Window | null {
+  const bounds = item.floatingBounds
+  const width = Math.round(bounds?.w ?? item.w ?? 720)
+  const height = Math.round(bounds?.h ?? item.h ?? 520)
+  const left = Math.round(bounds?.x ?? item.x ?? 80)
+  const top = Math.round(bounds?.y ?? item.y ?? 80)
+  const url = `${window.location.origin}${window.location.pathname}?workspace_popout=${encodeURIComponent(item.id)}&cerious_client=desktop`
+  const features = [
+    'popup=yes',
+    `width=${Math.max(320, width)}`,
+    `height=${Math.max(240, height)}`,
+    `left=${Math.max(0, left)}`,
+    `top=${Math.max(0, top)}`,
+    'resizable=yes',
+    'scrollbars=no',
+  ].join(',')
+  return window.open(url, `cerious-window-${item.id}`, features)
 }
 
 function isDesktopClientLaunch(): boolean {
@@ -1876,6 +1929,7 @@ function WorkspaceWindowFrame({
   onMove,
   onResize,
   onToggleCollapse,
+  onPopout,
   onClone,
   onClose,
   getWorkspacePan,
@@ -1889,6 +1943,7 @@ function WorkspaceWindowFrame({
   onMove: (id: string, x: number, y: number) => void
   onResize: (id: string, patch: Partial<Pick<WorkspaceWindow, 'x' | 'y' | 'w' | 'h'>>) => void
   onToggleCollapse: () => void
+  onPopout: () => void
   onClone: () => void
   onClose: () => void
   getWorkspacePan: () => { x: number; y: number }
@@ -2038,6 +2093,9 @@ function WorkspaceWindowFrame({
           <span className="truncate text-[11px] font-bold uppercase tracking-wide text-white">{displayTitle}</span>
         </div>
         <div className="flex items-center gap-1">
+          <button className="btn-neutral rounded p-1" title="Float window" onClick={onPopout}>
+            <ExternalLink size={13} />
+          </button>
           <button className="btn-neutral rounded p-1" title="Clone window" onClick={onClone}>
             <Copy size={13} />
           </button>
@@ -9421,6 +9479,25 @@ export function WorkspaceDesktop() {
     })
   }
 
+  const popOutWindow = (id: string) => {
+    const source = windows.find(item => item.id === id)
+    if (!source) return
+    const floatingWindow: WorkspaceWindow = {
+      ...source,
+      poppedOut: true,
+      floatingBounds: source.floatingBounds ?? {
+        x: Math.max(0, Math.round(source.x)),
+        y: Math.max(0, Math.round(source.y)),
+        w: Math.max(320, Math.round(source.w)),
+        h: Math.max(240, Math.round(source.h)),
+      },
+    }
+    setWindows(current => current.map(item => item.id === id ? floatingWindow : item))
+    persistWorkspaceWindowPatch(id, { poppedOut: true, floatingBounds: floatingWindow.floatingBounds })
+    const opened = openWorkspaceFloatingWindow(floatingWindow)
+    setSaveStatus(opened ? 'Window floated' : 'Popup blocked')
+  }
+
   const addWindow = (
     kind: WorkspaceWindowKind,
     template?: WorkspaceTemplate,
@@ -9627,40 +9704,50 @@ export function WorkspaceDesktop() {
           }}
         >
           <div className="absolute inset-0 opacity-[0.12]" style={{ backgroundImage: 'linear-gradient(#1f2937 1px, transparent 1px), linear-gradient(90deg, #1f2937 1px, transparent 1px)', backgroundSize: '32px 32px' }} />
-          {windows.map(item => (
-            <WorkspaceWindowFrame
-              key={item.id}
-              item={item}
-              active={item.z === maxZ}
-              onActivate={() => bringForward(item.id)}
-              onMove={moveWindow}
-              onResize={resizeWindow}
-              onToggleCollapse={() => toggleCollapse(item.id)}
-              onClone={() => cloneWindow(item.id)}
-              onClose={() => closeWindow(item.id)}
-              getWorkspacePan={() => workspacePanRef.current}
-              onDragPointerMove={handleWindowDragPointerMove}
-              onDragPointerEnd={stopWorkspaceEdgePan}
-            >
-              {renderWindowBody(item, {
-                marketRows,
-                setMarketRows,
-                selectedProvider,
-                selectedSymbol,
-                operatorName: operatorName.trim() || DEFAULT_OPERATOR,
-                selectProduct,
-                selectWindowProduct,
-                alerts,
-                setAlerts,
-                cloneChart,
-                cloneRunway,
-                openPredictionChart,
-                updateWindowChartSettings,
-                updateWindowDepthLadderSettings,
-                saveDepthLadderDefaultForWindow,
-              })}
-            </WorkspaceWindowFrame>
-          ))}
+          {windows.map(item => {
+            const floatedInDesktop = isDesktopClientLaunch() && item.poppedOut
+            return (
+              <WorkspaceWindowFrame
+                key={item.id}
+                item={item}
+                active={item.z === maxZ}
+                onActivate={() => bringForward(item.id)}
+                onMove={moveWindow}
+                onResize={resizeWindow}
+                onToggleCollapse={() => toggleCollapse(item.id)}
+                onPopout={() => popOutWindow(item.id)}
+                onClone={() => cloneWindow(item.id)}
+                onClose={() => closeWindow(item.id)}
+                getWorkspacePan={() => workspacePanRef.current}
+                onDragPointerMove={handleWindowDragPointerMove}
+                onDragPointerEnd={stopWorkspaceEdgePan}
+              >
+                {floatedInDesktop ? (
+                  <div className="flex h-full flex-col items-center justify-center gap-3 bg-[#05070b] p-4 text-center">
+                    <ExternalLink size={28} className="text-accent" />
+                    <div className="font-mono text-xs uppercase tracking-wide text-slate-200">Floating window</div>
+                    <button className="btn-accent px-3 py-2 text-xs" onClick={() => popOutWindow(item.id)}>Focus / Reopen</button>
+                  </div>
+                ) : renderWindowBody(item, {
+                  marketRows,
+                  setMarketRows,
+                  selectedProvider,
+                  selectedSymbol,
+                  operatorName: operatorName.trim() || DEFAULT_OPERATOR,
+                  selectProduct,
+                  selectWindowProduct,
+                  alerts,
+                  setAlerts,
+                  cloneChart,
+                  cloneRunway,
+                  openPredictionChart,
+                  updateWindowChartSettings,
+                  updateWindowDepthLadderSettings,
+                  saveDepthLadderDefaultForWindow,
+                })}
+              </WorkspaceWindowFrame>
+            )
+          })}
         </div>
       </main>
 
@@ -9673,6 +9760,228 @@ export function WorkspaceDesktop() {
         </div>
         <div />
       </footer>
+    </div>
+  )
+}
+
+export function WorkspacePopoutWindow({ windowId }: { windowId: string }) {
+  useMarketBootstrap()
+  const initialWorkspace = useMemo(loadActiveWorkspace, [])
+  const initialWindow = initialWorkspace?.windows.find(item => item.id === windowId)
+  const [workspace, setWorkspace] = useState<SavedWorkspace | null>(initialWorkspace)
+  const [item, setItem] = useState<WorkspaceWindow | null>(initialWindow ?? null)
+  const [marketRows, setMarketRows] = useState<MarketRowConfig[]>(() => initialWorkspace?.rows ?? [])
+  const [alerts, setAlerts] = useState<AlertRule[]>(() => initialWorkspace?.alerts ?? [])
+  const [selectedProvider, setSelectedProvider] = useState<ProviderKey>(normalizeProviderKey(initialWorkspace?.selectedProvider))
+  const [selectedSymbol, setSelectedSymbol] = useState(initialWorkspace?.selectedSymbol ?? initialWindow?.symbol ?? 'ES')
+  const setProvider = useStore(s => s.setMarketProvider)
+  const title = item?.kind === 'depthLadder' && item.symbol ? `${WINDOW_LABELS.depthLadder} - ${item.symbol}` : item?.title ?? 'Floating Window'
+
+  const patchWindow = (patch: Partial<WorkspaceWindow>) => {
+    setItem(current => current ? { ...current, ...patch } : current)
+    const next = persistWorkspaceWindowPatch(windowId, patch)
+    if (next) setWorkspace(next)
+  }
+
+  useEffect(() => {
+    const syncBounds = () => patchWindow({ poppedOut: true, floatingBounds: currentFloatingBounds() })
+    syncBounds()
+    const id = window.setInterval(syncBounds, 2500)
+    window.addEventListener('beforeunload', syncBounds)
+    return () => {
+      window.clearInterval(id)
+      window.removeEventListener('beforeunload', syncBounds)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [windowId])
+
+  if (!item) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-[#05070b] p-6 text-slate-200">
+        <div className="border border-surface-border bg-surface-card p-5 font-mono text-xs">
+          Floating window not found in the active workspace.
+        </div>
+      </div>
+    )
+  }
+
+  const selectProduct = (provider: ProviderKey, symbol: string) => {
+    const nextProvider = normalizeProviderKey(provider)
+    setProvider(nextProvider)
+    setSelectedProvider(nextProvider)
+    setSelectedSymbol(symbol)
+  }
+
+  const selectWindowProduct = (_id: string, provider: ProviderKey, symbol: string) => {
+    const nextProvider = normalizeProviderKey(provider)
+    patchWindow({ provider: nextProvider, symbol })
+  }
+
+  const updateWindowChartSettings = (_id: string, chartSettings: AcmeChartSettings) => patchWindow({ chartSettings })
+  const updateWindowDepthLadderSettings = (_id: string, depthLadderSettings: DepthLadderSettings) => patchWindow({ depthLadderSettings: normalizeDepthLadderSettings(depthLadderSettings) })
+  const saveDepthLadderDefaultForWindow = (_id: string, depthLadderSettings: DepthLadderSettings) => {
+    const normalized = saveDepthLadderDefaultSettings(depthLadderSettings)
+    patchWindow({ depthLadderSettings: normalized })
+  }
+  const dockWindow = () => {
+    patchWindow({ poppedOut: false, floatingBounds: currentFloatingBounds() })
+    window.close()
+  }
+
+  return (
+    <div className="flex h-screen flex-col overflow-hidden bg-[#05070b] text-slate-200">
+      <header className="flex h-10 shrink-0 items-center justify-between border-b border-blue-500/60 bg-[#080c14] px-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <img src={ceriousLogo} alt="Cerious Systems" className="h-6 w-6 rounded border border-surface-border object-cover" />
+          <span className="truncate font-mono text-[11px] font-bold uppercase tracking-wide text-white">{title}</span>
+          <span className="font-mono text-[10px] text-muted">{item.provider?.toUpperCase() ?? selectedProvider.toUpperCase()} {item.symbol ?? selectedSymbol}</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <button className="btn-neutral px-2 py-1 text-[10px]" onClick={() => patchWindow({ poppedOut: true, floatingBounds: currentFloatingBounds() })}>Save Frame</button>
+          <button className="btn-neutral px-2 py-1 text-[10px]" onClick={dockWindow}>Dock</button>
+          <button className="btn-neutral px-2 py-1 text-[10px]" onClick={() => window.close()}>Close</button>
+        </div>
+      </header>
+      <div className="min-h-0 flex-1 overflow-hidden">
+        {renderWindowBody(item, {
+          marketRows,
+          setMarketRows,
+          selectedProvider,
+          selectedSymbol,
+          operatorName: workspace?.operator ?? DEFAULT_OPERATOR,
+          selectProduct,
+          selectWindowProduct,
+          alerts,
+          setAlerts,
+          cloneChart: () => undefined,
+          cloneRunway: () => undefined,
+          openPredictionChart: () => undefined,
+          updateWindowChartSettings,
+          updateWindowDepthLadderSettings,
+          saveDepthLadderDefaultForWindow,
+        })}
+      </div>
+    </div>
+  )
+}
+
+export function DesktopToolbar() {
+  useMarketBootstrap()
+  const initialWorkspace = useMemo(loadActiveWorkspace, [])
+  const [workspace, setWorkspace] = useState<SavedWorkspace | null>(initialWorkspace)
+  const [workspaces, setWorkspaces] = useState<SavedWorkspace[]>(() => loadSavedWorkspaces())
+  const [status, setStatus] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    const loadServerDefault = async () => {
+      const serverWorkspaces = await fetchServerSavedWorkspaces()
+      if (cancelled || !serverWorkspaces.length) return
+      const merged = serverWorkspaces.reduce((list, item) => upsertSavedWorkspace(list, item), loadSavedWorkspaces())
+      setWorkspaces(merged)
+      const active = loadActiveWorkspace()
+      const latest = serverWorkspaces
+        .filter(item => workspaceKey(item.operator, item.name) === workspaceKey(DEFAULT_OPERATOR, 'Ted S'))
+        .sort((a, b) => b.updatedAt - a.updatedAt)[0] ?? serverWorkspaces[0]
+      if (!active || latest.updatedAt > active.updatedAt) {
+        persistWorkspaceSnapshot(latest, merged, true, 'desktop toolbar server default')
+        setWorkspace(latest)
+      } else {
+        setWorkspace(active)
+      }
+    }
+    loadServerDefault()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const activeWorkspace = workspace ?? loadActiveWorkspace()
+  const activeKey = activeWorkspace ? workspaceKey(activeWorkspace.operator, activeWorkspace.name) : ''
+
+  const loadWorkspace = (key: string) => {
+    const next = workspaces.find(item => workspaceKey(item.operator, item.name) === key)
+    if (!next) return
+    persistWorkspaceSnapshot(next, workspaces, true, 'desktop toolbar load')
+    setWorkspace(next)
+    setStatus(`Loaded ${next.name}`)
+  }
+
+  const openOne = (windowItem: WorkspaceWindow) => {
+    const floatingWindow: WorkspaceWindow = {
+      ...windowItem,
+      poppedOut: true,
+      floatingBounds: windowItem.floatingBounds ?? {
+        x: Math.max(0, Math.round(windowItem.x)),
+        y: Math.max(0, Math.round(windowItem.y)),
+        w: Math.max(360, Math.round(windowItem.w)),
+        h: Math.max(260, Math.round(windowItem.h)),
+      },
+    }
+    persistWorkspaceWindowPatch(windowItem.id, { poppedOut: true, floatingBounds: floatingWindow.floatingBounds })
+    openWorkspaceFloatingWindow(floatingWindow)
+  }
+
+  const openFloatingWorkspace = () => {
+    if (!activeWorkspace) return
+    const preferred = activeWorkspace.windows.filter(item => item.poppedOut || !item.collapsed)
+    const targets = preferred.length ? preferred : activeWorkspace.windows
+    targets.forEach((item, index) => {
+      const shifted = item.floatingBounds
+        ? item
+        : { ...item, floatingBounds: { x: 80 + index * 24, y: 70 + index * 22, w: Math.max(360, item.w), h: Math.max(260, item.h) } }
+      openOne(shifted)
+    })
+    setStatus(`Opened ${targets.length} windows`)
+  }
+
+  const saveWorkspace = async () => {
+    const latest = loadActiveWorkspace()
+    if (!latest) return
+    setWorkspace(latest)
+    const ok = await saveWorkspaceServerSnapshot(latest, 'desktop toolbar save')
+    setStatus(ok ? 'Saved local + server' : 'Saved local; server pending')
+  }
+
+  const openCanvas = () => {
+    window.open(`${window.location.origin}${window.location.pathname}?cerious_client=desktop`, 'cerious-canvas', 'popup=yes,width=1280,height=900,left=80,top=60,resizable=yes')
+  }
+
+  return (
+    <div className="flex h-screen flex-col overflow-hidden bg-[#05070b] text-slate-100">
+      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-blue-500/60 bg-[#080c14] px-3">
+        <img src={ceriousLogo} alt="Cerious Systems" className="h-8 w-8 rounded border border-surface-border object-cover" />
+        <div className="mr-2 min-w-0">
+          <div className="font-mono text-[11px] font-black uppercase tracking-wide text-white">Cerious Desktop</div>
+          <div className="font-mono text-[9px] text-muted">Floating workspace launcher</div>
+        </div>
+        <select className="input-field min-w-[180px] py-1 text-[11px]" value={activeKey} onChange={event => loadWorkspace(event.target.value)}>
+          <option value="">Load workspace...</option>
+          {workspaces.map(item => <option key={workspaceKey(item.operator, item.name)} value={workspaceKey(item.operator, item.name)}>{item.name}</option>)}
+        </select>
+        <button className="btn-accent px-3 py-2 text-[11px]" onClick={openFloatingWorkspace}>Open Floating Workspace</button>
+        <button className="btn-neutral px-3 py-2 text-[11px]" onClick={saveWorkspace}>Save</button>
+        <button className="btn-neutral px-3 py-2 text-[11px]" onClick={openCanvas}>Open Canvas</button>
+        <span className="ml-auto font-mono text-[10px] text-accent">{status}</span>
+      </header>
+      <main className="min-h-0 flex-1 overflow-auto p-3">
+        {!activeWorkspace ? (
+          <div className="border border-surface-border bg-surface-card p-4 font-mono text-xs text-muted">No workspace loaded.</div>
+        ) : (
+          <div className="grid gap-2">
+            {activeWorkspace.windows.map(item => (
+              <div key={item.id} className="grid grid-cols-[1fr_auto_auto] items-center gap-2 border border-surface-border bg-[#0b111c] px-3 py-2">
+                <div className="min-w-0">
+                  <div className="truncate font-mono text-[11px] font-bold uppercase text-white">{item.kind === 'depthLadder' && item.symbol ? `${WINDOW_LABELS.depthLadder} - ${item.symbol}` : item.title}</div>
+                  <div className="font-mono text-[10px] text-muted">{item.provider?.toUpperCase() ?? 'CME'} {item.symbol ?? ''} {item.poppedOut ? 'FLOATING' : item.collapsed ? 'MINIMIZED' : 'CANVAS'}</div>
+                </div>
+                <button className="btn-accent px-3 py-1 text-[10px]" onClick={() => openOne(item)}>Open</button>
+                <button className="btn-neutral px-3 py-1 text-[10px]" onClick={() => persistWorkspaceWindowPatch(item.id, { poppedOut: false })}>Dock</button>
+              </div>
+            ))}
+          </div>
+        )}
+      </main>
     </div>
   )
 }

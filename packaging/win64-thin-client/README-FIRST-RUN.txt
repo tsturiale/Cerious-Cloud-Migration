@@ -12,7 +12,8 @@ What it does:
 1. Finds the local Cerious Systems project root.
 2. Starts the same deterministic service launcher used by the toolbar.
 3. Opens the terminal in a desktop-style app window with the desktop-client flag.
-4. Uses the same login portal and workspace persistence as the browser portal.
+4. Shows the Cerious Desktop toolbar, which opens individual workspace widgets as floating windows outside the canvas.
+5. Uses the same login portal and workspace persistence as the browser portal.
 
 Current local project root:
 C:\Users\tstur\Documents\Codex\Cerious Systems\Cerious local
