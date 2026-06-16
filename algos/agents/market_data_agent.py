@@ -18,6 +18,8 @@ from typing import Callable, Dict, List, Optional
 from core.state_store import StateStore, BarState
 
 logger = logging.getLogger("MarketDataAgent")
+_PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir))
+_DEFAULT_CRYPTO_DATA_DIR = os.path.join(_PROJECT_ROOT, "data", "crypto")
 
 
 # ─── VWAP calculation helper ──────────────────────────────────────────────────
@@ -63,7 +65,7 @@ class MarketDataAgent:
         self.cfg = cfg
         self.store = store
         self.on_bar_callback = on_bar_callback
-        self.data_dir = data_dir or r"C:\Users\trade\OneDrive\Desktop\Crypto Data"
+        self.data_dir = data_dir or os.getenv("CERIOUS_CRYPTO_DATA_DIR", _DEFAULT_CRYPTO_DATA_DIR)
 
         self._exchange = None
         self._backtest_data: Dict[str, pd.DataFrame] = {}

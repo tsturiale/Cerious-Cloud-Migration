@@ -124,4 +124,4 @@ reporting:
   report_interval_hours: 24
   google_sheets_enabled: true
   google_sheet_name: ASYM_Edge_Execution
-  credentials_path: "C:\\Users\\trade\\OneDrive\\Desktop\\Crypto Data\\Credential.json.json"
+  credentials_path: "data/credentials/google-service-account.json"

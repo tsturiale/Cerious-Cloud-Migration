@@ -22,6 +22,7 @@ from datetime import datetime
 
 # ─── Path setup ───────────────────────────────────────────────────────────────
 _HERE = os.path.dirname(os.path.abspath(__file__))
+_PROJECT_ROOT = os.path.abspath(os.path.join(_HERE, os.pardir))
 sys.path.insert(0, _HERE)  # F Systematica root
 
 logging.basicConfig(
@@ -66,7 +67,7 @@ class FSystematicaBacktest:
         self.start = start
         self.end = end
         self.warmup_bars = warmup_bars
-        self.data_dir = r"C:\Users\trade\OneDrive\Desktop\Crypto Data"
+        self.data_dir = os.getenv("CERIOUS_CRYPTO_DATA_DIR", os.path.join(_PROJECT_ROOT, "data", "crypto"))
 
         # ── Initialize all agents ─────────────────────────────────────────────
         self.store = StateStore()

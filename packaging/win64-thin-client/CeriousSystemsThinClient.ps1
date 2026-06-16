@@ -5,9 +5,11 @@ param(
 $ErrorActionPreference = "Stop"
 
 function Resolve-CeriousRoot {
+  $packageParent = Split-Path -Parent $PSScriptRoot
   $candidates = @(
     $env:CERIOUS_SYSTEMS_ROOT,
-    "C:\Users\tstur\Documents\Codex\2026-06-10\Cerious Systems",
+    (Join-Path $packageParent "Cerious local"),
+    "C:\Users\tstur\Documents\Codex\Cerious Systems\Cerious local",
     (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\..") -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Path -First 1)
   ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
 

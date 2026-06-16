@@ -12,7 +12,8 @@ import logging
 from typing import Dict, Optional
 
 # Add parent data directory to path so we can import the existing engine
-_DATA_DIR = r"C:\Users\trade\OneDrive\Desktop\Crypto Data"
+_PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir))
+_DATA_DIR = os.getenv("CERIOUS_CRYPTO_DATA_DIR", os.path.join(_PROJECT_ROOT, "data", "crypto"))
 if _DATA_DIR not in sys.path:
     sys.path.insert(0, _DATA_DIR)
 

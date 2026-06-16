@@ -13,6 +13,8 @@ from typing import Dict, List
 from core.state_store import StateStore
 
 logger = logging.getLogger("ReportingAgent")
+_PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir))
+_DEFAULT_CREDENTIALS_DIR = os.path.join(_PROJECT_ROOT, "data", "credentials")
 
 
 class ReportingAgent:
@@ -40,7 +42,7 @@ class ReportingAgent:
     def _init_sheets(self):
         """Initialize Google Sheets connector (reuses existing gspread pattern)."""
         import sys
-        data_dir = r"C:\Users\trade\OneDrive\Desktop\Crypto Data"
+        data_dir = os.getenv("CERIOUS_CREDENTIALS_DIR", _DEFAULT_CREDENTIALS_DIR)
         if data_dir not in sys.path:
             sys.path.insert(0, data_dir)
         try:

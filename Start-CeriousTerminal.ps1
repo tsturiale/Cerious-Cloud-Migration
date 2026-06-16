@@ -74,11 +74,18 @@ function Test-BackendContract {
   return ($payload -and $payload.app -eq "cerious-systems" -and [int]$payload.contractVersion -ge $RequiredContractVersion)
 }
 
+function Test-BackendOwnedByThisRoot {
+  $proc = Get-PortProcess -Port 8000
+  if (!$proc) { return $false }
+  $cmd = [string]$proc.CommandLine
+  return ($cmd -and $cmd.Contains($Root))
+}
+
 function Wait-BackendHealth {
   param([int]$Seconds = 60)
   $deadline = (Get-Date).AddSeconds($Seconds)
   while ((Get-Date) -lt $deadline) {
-    if ((Test-BackendHealth) -and (Test-BackendContract)) { return $true }
+    if ((Test-BackendHealth) -and (Test-BackendContract) -and (Test-BackendOwnedByThisRoot)) { return $true }
     Start-Sleep -Milliseconds 500
   }
   return $false
@@ -110,7 +117,8 @@ function Stop-StaleCeriousPortProcess {
   $proc = Get-PortProcess -Port $Port
   if (!$proc) { return $false }
   $cmd = [string]$proc.CommandLine
-  if ($cmd -and $cmd.Contains($Root)) {
+  $isCeriousBackend = Test-BackendHealth
+  if (($cmd -and $cmd.Contains($Root)) -or $isCeriousBackend) {
     Write-LauncherLog "Stopping stale Cerious process pid=$($proc.ProcessId) on port $Port"
     Stop-Process -Id $proc.ProcessId -Force -ErrorAction Stop
     Start-Sleep -Seconds 1
@@ -122,8 +130,8 @@ function Stop-StaleCeriousPortProcess {
 
 function Find-Npm {
   $candidates = @(
-    (Join-Path $env:ProgramFiles "nodejs\npm.cmd"),
-    "C:\Users\tstur\OneDrive\Documents\Arbitek v1\QuantSwarmTerminal\.tools\node-v26.3.0-win-x64\npm.cmd"
+    (Join-Path $Root ".tools\node-v26.3.0-win-x64\npm.cmd"),
+    (Join-Path $env:ProgramFiles "nodejs\npm.cmd")
   )
   $cmd = Get-Command npm.cmd -ErrorAction SilentlyContinue
   if ($cmd) { $candidates = @($cmd.Source) + $candidates }
@@ -140,8 +148,14 @@ function Start-Backend {
   }
 
   if ((Test-BackendHealth) -and (Test-BackendContract)) {
-    Write-LauncherLog "Backend health and contract OK on 127.0.0.1:8000"
-    return
+    if (Test-BackendOwnedByThisRoot) {
+      Write-LauncherLog "Backend health and contract OK on 127.0.0.1:8000"
+      return
+    }
+    Write-LauncherLog "Cerious backend is healthy but running from another root; restarting from $Root"
+    if (!(Stop-StaleCeriousPortProcess -Port 8000)) {
+      throw "Port 8000 is a Cerious backend from another root but could not be stopped."
+    }
   }
 
   if (Test-LocalPort -Port 8000) {

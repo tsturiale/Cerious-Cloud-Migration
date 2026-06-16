@@ -15,7 +15,7 @@ What it does:
 4. Uses the same login portal and workspace persistence as the browser portal.
 
 Current local project root:
-C:\Users\tstur\Documents\Codex\2026-06-10\Cerious Systems
+C:\Users\tstur\Documents\Codex\Cerious Systems\Cerious local
 
 If the project moves, set this environment variable before launching:
 CERIOUS_SYSTEMS_ROOT=C:\path\to\Cerious Systems

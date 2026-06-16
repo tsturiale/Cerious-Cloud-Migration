@@ -465,6 +465,7 @@ async def system_contract() -> dict[str, Any]:
         "ok": True,
         "app": "cerious-systems",
         "contractVersion": 10,
+        "rootPath": str(ROOT),
         "features": [
             "backend-served-terminal",
             "startup-warmup",
