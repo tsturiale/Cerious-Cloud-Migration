@@ -9924,15 +9924,30 @@ export function DesktopToolbar() {
 
   const openFloatingWorkspace = () => {
     if (!activeWorkspace) return
-    const preferred = activeWorkspace.windows.filter(item => item.poppedOut || !item.collapsed)
-    const targets = preferred.length ? preferred : activeWorkspace.windows
-    targets.forEach((item, index) => {
-      const shifted = item.floatingBounds
+    const floatingWindows = activeWorkspace.windows.map((item, index) => {
+      const withBounds = item.floatingBounds
         ? item
         : { ...item, floatingBounds: { x: 80 + index * 24, y: 70 + index * 22, w: Math.max(360, item.w), h: Math.max(260, item.h) } }
-      openOne(shifted)
+      return {
+        ...withBounds,
+        poppedOut: true,
+        collapsed: false,
+      }
     })
-    setStatus(`Opened ${targets.length} windows`)
+    let opened = 0
+    floatingWindows.forEach(item => {
+      if (openWorkspaceFloatingWindow(item)) opened += 1
+    })
+    const nextWorkspace: SavedWorkspace = {
+      ...activeWorkspace,
+      windows: activeWorkspace.windows.map(item => floatingWindows.find(floating => floating.id === item.id) ?? item),
+      updatedAt: Date.now(),
+    }
+    const merged = upsertSavedWorkspace(workspaces, nextWorkspace)
+    persistWorkspaceSnapshot(nextWorkspace, merged, true, 'desktop toolbar open floating workspace')
+    setWorkspaces(merged)
+    setWorkspace(nextWorkspace)
+    setStatus(opened === floatingWindows.length ? `Opened ${opened} windows` : `Opened ${opened}/${floatingWindows.length}; allow popups`)
   }
 
   const saveWorkspace = async () => {
