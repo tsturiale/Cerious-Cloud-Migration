@@ -1,3 +1,7 @@
+param(
+  [switch]$DesktopClient
+)
+
 $ErrorActionPreference = "Stop"
 
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -200,7 +204,9 @@ function Invoke-SystemWarmup {
 function Open-Terminal {
   param([string]$BaseUrl)
   $launchId = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
-  $url = "$BaseUrl/?cerious_launch=$launchId"
+  $desktopFlag = ""
+  if ($DesktopClient) { $desktopFlag = "&cerious_client=desktop" }
+  $url = "$BaseUrl/?cerious_launch=$launchId$desktopFlag"
   $chrome = "C:\Program Files\Google\Chrome\Application\chrome.exe"
   if (Test-Path -LiteralPath $chrome) {
     Start-Process -FilePath $chrome -ArgumentList @("--new-window", "--app=$url")

@@ -48,6 +48,9 @@ class Settings:
     twilio_account_sid: str = os.getenv("TWILIO_ACCOUNT_SID", "").strip()
     twilio_auth_token: str = os.getenv("TWILIO_AUTH_TOKEN", "").strip()
     twilio_from_phone: str = os.getenv("TWILIO_FROM_PHONE", "").strip()
+    portal_username: str = os.getenv("CERIOUS_PORTAL_USERNAME", "tsturiale").strip()
+    portal_password: str = os.getenv("CERIOUS_PORTAL_PASSWORD", "").strip()
+    auth_secret: str = os.getenv("CERIOUS_AUTH_SECRET", "cerious-local-dev-secret").strip()
     dry_run: bool = os.getenv("CERIOUS_DRY_RUN", "1") != "0"
 
 

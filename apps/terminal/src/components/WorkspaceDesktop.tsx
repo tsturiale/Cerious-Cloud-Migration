@@ -331,6 +331,8 @@ type SavedWorkspace = {
   selectedProvider?: ProviderKey
   selectedSymbol?: string
   updatedAt: number
+  recoveredFrom?: string
+  serverFile?: string
 }
 
 type RecoveredWorkspacesPayload = {
@@ -372,6 +374,10 @@ const STORAGE_KEY = 'cerious.workspace.desktop.v1'
 const WORKSPACE_NAMES_KEY = 'cerious.workspace.names.v1'
 const DEFAULT_WORKSPACE_KEY = 'cerious.workspace.default.v1'
 const WORKSPACE_BACKUPS_KEY = 'cerious.workspace.backups.v1'
+const WORKSPACE_SESSION_TOKEN_KEY = 'cerious.workspace.sessionToken.v1'
+const DESKTOP_FIRST_LAUNCH_KEY = 'cerious.desktop.firstLaunchComplete.v1'
+const DESKTOP_CLIENT_DOWNLOAD_URL = '/downloads/CeriousSystems-Win64-ThinClient.zip'
+const TED_S_0915_RECOVERY_FILE = 'leveldb-09-ted-s.json'
 const ALGO_LIBRARY_KEY = 'cerious.algo.library.v1'
 const DEPTH_LADDER_LAYOUT_KEY = 'cerious.depth-ladder.layout.v1'
 const ALGO_LIBRARY_EVENT = 'cerious-algo-library'
@@ -744,6 +750,8 @@ function normalizeWorkspace(raw: Partial<SavedWorkspace> | null | undefined): Sa
     selectedProvider: normalizeProviderKey(raw.selectedProvider),
     selectedSymbol: raw.selectedSymbol,
     updatedAt: Number(raw.updatedAt || Date.now()),
+    recoveredFrom: raw.recoveredFrom,
+    serverFile: raw.serverFile,
   }
 }
 
@@ -842,9 +850,65 @@ function persistWorkspaceSnapshot(next: SavedWorkspace, list: SavedWorkspace[], 
   backupWorkspace(next, backupReason)
 }
 
+function isDesktopClientLaunch(): boolean {
+  try {
+    return new URLSearchParams(window.location.search).get('cerious_client') === 'desktop'
+  } catch {
+    return false
+  }
+}
+
+function needsDesktopFirstLaunchSeed(): boolean {
+  return isDesktopClientLaunch() && window.localStorage.getItem(DESKTOP_FIRST_LAUNCH_KEY) !== '1'
+}
+
+function collapseWorkspaceWindows(workspace: SavedWorkspace): SavedWorkspace {
+  return {
+    ...workspace,
+    windows: workspace.windows.map(item => ({ ...item, collapsed: true })),
+  }
+}
+
+function workspaceSessionToken(): string {
+  return window.localStorage.getItem(WORKSPACE_SESSION_TOKEN_KEY) || ''
+}
+
+async function saveWorkspaceServerSnapshot(next: SavedWorkspace, reason: string): Promise<boolean> {
+  try {
+    const response = await fetch('/api/workspaces/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        workspace: next,
+        reason,
+        sessionToken: workspaceSessionToken(),
+      }),
+    })
+    return response.ok
+  } catch {
+    return false
+  }
+}
+
 async function fetchRecoveredWorkspaces(): Promise<SavedWorkspace[]> {
   try {
     const response = await fetch('/api/workspaces/recovered', { cache: 'no-store' })
+    if (!response.ok) return []
+    const payload = await response.json() as RecoveredWorkspacesPayload
+    if (!Array.isArray(payload.workspaces)) return []
+    return payload.workspaces
+      .map(normalizeWorkspace)
+      .filter((item): item is SavedWorkspace => !!item)
+  } catch {
+    return []
+  }
+}
+
+async function fetchServerSavedWorkspaces(): Promise<SavedWorkspace[]> {
+  try {
+    const token = workspaceSessionToken()
+    const suffix = token ? `?token=${encodeURIComponent(token)}` : ''
+    const response = await fetch(`/api/workspaces/saved${suffix}`, { cache: 'no-store' })
     if (!response.ok) return []
     const payload = await response.json() as RecoveredWorkspacesPayload
     if (!Array.isArray(payload.workspaces)) return []
@@ -9029,17 +9093,27 @@ export function WorkspaceDesktop() {
   useEffect(() => {
     let cancelled = false
     const restoreRecoveredWorkspace = async () => {
-      const recovered = await fetchRecoveredWorkspaces()
-      if (cancelled || !recovered.length) return
-      const latestRecovered = Array.from(recovered.reduce((map, item) => {
+      const [recovered, serverSaved] = await Promise.all([
+        fetchRecoveredWorkspaces(),
+        fetchServerSavedWorkspaces(),
+      ])
+      const availableWorkspaces = [...serverSaved, ...recovered]
+      if (cancelled || !availableWorkspaces.length) return
+      const latestRecovered = Array.from(availableWorkspaces.reduce((map, item) => {
         const key = workspaceKey(item.operator, item.name)
         const existing = map.get(key)
         if (!existing || item.updatedAt > existing.updatedAt) map.set(key, item)
         return map
       }, new Map<string, SavedWorkspace>()).values())
-      const latestTedS = latestRecovered
+      const recoveredTedS0915 = recovered
+        .filter(item => workspaceKey(item.operator, item.name) === workspaceKey(DEFAULT_OPERATOR, 'Ted S'))
+        .find(item => item.recoveredFrom === TED_S_0915_RECOVERY_FILE)
+      const latestTedSByDate = latestRecovered
         .filter(item => workspaceKey(item.operator, item.name) === workspaceKey(DEFAULT_OPERATOR, 'Ted S'))
         .sort((a, b) => b.updatedAt - a.updatedAt)[0]
+      const latestTedS = needsDesktopFirstLaunchSeed()
+        ? recoveredTedS0915 ?? latestTedSByDate
+        : latestTedSByDate
 
       setSaved(current => {
         const base = latestTedS
@@ -9055,15 +9129,20 @@ export function WorkspaceDesktop() {
       const tedSKey = workspaceKey(DEFAULT_OPERATOR, 'Ted S')
       const activeUpdatedAt = Number(initialWorkspace?.updatedAt || 0)
       const shouldActivateTedS =
-        activeKey !== tedSKey
-        && (
+        needsDesktopFirstLaunchSeed()
+        || (
+          activeKey !== tedSKey
+          && (
           activeKey === workspaceKey(DEFAULT_OPERATOR, 'Ted')
           || activeKey === workspaceKey(DEFAULT_OPERATOR, 'Cerious CME Desk')
           || latestTedS.updatedAt > activeUpdatedAt
+          )
         )
       if (!shouldActivateTedS) return
 
-      const activated = { ...latestTedS, updatedAt: Date.now() }
+      const activated = needsDesktopFirstLaunchSeed()
+        ? collapseWorkspaceWindows({ ...latestTedS, updatedAt: Date.now() })
+        : { ...latestTedS, updatedAt: Date.now() }
       setOperatorName(activated.operator)
       setWorkspaceName(activated.name)
       setWindows(activated.windows)
@@ -9376,7 +9455,7 @@ export function WorkspaceDesktop() {
     ])
   }
 
-  const saveWorkspace = () => {
+  const saveWorkspace = async () => {
     const next: SavedWorkspace = {
       name: workspaceName.trim() || 'Untitled Workspace',
       operator: operatorName.trim() || DEFAULT_OPERATOR,
@@ -9392,7 +9471,10 @@ export function WorkspaceDesktop() {
     persistWorkspaceSnapshot(next, merged, true, 'manual save default')
     setOperatorName(next.operator)
     setWorkspaceName(next.name)
-    setSaveStatus('Saved default')
+    if (isDesktopClientLaunch()) window.localStorage.setItem(DESKTOP_FIRST_LAUNCH_KEY, '1')
+    setSaveStatus('Saved local')
+    const serverSaved = await saveWorkspaceServerSnapshot(next, 'manual save default')
+    setSaveStatus(serverSaved ? 'Saved local + server' : 'Saved local; server pending')
   }
 
   const loadWorkspace = (operator: string, name: string) => {
@@ -9518,6 +9600,15 @@ export function WorkspaceDesktop() {
               <Plus size={13} /> Add
             </button>
           </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <a
+            href={DESKTOP_CLIENT_DOWNLOAD_URL}
+            className="flex items-center gap-1 rounded border border-blue-400/35 bg-blue-500/10 px-2 py-1 font-mono text-[11px] font-bold uppercase text-blue-100 hover:border-blue-300 hover:bg-blue-500/20"
+            title="Download Cerious Systems Win64 thin client"
+          >
+            <Download size={13} /> Win64 Client
+          </a>
         </div>
       </header>
 

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
+import hmac
 import json
 import math
 import time
@@ -70,6 +72,8 @@ FRONTEND_ASSETS = FRONTEND_DIST / "assets"
 FRONTEND_VENDOR = FRONTEND_DIST / "vendor"
 FRONTEND_BRANDING = FRONTEND_DIST / "branding"
 RECOVERED_WORKSPACE_DIR = ROOT / "data" / "recovered-workspaces"
+WORKSPACE_STORE_DIR = ROOT / "data" / "workspace-store"
+DOWNLOADS_DIR = ROOT / "data" / "downloads"
 LAUNCHED_AT = datetime.now(timezone.utc)
 LR_READY_MAX_AGE_MS = 90 * 60 * 1000
 STUDY_WARMUP_TIMEOUT_SECONDS = 120.0
@@ -82,6 +86,88 @@ if FRONTEND_VENDOR.exists():
     app.mount("/vendor", StaticFiles(directory=str(FRONTEND_VENDOR)), name="terminal-vendor")
 if FRONTEND_BRANDING.exists():
     app.mount("/branding", StaticFiles(directory=str(FRONTEND_BRANDING)), name="terminal-branding")
+DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/downloads", StaticFiles(directory=str(DOWNLOADS_DIR)), name="terminal-downloads")
+
+
+def _base64url_json(payload: dict[str, Any]) -> str:
+    raw = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+
+
+def _decode_base64url_json(encoded: str) -> dict[str, Any]:
+    padding = "=" * (-len(encoded) % 4)
+    raw = base64.urlsafe_b64decode((encoded + padding).encode("ascii"))
+    payload = json.loads(raw.decode("utf-8"))
+    return payload if isinstance(payload, dict) else {}
+
+
+def _session_signature(encoded_payload: str) -> str:
+    secret = settings.auth_secret or "cerious-local-dev-secret"
+    return hmac.new(secret.encode("utf-8"), encoded_payload.encode("ascii"), hashlib.sha256).hexdigest()
+
+
+def _make_session_token(username: str) -> tuple[str, int]:
+    now = int(time.time())
+    expires_at = now + 18 * 60 * 60
+    encoded_payload = _base64url_json({
+        "sub": username,
+        "iat": now,
+        "exp": expires_at,
+        "scope": "cerious-terminal",
+    })
+    return f"{encoded_payload}.{_session_signature(encoded_payload)}", expires_at
+
+
+def _verify_session_token(token: str | None) -> str | None:
+    if not token or "." not in token:
+        return None
+    encoded_payload, supplied_signature = token.split(".", 1)
+    expected_signature = _session_signature(encoded_payload)
+    if not hmac.compare_digest(supplied_signature, expected_signature):
+        return None
+    try:
+        payload = _decode_base64url_json(encoded_payload)
+    except Exception:
+        return None
+    if int(payload.get("exp") or 0) < int(time.time()):
+        return None
+    username = str(payload.get("sub") or "").strip()
+    if not username:
+        return None
+    return username
+
+
+def _workspace_file_part(value: str) -> str:
+    cleaned = "".join(ch.lower() if ch.isalnum() else "-" for ch in value.strip())
+    cleaned = "-".join(part for part in cleaned.split("-") if part)
+    return cleaned[:96] or "workspace"
+
+
+def _workspace_user_dir(username: str) -> Path:
+    safe_user = _workspace_file_part(username or settings.portal_username or "local")
+    directory = WORKSPACE_STORE_DIR / safe_user
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory
+
+
+def _workspace_path(username: str, operator: str, name: str) -> Path:
+    return _workspace_user_dir(username) / f"{_workspace_file_part(operator)}__{_workspace_file_part(name)}.json"
+
+
+def _normalize_workspace_payload(raw: Any) -> dict[str, Any]:
+    if not isinstance(raw, dict):
+        raise HTTPException(status_code=400, detail="workspace payload is required")
+    workspace = dict(raw)
+    windows = workspace.get("windows")
+    if not isinstance(windows, list):
+        raise HTTPException(status_code=400, detail="workspace windows are required")
+    workspace["name"] = str(workspace.get("name") or "Untitled Workspace").strip() or "Untitled Workspace"
+    workspace["operator"] = str(workspace.get("operator") or "Operator 1").strip() or "Operator 1"
+    workspace["rows"] = workspace.get("rows") if isinstance(workspace.get("rows"), list) else []
+    workspace["alerts"] = workspace.get("alerts") if isinstance(workspace.get("alerts"), list) else []
+    workspace["updatedAt"] = int(time.time() * 1000)
+    return workspace
 
 
 async def run_intelligence(fn):
@@ -390,6 +476,82 @@ async def system_contract() -> dict[str, Any]:
     }
 
 
+@app.post("/api/auth/login")
+async def auth_login(payload: dict[str, Any]) -> dict[str, Any]:
+    username = str(payload.get("username") or "").strip()
+    password = str(payload.get("password") or "")
+    if not settings.portal_password:
+        raise HTTPException(status_code=503, detail="portal credential is not configured")
+    username_ok = hmac.compare_digest(username, settings.portal_username)
+    password_ok = hmac.compare_digest(password, settings.portal_password)
+    if not username_ok or not password_ok:
+        raise HTTPException(status_code=401, detail="invalid Cerious credential")
+    session_token, expires_at = _make_session_token(username)
+    return {
+        "ok": True,
+        "username": username,
+        "sessionToken": session_token,
+        "expiresAt": expires_at,
+    }
+
+
+@app.get("/api/auth/session")
+async def auth_session(token: str = "") -> dict[str, Any]:
+    username = _verify_session_token(token)
+    if not username:
+        raise HTTPException(status_code=401, detail="session expired")
+    return {
+        "ok": True,
+        "username": username,
+    }
+
+
+@app.post("/api/auth/logout")
+async def auth_logout() -> dict[str, Any]:
+    return {"ok": True}
+
+
+@app.get("/api/workspaces/saved")
+async def saved_workspaces(token: str = "") -> dict[str, Any]:
+    username = _verify_session_token(token) or settings.portal_username or "local"
+    directory = _workspace_user_dir(username)
+    workspaces: list[dict[str, Any]] = []
+    for path in sorted(directory.glob("*.json")):
+        if path.name == "latest.json":
+            continue
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8-sig"))
+        except Exception:
+            continue
+        if isinstance(payload, dict) and isinstance(payload.get("windows"), list):
+            payload = dict(payload)
+            payload["serverFile"] = str(path.relative_to(ROOT))
+            workspaces.append(payload)
+    workspaces.sort(key=lambda item: float(item.get("updatedAt") or 0), reverse=True)
+    return {"workspaces": workspaces}
+
+
+@app.post("/api/workspaces/save")
+async def save_workspace(payload: dict[str, Any]) -> dict[str, Any]:
+    username = _verify_session_token(str(payload.get("sessionToken") or "")) or settings.portal_username or "local"
+    workspace = _normalize_workspace_payload(payload.get("workspace"))
+    path = _workspace_path(username, workspace["operator"], workspace["name"])
+    envelope = {
+        **workspace,
+        "serverSavedAt": _iso_now(),
+        "serverReason": str(payload.get("reason") or "manual save"),
+    }
+    path.write_text(json.dumps(envelope, indent=2), encoding="utf-8")
+    latest_path = _workspace_user_dir(username) / "latest.json"
+    latest_path.write_text(json.dumps(envelope, indent=2), encoding="utf-8")
+    return {
+        "ok": True,
+        "workspace": workspace["name"],
+        "path": str(path.relative_to(ROOT)),
+        "latest": str(latest_path.relative_to(ROOT)),
+    }
+
+
 @app.get("/api/system/ready")
 async def system_ready() -> dict[str, Any]:
     task = await ensure_warmup_task()
@@ -421,7 +583,7 @@ async def recovered_workspaces() -> dict[str, Any]:
 
     for path in sorted(RECOVERED_WORKSPACE_DIR.glob("*.json")):
         try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
+            payload = json.loads(path.read_text(encoding="utf-8-sig"))
         except Exception:
             continue
         if not isinstance(payload, dict):

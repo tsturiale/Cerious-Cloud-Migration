@@ -3,6 +3,7 @@ import { Toaster } from 'react-hot-toast'
 import { WorkspaceDesktop } from './components/WorkspaceDesktop'
 import { PanelWindow } from './components/PanelWindow'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { PortalGate } from './components/PortalGate'
 import { useWebSocket } from './hooks/useWebSocket'
 import { useBroadcastSync, getPanelType } from './hooks/useBroadcastSync'
 import { useStore } from './store'
@@ -69,10 +70,12 @@ export default function App() {
   // Primary window — full terminal
   return (
     <ErrorBoundary>
-      <AssetConnector />
-      <MarketRotator />
-      <BroadcastSyncProvider />
-      <WorkspaceDesktop />
+      <PortalGate>
+        <AssetConnector />
+        <MarketRotator />
+        <BroadcastSyncProvider />
+        <WorkspaceDesktop />
+      </PortalGate>
       <Toaster position="bottom-right" toastOptions={{ style: toasterStyle }} />
     </ErrorBoundary>
   )
