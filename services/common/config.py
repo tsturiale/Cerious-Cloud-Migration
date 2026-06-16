@@ -43,6 +43,11 @@ class Settings:
     t4_depth_buffer: str = os.getenv("T4_DEPTH_BUFFER", "smart_trade")
     t4_depth_levels: str = os.getenv("T4_DEPTH_LEVELS", "normal")
     t4_reconnect_seconds: float = float(os.getenv("T4_RECONNECT_SECONDS", "5"))
+    alert_sms_webhook_url: str = os.getenv("CERIOUS_ALERT_SMS_WEBHOOK_URL", "").strip()
+    alert_sms_webhook_bearer: str = os.getenv("CERIOUS_ALERT_SMS_WEBHOOK_BEARER", "").strip()
+    twilio_account_sid: str = os.getenv("TWILIO_ACCOUNT_SID", "").strip()
+    twilio_auth_token: str = os.getenv("TWILIO_AUTH_TOKEN", "").strip()
+    twilio_from_phone: str = os.getenv("TWILIO_FROM_PHONE", "").strip()
     dry_run: bool = os.getenv("CERIOUS_DRY_RUN", "1") != "0"
 
 

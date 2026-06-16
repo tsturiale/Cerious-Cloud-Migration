@@ -210,7 +210,7 @@ export function OrderBook2({
   // HARDENED MANUAL SUBMISSION — wired to execution layer
   const submitManualOrder = async () => {
     if (!orderIntent || !key) {
-      alert('No order intent or active market')
+      alert('No order ticket or active market')
       return
     }
     if (simulationEnabled) {
@@ -1166,7 +1166,7 @@ export function OrderBook2({
         {accountView === 'account' && (
           <div className="grid grid-cols-4 gap-px text-[8px] uppercase">
             <div className="border px-1 py-0.5" style={{ borderColor: gridLine }}>
-              <div className="text-[#8b929e]">Intent</div>
+              <div className="text-[#8b929e]">Order Ticket</div>
               <div className="truncate font-bold text-white">
                 {orderIntent ? `${orderIntent.orderType.toUpperCase()} ${orderIntent.contracts}x ${orderIntent.outcome.toUpperCase()} ${orderIntent.side.toUpperCase()} ${orderIntent.cents}¢` : `${contractSize}x ready`}
               </div>

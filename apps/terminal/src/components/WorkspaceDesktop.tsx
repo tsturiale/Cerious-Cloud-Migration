@@ -130,6 +130,9 @@ const DEFAULT_MARKET_DATA_COLUMN_WIDTHS = MARKET_DATA_COLUMNS.reduce((acc, colum
 
 type StudyKey = 'price' | 'ptb' | 'probability' | 'truth' | 'greeks' | 'tape'
 type AlertSound = 'system-chime' | 'system-bell' | 'system-alarm'
+type AlertDeliveryChannel = 'audio' | 'desktop' | 'sms'
+type AlertDeliveryResult = { channel: AlertDeliveryChannel; ok: boolean; message: string }
+type AlertDeliveryStatus = { ok: boolean; message: string; at: number }
 type AlgoTemplate = 'mean-reversion-v2' | 'theo-quoter' | 'scale-in' | 'ptb-trigger'
 type AlgoStatus = 'draft' | 'held' | 'quoting' | 'paused'
 type TheoModel = 'truth' | 'market-mid' | 'ptb-edge'
@@ -313,11 +316,18 @@ type AlertRule = {
   }
 }
 
+const ALERT_FIELDS = new Set<AlertRule['field']>(['last', 'fill', 'probability', 'edge', 'gamma', 'theta'])
+const ALERT_OPS = new Set<AlertRule['op']>(['>', '<', '>=', '<='])
+const ALERT_VALUE_MODES = new Set<NonNullable<AlertRule['valueMode']>>(['money', 'percent', 'cents', 'price'])
+const WORKSPACE_EDGE_PAN_ZONE = 150
+const WORKSPACE_HOVER_PAN_ZONE = 24
+
 type SavedWorkspace = {
   name: string
   operator: string
   windows: WorkspaceWindow[]
   rows: MarketRowConfig[]
+  alerts?: AlertRule[]
   selectedProvider?: ProviderKey
   selectedSymbol?: string
   updatedAt: number
@@ -491,6 +501,41 @@ const PROVIDER_COLORS: Record<ProviderKey, string> = {
 function normalizeProviderKey(provider: ProviderKey | undefined): ProviderKey {
   if (provider && PROVIDERS.some(item => item.key === provider)) return provider
   return 'cme'
+}
+
+function normalizeAlertRule(raw: unknown, index: number): AlertRule | null {
+  if (!raw || typeof raw !== 'object') return null
+  const source = raw as Partial<AlertRule> & Record<string, unknown>
+  const field = ALERT_FIELDS.has(source.field as AlertRule['field']) ? source.field as AlertRule['field'] : 'last'
+  const op = ALERT_OPS.has(source.op as AlertRule['op']) ? source.op as AlertRule['op'] : '>='
+  const value = Number(source.value)
+  const rawDelivery = source.delivery && typeof source.delivery === 'object'
+    ? source.delivery as NonNullable<AlertRule['delivery']>
+    : {}
+  const sound = rawDelivery.sound && ['system-chime', 'system-bell', 'system-alarm'].includes(rawDelivery.sound)
+    ? rawDelivery.sound
+    : 'system-chime'
+  const valueMode = ALERT_VALUE_MODES.has(source.valueMode as NonNullable<AlertRule['valueMode']>)
+    ? source.valueMode as AlertRule['valueMode']
+    : undefined
+  return {
+    id: String(source.id || `alert-${Date.now()}-${index}`),
+    symbol: source.symbol,
+    provider: normalizeProviderKey(source.provider),
+    productSymbol: typeof source.productSymbol === 'string' ? source.productSymbol : undefined,
+    field,
+    op,
+    value: Number.isFinite(value) ? value : 0,
+    valueMode,
+    enabled: source.enabled !== false,
+    delivery: {
+      audio: rawDelivery.audio !== false,
+      desktop: rawDelivery.desktop === true,
+      sms: rawDelivery.sms === true,
+      sound,
+      phone: typeof rawDelivery.phone === 'string' ? rawDelivery.phone : undefined,
+    },
+  }
 }
 
 function venueColor(provider: ProviderKey | 'execution' | 'sim'): string {
@@ -692,6 +737,9 @@ function normalizeWorkspace(raw: Partial<SavedWorkspace> | null | undefined): Sa
     windows,
     rows: Array.isArray(raw.rows)
       ? raw.rows.map(row => ({ ...row, provider: normalizeProviderKey(row.provider) }))
+      : [],
+    alerts: Array.isArray(raw.alerts)
+      ? raw.alerts.map(normalizeAlertRule).filter((item): item is AlertRule => !!item)
       : [],
     selectedProvider: normalizeProviderKey(raw.selectedProvider),
     selectedSymbol: raw.selectedSymbol,
@@ -1839,30 +1887,35 @@ function WorkspaceWindowFrame({
     const startTop = item.y
     const startWidth = item.w
     const startHeight = item.h
+    const startPan = getWorkspacePan()
     const minWidth = 260
     const minHeight = 180
     event.currentTarget.setPointerCapture(event.pointerId)
 
     const move = (ev: PointerEvent) => {
+      const pan = getWorkspacePan()
       const dx = ev.clientX - startX
       const dy = ev.clientY - startY
+      const panDx = pan.x - startPan.x
+      const panDy = pan.y - startPan.y
       const patch: Partial<Pick<WorkspaceWindow, 'x' | 'y' | 'w' | 'h'>> = {}
+      onDragPointerMove(ev)
 
       if (direction.includes('e')) {
-        patch.w = clamp(startWidth + dx, minWidth, 2400)
+        patch.w = clamp(startWidth + dx + panDx, minWidth, 2400)
       }
       if (direction.includes('s')) {
-        patch.h = clamp(startHeight + dy, minHeight, 1800)
+        patch.h = clamp(startHeight + dy + panDy, minHeight, 1800)
       }
       if (direction.includes('w')) {
         const maxDx = startWidth - minWidth
-        const nextDx = clamp(dx, 8 - startLeft, maxDx)
+        const nextDx = clamp(dx + panDx, 8 - startLeft, maxDx)
         patch.x = startLeft + nextDx
         patch.w = startWidth - nextDx
       }
       if (direction.includes('n')) {
         const maxDy = startHeight - minHeight
-        const nextDy = clamp(dy, 48 - startTop, maxDy)
+        const nextDy = clamp(dy + panDy, 48 - startTop, maxDy)
         patch.y = startTop + nextDy
         patch.h = startHeight - nextDy
       }
@@ -1872,6 +1925,7 @@ function WorkspaceWindowFrame({
     const up = () => {
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', up)
+      onDragPointerEnd()
     }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)
@@ -2182,11 +2236,12 @@ function exportCsv(filename: string, headers: string[], rows: Array<Record<strin
   window.URL.revokeObjectURL(url)
 }
 
-function playAlertSound(sound: AlertSound = 'system-chime') {
+function playAlertSound(sound: AlertSound = 'system-chime'): AlertDeliveryResult {
   try {
     const AudioContextCtor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
-    if (!AudioContextCtor) return
+    if (!AudioContextCtor) return { channel: 'audio', ok: false, message: 'Audio unavailable' }
     const ctx = new AudioContextCtor()
+    if (ctx.state === 'suspended') void ctx.resume()
     const gain = ctx.createGain()
     gain.connect(ctx.destination)
     const profile: Record<AlertSound, Array<[number, number]>> = {
@@ -2206,31 +2261,39 @@ function playAlertSound(sound: AlertSound = 'system-chime') {
       osc.stop(ctx.currentTime + offset + 0.16)
     })
     window.setTimeout(() => void ctx.close(), 700)
-  } catch {
-    // Browser autoplay policies can block audio until the user has interacted.
+    return { channel: 'audio', ok: true, message: 'Audio sent' }
+  } catch (error) {
+    return { channel: 'audio', ok: false, message: error instanceof Error ? error.message : 'Audio blocked' }
   }
 }
 
-async function notifyDesktop(title: string, body: string) {
-  if (!('Notification' in window)) return
+async function notifyDesktop(title: string, body: string): Promise<AlertDeliveryResult> {
+  if (!('Notification' in window)) return { channel: 'desktop', ok: false, message: 'Desktop notifications unavailable' }
   const permission = Notification.permission === 'default'
     ? await Notification.requestPermission()
     : Notification.permission
   if (permission === 'granted') {
     new Notification(title, { body, tag: 'qst-fill-alert' })
+    return { channel: 'desktop', ok: true, message: 'Desktop sent' }
   }
+  return { channel: 'desktop', ok: false, message: `Desktop ${permission}` }
 }
 
-async function sendSmsAlert(phone: string | undefined, message: string) {
-  if (!phone?.trim()) return
+async function sendSmsAlert(phone: string | undefined, message: string): Promise<AlertDeliveryResult> {
+  if (!phone?.trim()) return { channel: 'sms', ok: false, message: 'Text phone missing' }
   try {
-    await fetch('/api/alerts/sms', {
+    const response = await fetch('/api/alerts/sms', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ to: phone.trim(), message }),
     })
-  } catch {
-    // SMS transport status is surfaced by the backend once configured.
+    const payload = await response.json().catch(() => ({})) as { ok?: boolean; configured?: boolean; error?: string; provider?: string }
+    if (response.ok && payload.ok !== false) {
+      return { channel: 'sms', ok: true, message: `Text sent${payload.provider ? ` via ${payload.provider}` : ''}` }
+    }
+    return { channel: 'sms', ok: false, message: payload.error ?? `Text failed (${response.status})` }
+  } catch (error) {
+    return { channel: 'sms', ok: false, message: error instanceof Error ? error.message : 'Text transport failed' }
   }
 }
 
@@ -2882,6 +2945,7 @@ function NormalDepthLadderWindow({
   const placeSimOrder = useStore(s => s.placeSimOrder)
   const cancelSimOrder = useStore(s => s.cancelSimOrder)
   const simOrders = useStore(s => s.simOrders)
+  const simPositions = useStore(s => s.simPositions)
   const simMessages = useStore(s => s.simMessages)
   const book = depthStream.book ?? undefined
   const ticks = depthStream.trades
@@ -3036,9 +3100,11 @@ function NormalDepthLadderWindow({
     const normalizedBids = (book?.bids ?? [])
       .map(level => ({ price: finiteDepthPrice(level.price), size: Number(level.size) }))
       .filter((level): level is { price: number; size: number } => level.price !== undefined && Number.isFinite(level.size))
+      .sort((a, b) => b.price - a.price)
     const normalizedAsks = (book?.asks ?? [])
       .map(level => ({ price: finiteDepthPrice(level.price), size: Number(level.size) }))
       .filter((level): level is { price: number; size: number } => level.price !== undefined && Number.isFinite(level.size))
+      .sort((a, b) => a.price - b.price)
     const bestBid = finiteDepthPrice(book?.bestBid) ?? normalizedBids[0]?.price
     const bestAsk = finiteDepthPrice(book?.bestAsk) ?? normalizedAsks[0]?.price
     const bookMid = finiteDepthPrice(book?.mid)
@@ -3185,12 +3251,38 @@ function NormalDepthLadderWindow({
 
   const activeWorkingCount = displayActiveOrders.filter(order => order.status === 'working').length + simDepthOrders.length
   const filledCount = activeOrders.filter(order => order.status === 'filled').length
+  const workingTotals = useMemo(() => {
+    const working = [
+      ...displayActiveOrders.filter(order => order.status === 'pending' || order.status === 'working'),
+      ...simDepthOrders,
+    ]
+    const bidQty = working
+      .filter(order => order.side === 'BID')
+      .reduce((sum, order) => sum + Number(order.size || 0), 0)
+    const askQty = working
+      .filter(order => order.side === 'ASK')
+      .reduce((sum, order) => sum + Number(order.size || 0), 0)
+    return { bidQty, askQty, totalQty: bidQty + askQty }
+  }, [displayActiveOrders, simDepthOrders])
   const activeForSide = (side: DepthOrderSide) => (
     displayActiveOrders.some(order => order.side === side && (order.status === 'pending' || order.status === 'working'))
     || simDepthOrders.some(order => order.side === side)
   )
-  const latestFill = useMemo(() => activeOrders.filter(order => order.status === 'filled').sort((a, b) => (b.filledAt ?? 0) - (a.filledAt ?? 0))[0], [activeOrders])
   const localDepthPosition = useMemo(() => {
+    const livePositions = marketKey
+      ? simPositions.filter(position => position.marketKey === marketKey && position.status === 'open')
+      : []
+    if (livePositions.length > 0) {
+      const net = livePositions.reduce((sum, position) => sum + Number(position.size || 0), 0)
+      const gross = livePositions.reduce((sum, position) => sum + Math.abs(Number(position.size || 0)), 0)
+      const notional = livePositions.reduce((sum, position) => sum + (Number(position.avgPrice) || 0) * Math.abs(Number(position.size || 0)), 0)
+      const openPnl = livePositions.reduce((sum, position) => sum + (Number(position.openPnl) || 0), 0)
+      return {
+        net,
+        avg: gross > 0 ? notional / gross : undefined,
+        openPnl,
+      }
+    }
     const filled = activeOrders.filter(order => order.status === 'filled')
     const net = filled.reduce((sum, order) => sum + (order.side === 'BID' ? order.size : -order.size), 0)
     const notional = filled.reduce((sum, order) => sum + (order.fillPrice ?? Number(order.priceKey)) * order.size, 0)
@@ -3198,8 +3290,9 @@ function NormalDepthLadderWindow({
     return {
       net,
       avg: size > 0 ? notional / size : undefined,
+      openPnl: 0,
     }
-  }, [activeOrders])
+  }, [activeOrders, marketKey, simPositions])
 
   const getSimFillPrice = (side: DepthOrderSide, orderType: 'limit' | 'market', limitPrice: number): number | null => {
     const bestBid = Number(ladderModel.bid)
@@ -3767,20 +3860,15 @@ function NormalDepthLadderWindow({
               {size === 'small' ? 'SM' : size === 'medium' ? 'MD' : 'LG'}
             </button>
           ))}
-          <label
-            className="flex h-8 items-center border bg-[#121212] text-[11px] font-black uppercase leading-none text-[#ffe800]"
+          <select
+            value={priceMultiplier}
+            onChange={event => setPriceMultiplier(Number(event.target.value) || 1)}
+            className="h-8 cursor-pointer border bg-[#121212] px-2 text-[11px] font-black uppercase leading-none text-[#ffe800] outline-none hover:border-[#ffe800]"
             style={{ borderColor: rowLine }}
             title="Price multiplier: row step = exchange tick x multiplier. Higher values consolidate rows."
           >
-            <span className="flex h-full items-center border-r px-2" style={{ borderColor: rowLine }}>X</span>
-            <select
-              value={priceMultiplier}
-              onChange={event => setPriceMultiplier(Number(event.target.value) || 1)}
-              className="h-full bg-[#121212] px-1 text-[11px] font-black text-[#ffe800] outline-none"
-            >
-              {priceMultiplierOptions.map(multiplier => <option key={multiplier} value={multiplier}>{multiplier}</option>)}
-            </select>
-          </label>
+            {priceMultiplierOptions.map(multiplier => <option key={multiplier} value={multiplier}>x{multiplier}</option>)}
+          </select>
           <button
             onClick={() => setActionMode(mode => mode === 'limit' ? 'market' : 'limit')}
             className={cx(controlButtonClass, actionMode === 'limit' ? 'bg-[#0b2a63] text-white' : 'bg-[#4a0000] text-[#ffe0e0]')}
@@ -3896,10 +3984,18 @@ function NormalDepthLadderWindow({
       )}
       <div className="shrink-0 border-t p-1" style={{ borderColor: rowLine, backgroundColor: '#05070b' }}>
         <div className="mb-1 flex items-center gap-1">
-          <div className="grid flex-1 grid-cols-[1fr_150px] gap-px text-[8px] uppercase">
-            <div className="border px-1 py-0.5" style={{ borderColor: gridLine }}>
-              <div className="text-[#8b929e]">Intent</div>
-              <div className="truncate font-bold text-white">{simulationEnabled ? `${defaultSize}x sim ${actionMode}` : fastTrade ? `${defaultSize}x fast ${actionMode}` : `${defaultSize}x staged ${actionMode}`}</div>
+          <div className="grid min-w-0 flex-1 grid-cols-[1fr_1fr_1.25fr] gap-px text-[8px] uppercase">
+            <div className="border px-1 py-0.5" style={{ borderColor: gridLine, backgroundColor: '#07111f' }}>
+              <div className="text-[#8b929e]">Working Bids</div>
+              <div className="truncate text-[11px] font-black" style={{ color: buyColor.strong }}>
+                {fmtCompact(workingTotals.bidQty)}
+              </div>
+            </div>
+            <div className="border px-1 py-0.5" style={{ borderColor: gridLine, backgroundColor: '#17070a' }}>
+              <div className="text-[#8b929e]">Working Sells</div>
+              <div className="truncate text-[11px] font-black" style={{ color: sellColor.strong }}>
+                {fmtCompact(workingTotals.askQty)}
+              </div>
             </div>
             <div
               className={cx('border px-1 py-0.5 font-bold', localDepthPosition.net > 0 ? 'text-white' : localDepthPosition.net < 0 ? 'text-white' : 'text-[#d1d5db]')}
@@ -3912,44 +4008,25 @@ function NormalDepthLadderWindow({
                     : '#121212',
               }}
             >
-              <div className={cx('text-[#dbeafe]', localDepthPosition.net < 0 && 'text-white')}>{localDepthPosition.net > 0 ? 'Long' : localDepthPosition.net < 0 ? 'Short' : 'Flat'}</div>
-              <div className="truncate text-[10px]">
+              <div className={cx('text-[#dbeafe]', localDepthPosition.net < 0 && 'text-white')}>Net Position</div>
+              <div className="truncate text-[11px] font-black">
                 {localDepthPosition.net === 0
-                  ? '0'
-                  : `${Math.abs(localDepthPosition.net)} @ ${localDepthPosition.avg !== undefined ? fmtLadderPrice(localDepthPosition.avg, ladderModel.rowStep || ladderModel.tick) : '-'}`}
+                  ? 'FLAT 0'
+                  : `${localDepthPosition.net > 0 ? 'LONG' : 'SHORT'} ${fmtCompact(Math.abs(localDepthPosition.net))}${localDepthPosition.avg !== undefined ? ` @ ${fmtLadderPrice(localDepthPosition.avg, ladderModel.rowStep || ladderModel.tick)}` : ''}`}
               </div>
             </div>
           </div>
-          <input
-            type="number"
-            min={1}
-            value={defaultSize}
-            onChange={event => setDefaultSize(Math.max(1, Number(event.target.value) || 1))}
-            className="h-8 w-16 border bg-[#121212] px-1 text-right text-[10px] font-bold text-slate-100 outline-none"
-            style={{ borderColor: gridLine }}
-            title="Custom quantity"
-          />
+          <label className="grid w-20 grid-rows-[12px_1fr] border bg-[#121212]" style={{ borderColor: gridLine }} title="Custom order quantity">
+            <span className="px-1 text-[8px] uppercase text-[#8b929e]">Qty</span>
+            <input
+              type="number"
+              min={1}
+              value={defaultSize}
+              onChange={event => setDefaultSize(Math.max(1, Number(event.target.value) || 1))}
+              className="min-w-0 bg-transparent px-1 pb-0.5 text-right text-[11px] font-black text-slate-100 outline-none"
+            />
+          </label>
         </div>
-        {(displayActiveOrders.length > 0 || simDepthOrders.length > 0) && (
-          <div className="grid grid-cols-4 gap-px text-[8px] uppercase">
-            <div className="border px-1 py-0.5" style={{ borderColor: gridLine }}>
-              <div className="text-[#8b929e]">Bids</div>
-              <div className="font-bold" style={{ color: buyColor.strong }}>{displayActiveOrders.filter(order => order.side === 'BID').length + simDepthOrders.filter(order => order.side === 'BID').length}</div>
-            </div>
-            <div className="border px-1 py-0.5" style={{ borderColor: gridLine }}>
-              <div className="text-[#8b929e]">Asks</div>
-              <div className="font-bold" style={{ color: sellColor.strong }}>{displayActiveOrders.filter(order => order.side === 'ASK').length + simDepthOrders.filter(order => order.side === 'ASK').length}</div>
-            </div>
-            <div className="border px-1 py-0.5" style={{ borderColor: gridLine }}>
-              <div className="text-[#8b929e]">Working</div>
-              <div className="font-bold text-[#00d8ff]">{activeWorkingCount}</div>
-            </div>
-            <div className="border px-1 py-0.5" style={{ borderColor: gridLine }}>
-              <div className="text-[#8b929e]">{latestFill ? 'Last Fill' : 'Pending'}</div>
-              <div className="truncate font-bold text-[#ffe800]">{latestFill ? `${latestFill.side} ${latestFill.size} @ ${fmtLadderPrice(latestFill.fillPrice ?? Number(latestFill.priceKey), ladderModel.rowStep || ladderModel.tick)}` : activeOrders.filter(order => order.status === 'pending').length}</div>
-            </div>
-          </div>
-        )}
         {simulationEnabled && simMessages[0] && (
           <div className="mt-1 truncate border px-1 py-0.5 text-[8px] font-bold uppercase text-[#74ff8d]" style={{ borderColor: '#1f5f2f', backgroundColor: '#07120a' }}>
             {simMessages[0]}
@@ -5346,7 +5423,7 @@ function AlgoBuilderWindow({
             <div className="h-full bg-accent" style={{ width: `${clamp(Math.abs(quote.edge) * 8, 2, 100)}%` }} />
           </div>
           <div className="mt-2 text-[9px] leading-relaxed text-muted">
-            Held algos stay in Manager until status is changed. Quoting algos are represented as synthetic order intent until the algo engine service is connected.
+            Held algos stay in Manager until status is changed. Quoting algos are represented as staged synthetic orders until the algo engine service is connected.
           </div>
         </div>
       </div>
@@ -6099,6 +6176,7 @@ function AlertsWindow({
   const markets = useStore(s => s.markets)
   const polyTicks = useStore(s => s.polyTicks)
   const fills = useStore(s => s.fills)
+  const [deliveryStatus, setDeliveryStatus] = useState<Record<string, AlertDeliveryStatus>>({})
 
   const defaultOption = options.find(option => option.provider === 'cme' && option.symbol === 'ES') ?? options[0]
 
@@ -6154,7 +6232,41 @@ function AlertsWindow({
     ])
   }
 
-  const firedFillKeys = useRef<Record<string, string>>({})
+  const firedAlertKeys = useRef<Record<string, string>>({})
+  const armedAlertRules = useRef<Record<string, boolean>>({})
+  const alertConfigKeys = useRef<Record<string, string>>({})
+
+  const alertRuleKey = (alert: AlertRule, threshold: number) => [
+    normalizeProviderKey(alert.provider),
+    alert.productSymbol ?? alert.symbol ?? '',
+    alert.field,
+    alert.op,
+    alert.valueMode ?? '',
+    Number.isFinite(threshold) ? threshold.toFixed(8) : '',
+  ].join('|')
+
+  const deliverAlert = useCallback(async (alert: AlertRule, title: string, message: string) => {
+    const delivery = alert.delivery ?? {}
+    const syncResults: AlertDeliveryResult[] = []
+    const asyncResults: Array<Promise<AlertDeliveryResult>> = []
+    if (delivery.audio) syncResults.push(playAlertSound(delivery.sound ?? 'system-chime'))
+    if (delivery.desktop) asyncResults.push(notifyDesktop(title, message))
+    if (delivery.sms) asyncResults.push(sendSmsAlert(delivery.phone, message))
+    const results = [...syncResults, ...await Promise.all(asyncResults)]
+    if (results.length === 0) {
+      setDeliveryStatus(current => ({ ...current, [alert.id]: { ok: false, message: 'No delivery channel selected', at: Date.now() } }))
+      return
+    }
+    const ok = results.every(result => result.ok)
+    setDeliveryStatus(current => ({
+      ...current,
+      [alert.id]: {
+        ok,
+        message: results.map(result => `${result.channel}: ${result.message}`).join(' | '),
+        at: Date.now(),
+      },
+    }))
+  }, [])
 
   const readAlert = (alert: AlertRule) => {
     const option = findOption(alert)
@@ -6190,19 +6302,35 @@ function AlertsWindow({
 
   useEffect(() => {
     alerts.forEach(alert => {
-      if (!alert.enabled || alert.field !== 'fill') return
       const read = readAlert(alert)
-      if (!read.fillKey) return
-      if (firedFillKeys.current[alert.id] === read.fillKey) return
-      firedFillKeys.current[alert.id] = read.fillKey
-      const title = `Fill alert: ${read.option?.label ?? alert.productSymbol ?? 'product'}`
-      const message = read.message
-      const delivery = alert.delivery ?? {}
-      if (delivery.audio) playAlertSound(delivery.sound ?? 'system-chime')
-      if (delivery.desktop) void notifyDesktop(title, message)
-      if (delivery.sms) void sendSmsAlert(delivery.phone, message)
+      const threshold = normalizeThreshold(alert, read.moneyProduct)
+      const ruleKey = alertRuleKey(alert, threshold)
+      if (alertConfigKeys.current[alert.id] !== ruleKey) {
+        alertConfigKeys.current[alert.id] = ruleKey
+        armedAlertRules.current[alert.id] = true
+      }
+      if (!alert.enabled) {
+        armedAlertRules.current[alert.id] = true
+        return
+      }
+      const label = read.option?.label ?? alert.productSymbol ?? 'product'
+      if (alert.field === 'fill') {
+        if (!read.fillKey) return
+        if (firedAlertKeys.current[alert.id] === read.fillKey) return
+        firedAlertKeys.current[alert.id] = read.fillKey
+        void deliverAlert(alert, `Fill alert: ${label}`, read.message)
+        return
+      }
+      const hit = compare(read.actual, alert, threshold)
+      if (!hit) {
+        armedAlertRules.current[alert.id] = true
+        return
+      }
+      if (armedAlertRules.current[alert.id] === false) return
+      armedAlertRules.current[alert.id] = false
+      void deliverAlert(alert, `Alert: ${label}`, `${read.message} ${alert.op} ${formatThreshold(alert, read.moneyProduct)}`)
     })
-  }, [alerts, fills])
+  }, [alerts, fills, markets, polyTicks, deliverAlert])
 
   return (
     <div className="flex h-full flex-col bg-surface text-xs">
@@ -6318,59 +6446,68 @@ function AlertsWindow({
                   <Trash2 size={13} />
                 </button>
               </div>
-              {alert.field === 'fill' && (
-                <div className="mt-1 grid grid-cols-[78px_96px_92px_1fr] gap-1 text-[10px]">
+              <div className="mt-1 grid grid-cols-[78px_96px_92px_minmax(170px,1fr)_56px] gap-1 text-[10px]">
+                <label className="flex items-center gap-1 rounded border border-surface-border bg-surface px-2 py-1 text-muted">
+                  <input
+                    type="checkbox"
+                    checked={alert.delivery?.audio ?? true}
+                    onChange={event => setAlerts(current => current.map(item => item.id === alert.id ? { ...item, delivery: { ...item.delivery, audio: event.target.checked, sound: item.delivery?.sound ?? 'system-chime' } } : item))}
+                  />
+                  audio
+                </label>
+                <select
+                  value={alert.delivery?.sound ?? 'system-chime'}
+                  onChange={event => setAlerts(current => current.map(item => item.id === alert.id ? { ...item, delivery: { ...item.delivery, sound: event.target.value as AlertSound } } : item))}
+                  className="input-field py-1 text-[10px]"
+                >
+                  <option value="system-chime">system chime</option>
+                  <option value="system-bell">system bell</option>
+                  <option value="system-alarm">system alarm</option>
+                </select>
+                <label className="flex items-center gap-1 rounded border border-surface-border bg-surface px-2 py-1 text-muted">
+                  <input
+                    type="checkbox"
+                    checked={alert.delivery?.desktop ?? false}
+                    onChange={event => {
+                      const checked = event.target.checked
+                      if (checked && 'Notification' in window && Notification.permission === 'default') void Notification.requestPermission()
+                      setAlerts(current => current.map(item => item.id === alert.id ? { ...item, delivery: { ...item.delivery, desktop: checked } } : item))
+                    }}
+                  />
+                  desktop
+                </label>
+                <div className="grid grid-cols-[72px_1fr] gap-1">
                   <label className="flex items-center gap-1 rounded border border-surface-border bg-surface px-2 py-1 text-muted">
                     <input
                       type="checkbox"
-                      checked={alert.delivery?.audio ?? true}
-                      onChange={event => setAlerts(current => current.map(item => item.id === alert.id ? { ...item, delivery: { ...item.delivery, audio: event.target.checked, sound: item.delivery?.sound ?? 'system-chime' } } : item))}
+                      checked={alert.delivery?.sms ?? false}
+                      onChange={event => setAlerts(current => current.map(item => item.id === alert.id ? { ...item, delivery: { ...item.delivery, sms: event.target.checked } } : item))}
                     />
-                    audio
+                    SMS
                   </label>
-                  <select
-                    value={alert.delivery?.sound ?? 'system-chime'}
-                    onChange={event => setAlerts(current => current.map(item => item.id === alert.id ? { ...item, delivery: { ...item.delivery, sound: event.target.value as AlertSound } } : item))}
+                  <input
+                    value={alert.delivery?.phone ?? ''}
+                    onChange={event => setAlerts(current => current.map(item => item.id === alert.id ? { ...item, delivery: { ...item.delivery, phone: event.target.value } } : item))}
                     className="input-field py-1 text-[10px]"
-                  >
-                    <option value="system-chime">system chime</option>
-                    <option value="system-bell">system bell</option>
-                    <option value="system-alarm">system alarm</option>
-                  </select>
-                  <label className="flex items-center gap-1 rounded border border-surface-border bg-surface px-2 py-1 text-muted">
-                    <input
-                      type="checkbox"
-                      checked={alert.delivery?.desktop ?? false}
-                      onChange={event => {
-                        const checked = event.target.checked
-                        if (checked && 'Notification' in window && Notification.permission === 'default') void Notification.requestPermission()
-                        setAlerts(current => current.map(item => item.id === alert.id ? { ...item, delivery: { ...item.delivery, desktop: checked } } : item))
-                      }}
-                    />
-                    desktop
-                  </label>
-                  <div className="grid grid-cols-[72px_1fr] gap-1">
-                    <label className="flex items-center gap-1 rounded border border-surface-border bg-surface px-2 py-1 text-muted">
-                      <input
-                        type="checkbox"
-                        checked={alert.delivery?.sms ?? false}
-                        onChange={event => setAlerts(current => current.map(item => item.id === alert.id ? { ...item, delivery: { ...item.delivery, sms: event.target.checked } } : item))}
-                      />
-                      SMS
-                    </label>
-                    <input
-                      value={alert.delivery?.phone ?? ''}
-                      onChange={event => setAlerts(current => current.map(item => item.id === alert.id ? { ...item, delivery: { ...item.delivery, phone: event.target.value } } : item))}
-                      className="input-field py-1 text-[10px]"
-                      placeholder="+15551234567"
-                    />
-                  </div>
+                    placeholder="+15551234567"
+                  />
                 </div>
-              )}
+                <button
+                  className="rounded border border-surface-border bg-surface px-2 py-1 font-bold text-accent hover:border-accent"
+                  onClick={() => void deliverAlert(alert, `Test alert: ${option?.label ?? symbol}`, `Test alert for ${option?.label ?? symbol}`)}
+                >
+                  Test
+                </button>
+              </div>
               <div className="mt-1 flex items-center justify-between text-[10px] font-mono">
                 <span className={hit ? 'font-bold text-warn' : 'text-muted'}>{hit ? 'TRIGGERED' : 'watching'}</span>
                 <span className="truncate text-slate-300">{read.message} {alert.field !== 'fill' ? `${alert.op} ${formatThreshold(alert, moneyProduct)}` : ''}</span>
               </div>
+              {deliveryStatus[alert.id] && (
+                <div className={cx('mt-1 truncate text-[10px] font-mono', deliveryStatus[alert.id].ok ? 'text-up' : 'text-warn')}>
+                  {deliveryStatus[alert.id].message}
+                </div>
+              )}
             </div>
           )
         })}
@@ -8883,7 +9020,7 @@ export function WorkspaceDesktop() {
   const [selectedSymbol, setSelectedSymbol] = useState(initialWorkspace?.selectedSymbol ?? 'ES')
   const [saveStatus, setSaveStatus] = useState('')
   const [widgetToAdd, setWidgetToAdd] = useState<WorkspaceWindowKind>('marketData')
-  const [alerts, setAlerts] = useState<AlertRule[]>([])
+  const [alerts, setAlerts] = useState<AlertRule[]>(() => initialWorkspace?.alerts ?? [])
   const setProvider = useStore(s => s.setMarketProvider)
   const simulationEnabled = useStore(s => s.simulationEnabled)
   const setSimulationEnabled = useStore(s => s.setSimulationEnabled)
@@ -8931,6 +9068,7 @@ export function WorkspaceDesktop() {
       setWorkspaceName(activated.name)
       setWindows(activated.windows)
       setMarketRows(activated.rows)
+      setAlerts(activated.alerts ?? [])
       const nextProvider = normalizeProviderKey(activated.selectedProvider)
       setProvider(nextProvider)
       setSelectedProvider(nextProvider)
@@ -8957,12 +9095,13 @@ export function WorkspaceDesktop() {
       operator: operatorName.trim() || DEFAULT_OPERATOR,
       windows,
       rows: marketRows,
+      alerts,
       selectedProvider,
       selectedSymbol,
       updatedAt: Date.now(),
     }
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
-  }, [marketRows, operatorName, selectedProvider, selectedSymbol, windows, workspaceName])
+  }, [alerts, marketRows, operatorName, selectedProvider, selectedSymbol, windows, workspaceName])
 
   useEffect(() => {
     if (window.localStorage.getItem(DEFAULT_WORKSPACE_KEY)) return
@@ -8971,6 +9110,7 @@ export function WorkspaceDesktop() {
       operator: operatorName.trim() || DEFAULT_OPERATOR,
       windows,
       rows: marketRows,
+      alerts,
       selectedProvider,
       selectedSymbol,
       updatedAt: Date.now(),
@@ -9071,30 +9211,38 @@ export function WorkspaceDesktop() {
     }
 
     const rect = main.getBoundingClientRect()
-    const edge = 120
-    const maxSpeed = 48
-    const minSpeed = 2
+    const edge = WORKSPACE_EDGE_PAN_ZONE
+    const maxSpeed = 72
+    const minSpeed = 6
     let dx = 0
     let dy = 0
-    const speedFromOutside = (depth: number) => {
+    const speedFromDepth = (depth: number) => {
       const t = clamp(depth / edge, 0, 1)
       return minSpeed + (t * t * maxSpeed)
     }
-    const rightDepth = pointer.x - rect.right
-    const leftDepth = rect.left - pointer.x
-    const bottomDepth = pointer.y - rect.bottom
-    const topDepth = rect.top - pointer.y
+    const rightDepth = pointer.x >= rect.right
+      ? edge
+      : Math.max(0, pointer.x - (rect.right - edge))
+    const leftDepth = pointer.x <= rect.left
+      ? edge
+      : Math.max(0, (rect.left + edge) - pointer.x)
+    const bottomDepth = pointer.y >= rect.bottom
+      ? edge
+      : Math.max(0, pointer.y - (rect.bottom - edge))
+    const topDepth = pointer.y <= rect.top
+      ? edge
+      : Math.max(0, (rect.top + edge) - pointer.y)
 
     if (rightDepth > 0) {
-      dx = speedFromOutside(rightDepth)
+      dx = speedFromDepth(rightDepth)
     } else if (leftDepth > 0) {
-      dx = -speedFromOutside(leftDepth)
+      dx = -speedFromDepth(leftDepth)
     }
 
     if (bottomDepth > 0) {
-      dy = speedFromOutside(bottomDepth)
+      dy = speedFromDepth(bottomDepth)
     } else if (topDepth > 0) {
-      dy = -speedFromOutside(topDepth)
+      dy = -speedFromDepth(topDepth)
     }
 
     if (dx === 0 && dy === 0) {
@@ -9113,12 +9261,35 @@ export function WorkspaceDesktop() {
   }
 
   const handleWorkspacePointerMove = (event: ReactPointerEvent<HTMLElement>) => {
-    if (event.buttons === 0) stopWorkspaceEdgePan()
+    if (event.buttons !== 0) return
+    const rect = mainRef.current?.getBoundingClientRect()
+    if (!rect) {
+      stopWorkspaceEdgePan()
+      return
+    }
+    const inHoverEdge =
+      event.clientX <= rect.left + WORKSPACE_HOVER_PAN_ZONE
+      || event.clientX >= rect.right - WORKSPACE_HOVER_PAN_ZONE
+      || event.clientY <= rect.top + WORKSPACE_HOVER_PAN_ZONE
+      || event.clientY >= rect.bottom - WORKSPACE_HOVER_PAN_ZONE
+    if (!inHoverEdge) {
+      stopWorkspaceEdgePan()
+      return
+    }
+    edgePointerRef.current = { x: event.clientX, y: event.clientY }
+    startWorkspaceEdgePan()
   }
 
   const handleWindowDragPointerMove = (event: PointerEvent) => {
     const rect = mainRef.current?.getBoundingClientRect()
-    if (rect && event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom) {
+    const edge = WORKSPACE_EDGE_PAN_ZONE
+    if (
+      rect
+      && event.clientX > rect.left + edge
+      && event.clientX < rect.right - edge
+      && event.clientY > rect.top + edge
+      && event.clientY < rect.bottom - edge
+    ) {
       stopWorkspaceEdgePan()
       return
     }
@@ -9211,6 +9382,7 @@ export function WorkspaceDesktop() {
       operator: operatorName.trim() || DEFAULT_OPERATOR,
       windows,
       rows: marketRows,
+      alerts,
       selectedProvider,
       selectedSymbol,
       updatedAt: Date.now(),
@@ -9231,6 +9403,7 @@ export function WorkspaceDesktop() {
     setWorkspaceName(normalized.name)
     setWindows(normalized.windows)
     setMarketRows(normalized.rows)
+    setAlerts(normalized.alerts ?? [])
     if (normalized.selectedProvider) {
       const nextProvider = normalizeProviderKey(normalized.selectedProvider)
       setProvider(nextProvider)

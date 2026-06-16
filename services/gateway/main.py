@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import math
 import time
@@ -8,6 +9,9 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+from urllib import error as urlerror
+from urllib import parse as urlparse
+from urllib import request as urlrequest
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -83,6 +87,90 @@ if FRONTEND_BRANDING.exists():
 async def run_intelligence(fn):
     async with INTELLIGENCE_LOCK:
         return await asyncio.to_thread(fn)
+
+
+def _http_read_json(request: urlrequest.Request, timeout: float = 10.0) -> dict[str, Any]:
+    with urlrequest.urlopen(request, timeout=timeout) as response:
+        body = response.read().decode("utf-8", errors="replace")
+        try:
+            parsed = json.loads(body) if body else {}
+        except json.JSONDecodeError:
+            parsed = {"body": body}
+        return {
+            "status": int(getattr(response, "status", 200)),
+            "response": parsed,
+        }
+
+
+def _send_sms_alert_sync(to: str, message: str) -> dict[str, Any]:
+    if settings.alert_sms_webhook_url:
+        body = json.dumps({
+            "to": to,
+            "message": message,
+            "source": "cerious-terminal",
+            "sentAt": _iso_now(),
+        }).encode("utf-8")
+        headers = {"Content-Type": "application/json"}
+        if settings.alert_sms_webhook_bearer:
+            headers["Authorization"] = f"Bearer {settings.alert_sms_webhook_bearer}"
+        request = urlrequest.Request(settings.alert_sms_webhook_url, data=body, headers=headers, method="POST")
+        try:
+            result = _http_read_json(request)
+        except urlerror.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            return {
+                "ok": False,
+                "configured": True,
+                "provider": "webhook",
+                "error": f"SMS webhook rejected alert with HTTP {exc.code}: {detail[:240]}",
+            }
+        return {
+            "ok": 200 <= int(result["status"]) < 300,
+            "configured": True,
+            "provider": "webhook",
+            "status": result["status"],
+            "response": result["response"],
+        }
+
+    if settings.twilio_account_sid and settings.twilio_auth_token and settings.twilio_from_phone:
+        form = urlparse.urlencode({
+            "To": to,
+            "From": settings.twilio_from_phone,
+            "Body": message,
+        }).encode("utf-8")
+        token = base64.b64encode(f"{settings.twilio_account_sid}:{settings.twilio_auth_token}".encode("utf-8")).decode("ascii")
+        request = urlrequest.Request(
+            f"https://api.twilio.com/2010-04-01/Accounts/{settings.twilio_account_sid}/Messages.json",
+            data=form,
+            headers={
+                "Authorization": f"Basic {token}",
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            method="POST",
+        )
+        try:
+            result = _http_read_json(request)
+        except urlerror.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            return {
+                "ok": False,
+                "configured": True,
+                "provider": "twilio",
+                "error": f"Twilio rejected alert with HTTP {exc.code}: {detail[:240]}",
+            }
+        return {
+            "ok": 200 <= int(result["status"]) < 300,
+            "configured": True,
+            "provider": "twilio",
+            "status": result["status"],
+            "response": result["response"],
+        }
+
+    return {
+        "ok": False,
+        "configured": False,
+        "error": "SMS transport is not configured. Set CERIOUS_ALERT_SMS_WEBHOOK_URL or TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN/TWILIO_FROM_PHONE.",
+    }
 
 
 def _iso_now() -> str:
@@ -961,16 +1049,23 @@ async def execution_entry_stub(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 @app.post("/api/alerts/sms")
-async def sms_disabled(payload: dict[str, Any]) -> JSONResponse:
-    return JSONResponse(
-        {
-            "ok": False,
-            "configured": False,
-            "error": "SMS disabled in Cerious local CME build.",
-            "request": payload,
-        },
-        status_code=503,
-    )
+async def send_sms_alert(payload: dict[str, Any]) -> JSONResponse:
+    to = str(payload.get("to") or "").strip()
+    message = str(payload.get("message") or "").strip()
+    if not to or not message:
+        return JSONResponse(
+            {"ok": False, "configured": False, "error": "SMS alert requires both to and message."},
+            status_code=400,
+        )
+
+    try:
+        result = await asyncio.to_thread(_send_sms_alert_sync, to, message)
+    except Exception as exc:
+        return JSONResponse(
+            {"ok": False, "configured": True, "error": f"SMS transport failed: {exc}"},
+            status_code=502,
+        )
+    return JSONResponse(result, status_code=200 if result.get("ok") else 503)
 
 
 @app.websocket("/ws/{asset}")

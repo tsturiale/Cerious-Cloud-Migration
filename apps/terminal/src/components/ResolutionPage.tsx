@@ -262,7 +262,7 @@ export function ResolutionPage() {
           <div className={`mt-3 px-3 py-2 rounded border border-[#1e3050] bg-[#0d1826] text-[10px] ${MUTED} leading-relaxed`}>
             <span className="text-slate-300 font-semibold">Additional Context:</span> When unforeseen circumstances
             require rule clarification, context can be added. Clarifications <em>cannot</em> change the fundamental
-            intent of the question and are published on-chain via the bulletin board contract.
+            meaning of the question and are published on-chain via the bulletin board contract.
           </div>
         </div>
 

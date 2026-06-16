@@ -1314,7 +1314,7 @@ CONTENT: dict[str, dict[str, Any]] = {
         "rows": [
             ["Risk unit", "Define 1R as the dollar loss from entry to invalidation on the full layered position."],
             ["Daily loss stop", "Stop new entries after -2R realized or two failed attempts in the same spread."],
-            ["Correlation cap", "Do not hold multiple spread trades with the same hidden ES exposure unless intentional."],
+            ["Correlation cap", "Do not hold multiple spread trades with the same hidden ES exposure unless planned."],
             ["Size cap", "Size from the thinner leg. RTY and YM liquidity are often the bottleneck."],
             ["Regime cap", "GOOSE Low permits one starter clip; Medium permits two; High permits full layering."],
             ["Event cap", "Before CPI, FOMC, NFP, or major mega-cap earnings, flatten or reduce to gap-tolerant size."],

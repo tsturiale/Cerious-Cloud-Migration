@@ -303,7 +303,7 @@ function visibleBookCounterparties(order: SimOrder, book: PolyBook | undefined):
   const rawPrices = bookUsesRawPrices(book)
 
   const byPrice = (matches: VisibleMarketMatch[]) => matches
-    .filter(match => match.size >= MIN_SIM_TRADE_EVIDENCE && marketPriceSatisfiesOrder(order, match.price))
+    .filter(match => match.size > 0 && marketPriceSatisfiesOrder(order, match.price))
     .sort((a, b) => order.side === 'bid' ? a.price - b.price : b.price - a.price)
 
   if (rawPrices) {
