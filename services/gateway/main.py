@@ -36,7 +36,7 @@ from services.intelligence.service import (
     spread_pack,
     trade_analytics_state,
 )
-from services.order.service import cancel_all_orders, cancel_order, positions_orders_state
+from services.order.service import cancel_all_orders, cancel_order, order_state_snapshot, place_order, positions_orders_state
 from services.price.service import price_service
 from services.studies.service import studies_service
 
@@ -44,7 +44,7 @@ from services.studies.service import studies_service
 app = FastAPI(title=settings.app_name)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://127.0.0.1:5173", "http://localhost:5173"],
+    allow_origins=list(settings.allowed_origins),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -78,6 +78,12 @@ LAUNCHED_AT = datetime.now(timezone.utc)
 LR_READY_MAX_AGE_MS = 90 * 60 * 1000
 STUDY_WARMUP_TIMEOUT_SECONDS = 120.0
 INTELLIGENCE_WARMUP_TIMEOUT_SECONDS = 75.0
+
+
+async def publish_order_snapshot() -> dict[str, Any]:
+    snapshot = order_state_snapshot()
+    await market_bus.publish_event({"type": "order_snapshot", "data": snapshot})
+    return snapshot
 STUDY_ENDPOINT_TIMEOUT_SECONDS = 45.0
 
 if FRONTEND_ASSETS.exists():
@@ -719,13 +725,18 @@ async def acme_positions_orders_endpoint() -> dict[str, Any]:
 
 
 @app.post("/api/acme/orders/cancel-all")
-async def acme_cancel_all_orders_endpoint() -> dict[str, Any]:
-    return cancel_all_orders()
+async def acme_cancel_all_orders_endpoint(payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    source = str((payload or {}).get("source") or "").strip().lower() or None
+    result = cancel_all_orders(source=source)
+    result["state"] = await publish_order_snapshot()
+    return result
 
 
 @app.post("/api/acme/orders/{order_id}/cancel")
 async def acme_cancel_order_endpoint(order_id: str) -> dict[str, Any]:
-    return cancel_order(order_id)
+    result = cancel_order(order_id)
+    result["state"] = await publish_order_snapshot()
+    return result
 
 
 def _interval_ms(interval: str | float | int) -> int:
@@ -1182,13 +1193,10 @@ async def poly_history_compat(market_key: str | None = None, asset: str | None =
 
 @app.post("/api/order")
 async def order_stub(payload: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "ok": True,
-        "dry_run": settings.dry_run,
-        "service": "order",
-        "status": "accepted-local",
-        "request": payload,
-    }
+    result = place_order(payload)
+    result["dry_run"] = settings.dry_run
+    result["state"] = await publish_order_snapshot()
+    return result
 
 
 @app.post("/api/execution/entry")
@@ -1240,6 +1248,7 @@ async def ws_endpoint(websocket: WebSocket, asset: str, provider: str = "cme") -
 
     await websocket.accept()
     await websocket.send_text(json.dumps(market_bus.snapshot(asset)))
+    await websocket.send_text(json.dumps({"type": "order_snapshot", "data": order_state_snapshot()}))
     queue = market_bus.subscribe()
     try:
         while True:

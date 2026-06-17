@@ -1,0 +1,68 @@
+name: native-price-feed
+
+on:
+  pull_request:
+    paths:
+      - "native/price-feed-cpp/**"
+      - ".github/workflows/native-price-feed.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux build tools
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake ninja-build pkg-config curl zip unzip tar
+
+      - name: Bootstrap vcpkg (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git .tools/vcpkg
+          .tools\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+
+      - name: Bootstrap vcpkg (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git .tools/vcpkg
+          .tools/vcpkg/bootstrap-vcpkg.sh -disableMetrics
+
+      - name: Install native dependencies (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          .tools\vcpkg\vcpkg.exe install openssl:x64-windows zstd:x64-windows
+
+      - name: Install native dependencies (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          .tools/vcpkg/vcpkg install openssl:x64-linux zstd:x64-linux
+
+      - name: Configure
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            triplet="x64-windows"
+          else
+            triplet="x64-linux"
+          fi
+          cmake -S native/price-feed-cpp -B native/price-feed-cpp/build -G Ninja \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_TOOLCHAIN_FILE="$PWD/.tools/vcpkg/scripts/buildsystems/vcpkg.cmake" \
+            -DVCPKG_TARGET_TRIPLET="$triplet"
+
+      - name: Build
+        run: cmake --build native/price-feed-cpp/build --config RelWithDebInfo

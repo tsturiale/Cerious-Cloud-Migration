@@ -53,6 +53,12 @@ interface TerminalState {
   simPositions: SimPosition[]
   simMessages: string[]
   setSimulationEnabled: (v: boolean) => void
+  setSimTradingState: (state: {
+    simOrders?: SimOrder[]
+    simPositions?: SimPosition[]
+    fills?: Record<string, PolyTradeTick[]>
+    simMessages?: string[]
+  }) => void
   placeSimOrder: (order: {
     id?: string
     marketKey: string
@@ -824,6 +830,12 @@ export const useStore = create<TerminalState>((set, get) => ({
     simulationEnabled: v,
     simMessages: [`Sim Exchange ${v ? 'enabled' : 'disabled'}.`, ...s.simMessages].slice(0, 50),
   })),
+  setSimTradingState: (state) => set(s => ({
+    simOrders: state.simOrders ?? s.simOrders,
+    simPositions: state.simPositions ?? s.simPositions,
+    fills: state.fills ?? s.fills,
+    simMessages: state.simMessages ?? s.simMessages,
+  })),
   placeSimOrder: (order) => {
     const id = order.id ?? `sim-${order.marketKey}-${order.outcome}-${order.side}-${order.price}-${Date.now()}`
     set(s => {
@@ -1204,6 +1216,12 @@ export const useStore = create<TerminalState>((set, get) => ({
       executionRisk: (data.execution_risk ?? null) as ExecutionRisk | null,
       polyBooks: snapshotPolyBooks,
       polyTicks: snapshotPolyTicks,
+    }
+    if (data.order_state) {
+      newState.simOrders = data.order_state.simOrders ?? s.simOrders
+      newState.simPositions = data.order_state.simPositions ?? s.simPositions
+      newState.fills = data.order_state.fills ?? s.fills
+      newState.simMessages = data.order_state.simMessages ?? s.simMessages
     }
     if (data.markets) {
       // Inline setMarkets logic for snapshot

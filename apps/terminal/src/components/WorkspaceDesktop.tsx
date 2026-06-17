@@ -1,15 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type PointerEvent as ReactPointerEvent, type ReactNode, type SetStateAction, type WheelEvent as ReactWheelEvent } from 'react'
+﻿import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type PointerEvent as ReactPointerEvent, type ReactNode, type SetStateAction, type WheelEvent as ReactWheelEvent } from 'react'
 import {
-  Activity,
   AlertTriangle,
-  BookOpen,
   ChevronDown,
   ChevronUp,
   Check,
   Copy,
   Database,
   Download,
-  ExternalLink,
   Folder,
   FolderOpen,
   Plus,
@@ -21,16 +18,8 @@ import {
   X,
 } from 'lucide-react'
 import { useStore } from '../store'
-import type { Asset, Bar, MarketInfo, PolyBook, PolyTradeTick, ProbPoint, SimOrder, SimPosition, WsMsg } from '../types'
-import { GreeksEducationPanel } from './GreeksEducationPanel'
+import type { Asset, Bar, PolyBook, PolyTradeTick, SimOrder, SimPosition, WsMsg } from '../types'
 import { OrderBook2 } from './OrderBook2'
-import { PolyPriceChart } from './PolyPriceChart'
-import { PtbOpportunityVisual, PtbRunwayChart, type PtbRunwayProduct } from './PtbOpportunityVisual'
-import { PredictionChart, type ChartDataPoint } from './PredictionChart'
-import { Chart } from './Chart'
-import { MultiChart } from './MultiChart'
-import { PositionMonitor } from './PositionMonitor'
-import { TimeAndSales } from './TimeAndSales'
 import { fetchBars } from '../utils/bars'
 import ceriousLogo from '../assets/branding/cerious-logo.png'
 import {
@@ -47,7 +36,6 @@ import {
   roundToPriceIncrement as roundToTick,
 } from '../utils/marketDisplay'
 import {
-  GREEK_ENGINES,
   PRODUCT_ASSETS,
   PROVIDERS,
   SERVICE_BLUEPRINT,
@@ -131,14 +119,13 @@ const DEFAULT_MARKET_DATA_COLUMN_WIDTHS = MARKET_DATA_COLUMNS.reduce((acc, colum
   return acc
 }, {} as Record<MarketDataColumnKey, number>)
 
-type StudyKey = 'price' | 'ptb' | 'probability' | 'truth' | 'greeks' | 'tape'
 type AlertSound = 'system-chime' | 'system-bell' | 'system-alarm'
 type AlertDeliveryChannel = 'audio' | 'desktop' | 'sms'
 type AlertDeliveryResult = { channel: AlertDeliveryChannel; ok: boolean; message: string }
 type AlertDeliveryStatus = { ok: boolean; message: string; at: number }
-type AlgoTemplate = 'mean-reversion-v2' | 'theo-quoter' | 'scale-in' | 'ptb-trigger'
+type AlgoTemplate = 'mean-reversion-v2' | 'scale-in'
 type AlgoStatus = 'draft' | 'held' | 'quoting' | 'paused'
-type TheoModel = 'truth' | 'market-mid' | 'ptb-edge'
+type QuoteModel = 'study-peg' | 'market-mid'
 type DepthColumnKey = 'orders' | 'bid' | 'price' | 'ask'
 type DepthLadderDensity = 'small' | 'medium' | 'large'
 
@@ -208,7 +195,7 @@ type AlgoDefinition = {
   outcome: 'yes' | 'no'
   side: 'bid' | 'offer' | 'both'
   orderType: 'limit' | 'market'
-  theoModel: TheoModel
+  quoteModel: QuoteModel
   quoteWidth: number
   edgeThreshold: number
   clipSize: number
@@ -305,7 +292,7 @@ type AlertRule = {
   symbol?: Asset
   provider?: ProviderKey
   productSymbol?: string
-  field: 'last' | 'fill' | 'probability' | 'edge' | 'gamma' | 'theta'
+  field: 'last' | 'fill'
   op: '>' | '<' | '>=' | '<='
   value: number
   valueMode?: 'money' | 'percent' | 'cents' | 'price'
@@ -319,9 +306,11 @@ type AlertRule = {
   }
 }
 
-const ALERT_FIELDS = new Set<AlertRule['field']>(['last', 'fill', 'probability', 'edge', 'gamma', 'theta'])
+const ALERT_FIELDS = new Set<AlertRule['field']>(['last', 'fill'])
 const ALERT_OPS = new Set<AlertRule['op']>(['>', '<', '>=', '<='])
 const ALERT_VALUE_MODES = new Set<NonNullable<AlertRule['valueMode']>>(['money', 'percent', 'cents', 'price'])
+const WORKSPACE_HEADER_HEIGHT = 48
+const WORKSPACE_FOOTER_HEIGHT = 28
 const WORKSPACE_EDGE_PAN_ZONE = 150
 const WORKSPACE_HOVER_PAN_ZONE = 24
 
@@ -385,14 +374,17 @@ const WORKSPACE_NAMES_KEY = 'cerious.workspace.names.v1'
 const DEFAULT_WORKSPACE_KEY = 'cerious.workspace.default.v1'
 const WORKSPACE_BACKUPS_KEY = 'cerious.workspace.backups.v1'
 const WORKSPACE_SESSION_TOKEN_KEY = 'cerious.workspace.sessionToken.v1'
-const DESKTOP_FIRST_LAUNCH_KEY = 'cerious.desktop.firstLaunchComplete.v1'
-const DESKTOP_CLIENT_DOWNLOAD_URL = '/downloads/CeriousSystems-Win64-ThinClient.zip'
 const TED_S_DEFAULT_RECOVERY_FILE = 'leveldb-07-ted-s.json'
 const ALGO_LIBRARY_KEY = 'cerious.algo.library.v1'
 const DEPTH_LADDER_LAYOUT_KEY = 'cerious.depth-ladder.layout.v1'
+const TRADE_ANALYTICS_IMPORT_KEY = 'cerious.trade-analytics.import.v1'
+const MODEL_VARIANT_KEY = 'cerious.model.variant.v1'
+const MODEL_VARIANT_LIBRARY_KEY = 'cerious.model.variant.library.v1'
+const LEGACY_ACME_MODEL_VARIANT_KEY = 'acmeTraderModelVariantRegistryV1'
 const ALGO_LIBRARY_EVENT = 'cerious-algo-library'
 const DEFAULT_OPERATOR = 'Operator 1'
 const MAX_WORKSPACE_BACKUPS = 12
+const TRADE_ANALYTICS_ACCOUNT_SIZE = 500_000
 const CME_PRODUCT_ASSETS: Asset[] = ['ES', 'NQ', 'YM', 'RTY', 'CL', 'GC', 'ZM', 'ZS', 'ES_NQ', 'YM_ES', 'RTY_ES']
 const DEPTH_LADDER_PRICE_MULTIPLIERS = [1, 2, 4, 5, 8, 10, 16]
 const DEFAULT_DEPTH_LADDER_SETTINGS: DepthLadderSettings = {
@@ -409,48 +401,22 @@ const DEFAULT_DEPTH_LADDER_SETTINGS: DepthLadderSettings = {
   actionMode: 'limit',
   fastTrade: false,
 }
-const STUDIES: Array<{ key: StudyKey; label: string }> = [
-  { key: 'price', label: 'Price' },
-  { key: 'ptb', label: 'PTB' },
-  { key: 'probability', label: 'Market Prob' },
-  { key: 'truth', label: 'Truth Prob' },
-  { key: 'greeks', label: 'Greeks' },
-  { key: 'tape', label: 'Tape' },
-]
-
 const WINDOW_LABELS: Record<WorkspaceWindowKind, string> = {
   marketData: 'Market Data',
-  ladder: 'Legacy Ladder',
   depthLadder: 'Depth Ladder',
   order: 'Order Book',
   fills: 'Fills',
   alerts: 'Alert Manager',
-  greeks: 'Greeks Engine',
-  cryptoTerminal: 'Removed Terminal',
-  eventTerminal: 'Removed Terminal',
-  sportsTerminal: 'Removed Terminal',
-  tradingViewChart: 'TradingView Chart',
-  tradingViewMultiChart: 'TradingView Multi-Chart',
-  singlePanelChart: 'Single Panel Chart',
   charts: 'Charts',
-  acmeTwoPanelChart: 'ACME Plotly Two-Panel',
-  acmeThreePanelChart: 'ACME Plotly Three-Panel',
-  predictionChart: 'Prediction Chart',
-  ptbChart: 'PTB Analytic Chart',
-  ptbOpportunity: 'PTB Opportunity Map',
-  ptbRunway: 'PTB Runway',
   liquidityMap: 'Liquidity Map',
   algoBuilder: 'Algo Builder',
   algoManager: 'Algo Manager',
-  theoQuoter: 'Theo Quoter',
-  knowledge: 'Knowledge Service',
-  serviceMap: 'Service Mesh',
-  productLibrary: 'Product Library',
-  depthTrader: 'Depth Trader',
-  depthTraderEsNq: 'Depth Trader - ES / NQ',
-  depthTraderYmEs: 'Depth Trader - YM / ES',
-  depthTraderRtyEs: 'Depth Trader - RTY / ES',
-  mdTraderEs: 'MD Trader - ES',
+  serviceMap: 'System Services',
+  depthTrader: 'Depth Ladder',
+  depthTraderEsNq: 'Depth Ladder - ES / NQ',
+  depthTraderYmEs: 'Depth Ladder - YM / ES',
+  depthTraderRtyEs: 'Depth Ladder - RTY / ES',
+  mdTraderEs: 'Depth Ladder - ES',
   goose: 'GOOSE',
   streamingNews: 'Streaming News',
   liveApiArchitecture: 'Live API Architecture',
@@ -471,9 +437,6 @@ const WINDOW_LABELS: Record<WorkspaceWindowKind, string> = {
   riskChecklist: 'Risk Checklist',
   sourceNotes: 'Source Notes',
   modelResearchGovernance: 'Model Research & Governance',
-  spreadEsNq: 'ES / NQ',
-  spreadYmEs: 'YM / ES',
-  spreadRtyEs: 'RTY / ES',
 }
 
 const WIDGET_MENU: Array<{ group: string; kinds: WorkspaceWindowKind[] }> = [
@@ -484,26 +447,33 @@ const WIDGET_MENU: Array<{ group: string; kinds: WorkspaceWindowKind[] }> = [
   { group: 'Trading', kinds: ['order', 'alerts', 'liquidityMap'] },
   { group: 'Algos', kinds: ['algoBuilder', 'algoManager'] },
   { group: 'Charts', kinds: ['charts'] },
-  { group: 'PTB Analytics', kinds: ['predictionChart', 'ptbOpportunity', 'ptbRunway', 'ptbChart', 'greeks', 'knowledge'] },
   { group: 'System', kinds: ['liveApiArchitecture', 'serviceMap'] },
 ]
 
-const REMOVED_WINDOW_KINDS = new Set<WorkspaceWindowKind>([
-  'ladder',
-  'theoQuoter',
-  'cryptoTerminal',
-  'eventTerminal',
-  'sportsTerminal',
-  'tradingViewChart',
-  'tradingViewMultiChart',
-  'singlePanelChart',
-  'acmeTwoPanelChart',
-  'acmeThreePanelChart',
-  'productLibrary',
-  'spreadEsNq',
-  'spreadYmEs',
-  'spreadRtyEs',
+const REMOVED_WINDOW_KINDS = new Set<string>([
 ])
+
+const REMOVED_WINDOW_PATTERNS = [
+  /^ladder$/i,
+  new RegExp(['^crypto', 'Terminal$'].join(''), 'i'),
+  new RegExp(['^event', 'Terminal$'].join(''), 'i'),
+  new RegExp(['^sports', 'Terminal$'].join(''), 'i'),
+  new RegExp(['^trading', 'View'].join(''), 'i'),
+  new RegExp(['^single', 'PanelChart$'].join(''), 'i'),
+  /^acme(Two|Three)PanelChart$/i,
+  new RegExp(['^prediction', 'Chart$'].join(''), 'i'),
+  new RegExp(['^product', 'Library$'].join(''), 'i'),
+  /^spread(EsNq|YmEs|RtyEs)$/i,
+  new RegExp(['^p', 'tb'].join(''), 'i'),
+  new RegExp(['^g', 'reeks$'].join(''), 'i'),
+  new RegExp(['^the', 'oQuoter$'].join(''), 'i'),
+  /^knowledge$/i,
+]
+
+function isRemovedWindowKind(kind: unknown): boolean {
+  const key = String(kind ?? '')
+  return REMOVED_WINDOW_KINDS.has(key) || REMOVED_WINDOW_PATTERNS.some(pattern => pattern.test(key))
+}
 
 const PROVIDER_COLORS: Record<ProviderKey, string> = {
   cme: '#00d4a4',
@@ -517,6 +487,43 @@ const PROVIDER_COLORS: Record<ProviderKey, string> = {
 function normalizeProviderKey(provider: ProviderKey | undefined): ProviderKey {
   if (provider && PROVIDERS.some(item => item.key === provider)) return provider
   return 'cme'
+}
+
+function normalizeProductKey(value: unknown): string {
+  return String(value ?? '').trim().toUpperCase()
+}
+
+function productAliasSet(option: ProductOption | undefined, fallback?: unknown): Set<string> {
+  const aliases = new Set<string>()
+  ;[fallback, option?.marketKey, option?.symbol, option?.asset].forEach(value => {
+    const key = normalizeProductKey(value)
+    if (key) aliases.add(key)
+  })
+  return aliases
+}
+
+function algoMarketCandidates(algo: Partial<AlgoDefinition>): string[] {
+  const candidates = [
+    algo.marketKey,
+    algo.symbol,
+    ...(Array.isArray(algo.instruments) ? algo.instruments : []),
+  ].map(normalizeProductKey).filter(Boolean)
+  return candidates.filter((candidate, index, list) => list.indexOf(candidate) === index)
+}
+
+function findProductOptionForAlgo(options: ProductOption[], algo: AlgoDefinition): ProductOption | undefined {
+  const provider = normalizeProviderKey(algo.provider)
+  const candidates = new Set(algoMarketCandidates(algo))
+  return options.find(option => (
+    option.provider === provider
+    && [option.marketKey, option.symbol, option.asset].some(value => candidates.has(normalizeProductKey(value)))
+  )) ?? options.find(option => (
+    [option.marketKey, option.symbol, option.asset].some(value => candidates.has(normalizeProductKey(value)))
+  ))
+}
+
+function resolveAlgoMarketKey(algo: AlgoDefinition, option: ProductOption | undefined): string {
+  return normalizeProductKey(option?.marketKey) || algoMarketCandidates(algo)[0] || normalizeProductKey(algo.symbol)
 }
 
 function normalizeAlertRule(raw: unknown, index: number): AlertRule | null {
@@ -561,29 +568,7 @@ function venueColor(provider: ProviderKey | 'execution' | 'sim'): string {
 }
 
 function defaultWindows(template: WorkspaceTemplate = 'cme'): WorkspaceWindow[] {
-  if (template === 'event') {
-    return [
-      win('marketData', 16, 58, 520, 290, 1),
-      win('eventTerminal', 548, 58, 650, 530, 2, 'event'),
-      win('ladder', 1210, 58, 610, 650, 3),
-      win('order', 16, 360, 360, 430, 4),
-      win('fills', 388, 600, 420, 260, 5),
-      win('greeks', 820, 600, 520, 290, 6),
-      win('alerts', 1352, 720, 460, 220, 7),
-      win('serviceMap', 16, 802, 760, 190, 8),
-    ]
-  }
-  if (template === 'sports') {
-    return [
-      win('marketData', 16, 58, 520, 310, 1),
-      win('relativeSpreadCharts', 548, 58, 650, 520, 2, 'sports'),
-      win('depthLadder', 1210, 58, 610, 650, 3),
-      win('order', 16, 382, 360, 420, 4),
-      win('alerts', 388, 590, 430, 290, 5),
-      win('knowledge', 830, 590, 500, 300, 6),
-      win('serviceMap', 16, 812, 760, 180, 7),
-    ]
-  }
+  void template
   return [
     win('marketData', 16, 58, 560, 315, 1),
     win('charts', 588, 58, 620, 430, 2),
@@ -591,14 +576,10 @@ function defaultWindows(template: WorkspaceTemplate = 'cme'): WorkspaceWindow[] 
     win('order', 16, 386, 370, 430, 4),
     win('fills', 398, 500, 390, 310, 5),
     win('alerts', 800, 500, 400, 310, 6),
-    win('greeks', 398, 822, 560, 300, 7),
-    win('ptbRunway', 1220, 724, 600, 395, 9),
-    win('ptbOpportunity', 800, 822, 410, 420, 10),
     win('liquidityMap', 16, 830, 370, 290, 11),
     win('serviceMap', 398, 1134, 520, 260, 12),
     win('algoManager', 930, 1134, 430, 300, 13),
     win('spreadConfigurations', 1372, 1134, 448, 300, 14),
-    win('ptbChart', 588, 500, 620, 310, 15),
   ]
 }
 
@@ -628,9 +609,9 @@ function win(
 function defaultSymbolForWindowKind(kind: WorkspaceWindowKind, fallback: string): string {
   if (kind === 'depthLadder') return ''
   if (kind === 'charts') return 'ES_NQ'
-  if (kind === 'depthTraderEsNq' || kind === 'spreadEsNq') return 'ES_NQ'
-  if (kind === 'depthTraderYmEs' || kind === 'spreadYmEs') return 'YM_ES'
-  if (kind === 'depthTraderRtyEs' || kind === 'spreadRtyEs') return 'RTY_ES'
+  if (kind === 'depthTraderEsNq') return 'ES_NQ'
+  if (kind === 'depthTraderYmEs') return 'YM_ES'
+  if (kind === 'depthTraderRtyEs') return 'RTY_ES'
   if (kind === 'mdTraderEs') return 'ES'
   return fallback
 }
@@ -680,9 +661,9 @@ function fmtPct(n: number | undefined): string {
   return `${(n * 100).toFixed(1)}%`
 }
 
-function fmtProb(n: number | undefined): string {
+function fmtInt(n: number | undefined): string {
   if (n === undefined || Number.isNaN(n)) return '-'
-  return `${n.toFixed(1)}c`
+  return Math.round(n).toLocaleString()
 }
 
 function cx(...parts: Array<string | false | undefined>): string {
@@ -740,7 +721,7 @@ function saveDepthLadderDefaultSettings(settings: DepthLadderSettings): DepthLad
 
 function normalizeWorkspace(raw: Partial<SavedWorkspace> | null | undefined): SavedWorkspace | null {
   if (!raw || !Array.isArray(raw.windows)) return null
-  const windows = ensureFuturesDepthLadderWindow(ensureLegacyChartWindows(raw.windows.filter(item => !REMOVED_WINDOW_KINDS.has(item.kind)))).map(item => ({
+  const windows = ensureFuturesDepthLadderWindow(ensureLegacyChartWindows(raw.windows.filter(item => !isRemovedWindowKind(item.kind)))).map(item => ({
     ...item,
     provider: normalizeProviderKey(item.provider),
     ...(item.kind === 'depthLadder' && item.depthLadderSettings
@@ -860,68 +841,6 @@ function persistWorkspaceSnapshot(next: SavedWorkspace, list: SavedWorkspace[], 
   backupWorkspace(next, backupReason)
 }
 
-function persistWorkspaceWindowPatch(id: string, patch: Partial<WorkspaceWindow>): SavedWorkspace | null {
-  const active = loadActiveWorkspace()
-  if (!active) return null
-  const next: SavedWorkspace = {
-    ...active,
-    windows: active.windows.map(item => item.id === id ? { ...item, ...patch } : item),
-    updatedAt: Date.now(),
-  }
-  const list = upsertSavedWorkspace(loadSavedWorkspaces(), next)
-  window.localStorage.setItem(WORKSPACE_NAMES_KEY, JSON.stringify(list))
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
-  window.localStorage.setItem(DEFAULT_WORKSPACE_KEY, JSON.stringify(next))
-  return next
-}
-
-function currentFloatingBounds(): FloatingWindowBounds {
-  return {
-    x: Math.max(0, Math.round(window.screenX || 0)),
-    y: Math.max(0, Math.round(window.screenY || 0)),
-    w: Math.max(320, Math.round(window.outerWidth || window.innerWidth || 640)),
-    h: Math.max(240, Math.round(window.outerHeight || window.innerHeight || 480)),
-  }
-}
-
-function openWorkspaceFloatingWindow(item: WorkspaceWindow): Window | null {
-  const bounds = item.floatingBounds
-  const width = Math.round(bounds?.w ?? item.w ?? 720)
-  const height = Math.round(bounds?.h ?? item.h ?? 520)
-  const left = Math.round(bounds?.x ?? item.x ?? 80)
-  const top = Math.round(bounds?.y ?? item.y ?? 80)
-  const url = `${window.location.origin}${window.location.pathname}?workspace_popout=${encodeURIComponent(item.id)}&cerious_client=desktop`
-  const features = [
-    'popup=yes',
-    `width=${Math.max(320, width)}`,
-    `height=${Math.max(240, height)}`,
-    `left=${Math.max(0, left)}`,
-    `top=${Math.max(0, top)}`,
-    'resizable=yes',
-    'scrollbars=no',
-  ].join(',')
-  return window.open(url, `cerious-window-${item.id}`, features)
-}
-
-function isDesktopClientLaunch(): boolean {
-  try {
-    return new URLSearchParams(window.location.search).get('cerious_client') === 'desktop'
-  } catch {
-    return false
-  }
-}
-
-function needsDesktopFirstLaunchSeed(): boolean {
-  return isDesktopClientLaunch() && window.localStorage.getItem(DESKTOP_FIRST_LAUNCH_KEY) !== '1'
-}
-
-function collapseWorkspaceWindows(workspace: SavedWorkspace): SavedWorkspace {
-  return {
-    ...workspace,
-    windows: workspace.windows.map(item => ({ ...item, collapsed: true })),
-  }
-}
-
 function workspaceSessionToken(): string {
   return window.localStorage.getItem(WORKSPACE_SESSION_TOKEN_KEY) || ''
 }
@@ -973,53 +892,14 @@ async function fetchServerSavedWorkspaces(): Promise<SavedWorkspace[]> {
   }
 }
 
-function fmtChartTime(ts: number): string {
-  const date = new Date(ts)
-  return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}:${date.getSeconds().toString().padStart(2, '0')}`
-}
-
-function buildWorkspacePredictionData(
-  option: ProductOption | undefined,
-  market: MarketInfo | undefined,
-  history: ProbPoint[],
-  ticks: PolyTradeTick[],
-): ChartDataPoint[] {
-  const points = new Map<number, { yesPrice: number; volume: number }>()
-  history.forEach(point => {
-    if (Number.isFinite(point.ts) && Number.isFinite(point.up_pct)) points.set(point.ts, { yesPrice: clamp(point.up_pct, 0, 100), volume: 1 })
-  })
-  ticks.forEach(tick => {
-    if (Number.isFinite(tick.timestamp) && Number.isFinite(tick.price)) {
-      const existing = points.get(tick.timestamp)
-      points.set(tick.timestamp, {
-        yesPrice: clamp(tick.side === 'yes' ? tick.price : 100 - tick.price, 0, 100),
-        volume: (existing?.volume ?? 0) + Math.max(0.25, tick.size),
-      })
-    }
-  })
-  const fallback = option?.yes ?? market?.up_pct ?? 50
-  if (points.size === 0) {
-    const now = Date.now()
-    points.set(now - 60_000, { yesPrice: clamp(fallback, 0, 100), volume: 1 })
-    points.set(now, { yesPrice: clamp(fallback, 0, 100), volume: 1 })
-  }
-  return Array.from(points.entries())
-    .sort(([a], [b]) => a - b)
-    .slice(-120)
-    .map(([ts, point]) => ({ time: fmtChartTime(ts), yesPrice: point.yesPrice, volume: point.volume }))
-}
-
 function algoTemplateLabel(template: AlgoTemplate): string {
   if (template === 'mean-reversion-v2') return 'Mean Reversion v2'
-  if (template === 'theo-quoter') return 'Theo Quoter'
-  if (template === 'scale-in') return 'Scale In'
-  return 'PTB Trigger'
+  return 'Scale In'
 }
 
-function theoModelLabel(model: TheoModel): string {
-  if (model === 'truth') return 'Truth Engine'
-  if (model === 'market-mid') return 'Market Mid'
-  return 'PTB Edge'
+function quoteModelLabel(model: QuoteModel): string {
+  if (model === 'study-peg') return 'Study Peg'
+  return 'Market Mid'
 }
 
 function defaultAcmeMeanReversionFields(symbol: string) {
@@ -1103,7 +983,7 @@ function defaultAlgo(option: ProductOption | undefined, operator: string): AlgoD
     outcome: 'yes',
     side: 'both',
     orderType: 'limit',
-    theoModel: 'ptb-edge',
+    quoteModel: 'market-mid',
     quoteWidth: 2,
     edgeThreshold: acmeDefaults.entryPeg.standardDeviations,
     clipSize: acmeDefaults.risk.maxPosition,
@@ -1116,7 +996,7 @@ function defaultAlgo(option: ProductOption | undefined, operator: string): AlgoD
 
 function asTemplate(value: unknown): AlgoTemplate {
   const template = String(value ?? '')
-  return template === 'mean-reversion-v2' || template === 'theo-quoter' || template === 'scale-in' || template === 'ptb-trigger'
+  return template === 'mean-reversion-v2' || template === 'scale-in'
     ? template
     : 'mean-reversion-v2'
 }
@@ -1169,25 +1049,28 @@ function loadAlgoLibrary(): AlgoDefinition[] {
     if (!Array.isArray(parsed)) return []
     return parsed
       .filter(item => item.id && item.name)
-      .map(item => ({
-        ...item,
-        template: asTemplate(item.template ?? item.templateId),
-        provider: normalizeProviderKey(item.provider),
-        symbol: item.symbol ?? 'ES_NQ',
-        marketKey: item.marketKey ?? item.symbol ?? 'ES_NQ',
-        outcome: item.outcome ?? 'yes',
-        side: item.side ?? 'both',
-        orderType: item.orderType ?? 'limit',
-        theoModel: item.theoModel ?? 'truth',
-        quoteWidth: Number(item.quoteWidth ?? 2),
-        edgeThreshold: Number(item.edgeThreshold ?? 1),
-        clipSize: Number(item.clipSize ?? 5),
-        maxPosition: Number(item.maxPosition ?? 25),
-        operator: item.operator ?? DEFAULT_OPERATOR,
-        status: item.status ?? 'held',
-        updatedAt: Number(item.updatedAt ?? Date.now()),
-        ...normalizeAcmeFields(item, String(item.marketKey ?? item.symbol ?? 'ES_NQ')),
-      } as AlgoDefinition))
+      .map(item => {
+        const symbol = algoMarketCandidates(item)[0] || 'ES_NQ'
+        return {
+          ...item,
+          template: asTemplate(item.template ?? item.templateId),
+          provider: normalizeProviderKey(item.provider),
+          symbol,
+          marketKey: symbol,
+          outcome: item.outcome ?? 'yes',
+          side: item.side ?? 'both',
+          orderType: item.orderType ?? 'limit',
+          quoteModel: item.quoteModel ?? 'study-peg',
+          quoteWidth: Number(item.quoteWidth ?? 2),
+          edgeThreshold: Number(item.edgeThreshold ?? 1),
+          clipSize: Number(item.clipSize ?? 5),
+          maxPosition: Number(item.maxPosition ?? 25),
+          operator: item.operator ?? DEFAULT_OPERATOR,
+          status: item.status ?? 'held',
+          updatedAt: Number(item.updatedAt ?? Date.now()),
+          ...normalizeAcmeFields(item, symbol),
+        } as AlgoDefinition
+      })
   } catch {
     return []
   }
@@ -1200,7 +1083,7 @@ function acmeDefinitionToAlgo(item: Record<string, unknown>): AlgoDefinition | n
   const instruments = Array.isArray(item.instruments) ? item.instruments.map(String) : []
   const risk = item.risk && typeof item.risk === 'object' ? item.risk as Record<string, unknown> : {}
   const layerPlan = item.layerPlan && typeof item.layerPlan === 'object' ? item.layerPlan as Record<string, unknown> : {}
-  const templateId = String(item.templateId ?? 'ptb-trigger')
+  const templateId = String(item.templateId ?? 'mean-reversion-v2')
   const symbol = instruments[0] ?? 'ES_NQ'
   const acmeFields = normalizeAcmeFields(item, symbol)
   const statusRaw = String(item.status ?? 'held')
@@ -1216,7 +1099,7 @@ function acmeDefinitionToAlgo(item: Record<string, unknown>): AlgoDefinition | n
     outcome: 'yes',
     side: layerPlan.workSellSide === false ? 'bid' : layerPlan.workBuySide === false ? 'offer' : 'both',
     orderType: 'limit',
-    theoModel: 'ptb-edge',
+    quoteModel: 'market-mid',
     quoteWidth: Number(layerPlan.layerSpacingTicks ?? 2),
     edgeThreshold: Number((item.entryPeg as Record<string, unknown> | undefined)?.standardDeviations ?? 1.5),
     clipSize: Number(layerPlan.layerCount ?? 1),
@@ -1299,14 +1182,13 @@ function useAlgoLibrary() {
   }
 }
 
-function computeTheoQuote(option: ProductOption | undefined, model: TheoModel, quoteWidth: number) {
+function computeAlgoQuote(option: ProductOption | undefined, model: QuoteModel, quoteWidth: number) {
   const market = option?.priceToBeat ?? option?.spot ?? option?.yes ?? 50
   const rawPrice = market < 0 || market > 100 || option?.timeframe === '20sec' || option?.timeframe === 'synthetic'
   const truth = option?.truthYes ?? market
   const minPrice = rawPrice ? -Number.MAX_SAFE_INTEGER : 0
   const maxPrice = rawPrice ? Number.MAX_SAFE_INTEGER : 100
-  const edgeFair = option?.truthYes != null && !rawPrice ? clamp((option.truthYes * 0.7) + (market * 0.3), minPrice, maxPrice) : market
-  const fair = model === 'truth' ? truth : model === 'ptb-edge' ? edgeFair : market
+  const fair = model === 'study-peg' ? truth : market
   const half = quoteWidth / 2
   return {
     fair,
@@ -1552,6 +1434,29 @@ type AcmeOpportunityState = {
     regime: number
     liquidity: number
   }>
+  playbookRows?: Array<{
+    signalCombination: string
+    interpretation: string
+    expression: string
+    risk: string
+  }>
+  productRows?: Array<{
+    spread: string
+    label: string
+    tag: string
+    formula: string
+    buy: string
+    sell: string
+    nuance: string
+  }>
+  tradePlanRows?: Array<{
+    title: string
+    body: string
+  }>
+  riskChecklistRows?: Array<{
+    risk: string
+    control: string
+  }>
 }
 
 type AcmeTradeAnalyticsState = {
@@ -1573,10 +1478,35 @@ type AcmeTradeAnalyticsState = {
     drawdown: number
     drawdownPct: number
     studyCoverage: number
+    largestLossPct?: number
+    knownInstrumentRows?: number
+    peakEquity?: number
+    troughEquity?: number
+    endEquity?: number
+    productSummary?: string
+    worstDrawdownPoint?: ImportedFillRecord | null
   }
   studies: Array<{ study: string; passed: boolean; result: string; read: string }>
   curve: Array<{ index: number; equity: number; drawdown: number; maxDrawdown: number }>
   productTotals: Array<{ instrument: string; pnl: number }>
+  report?: Array<{ label: string; value: string; read: string }>
+  records?: ImportedFillRecord[]
+  source?: 'live' | 'imported'
+  filename?: string
+}
+
+type ImportedFillRecord = {
+  pnl: number
+  cumulativePnl?: number | null
+  accountMaxDrawdown?: number | null
+  accountDrawdown?: number | null
+  instrument: string
+  side?: string
+  qty?: number | null
+  price?: number | null
+  timestamp?: string
+  displayTimestamp?: string
+  timestampMs?: number
 }
 
 type AcmeNotionalState = {
@@ -1604,6 +1534,19 @@ type AcmeContentState = {
   fetchedAt: string
   sections?: Array<{ title: string; body: string }>
   rows?: string[][]
+}
+
+type ModelVariantDraft = {
+  name: string
+  version: string
+  horizon: string
+  owner: string
+  objective: string
+  notes: string
+  changeLog: string
+  reviewCriteria: string
+  savedAt?: string
+  schema?: string
 }
 
 function useAcmeEndpoint<T>(path: string, intervalMs = 10000) {
@@ -1634,6 +1577,361 @@ function useAcmeEndpoint<T>(path: string, intervalMs = 10000) {
   }, [intervalMs, path])
 
   return { data, error }
+}
+
+function parseAcmeCsv(text: string): string[][] {
+  const rows: string[][] = []
+  let row: string[] = []
+  let cell = ''
+  let quoted = false
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i]
+    const next = text[i + 1]
+    if (ch === '"' && quoted && next === '"') {
+      cell += '"'
+      i += 1
+    } else if (ch === '"') {
+      quoted = !quoted
+    } else if (ch === ',' && !quoted) {
+      row.push(cell)
+      cell = ''
+    } else if ((ch === '\n' || ch === '\r') && !quoted) {
+      if (ch === '\r' && next === '\n') i += 1
+      row.push(cell)
+      if (row.some(value => value.trim())) rows.push(row)
+      row = []
+      cell = ''
+    } else {
+      cell += ch
+    }
+  }
+  row.push(cell)
+  if (row.some(value => value.trim())) rows.push(row)
+  return rows
+}
+
+function normalizeCsvHeader(value: unknown): string {
+  return String(value ?? '').trim().toLowerCase().replace(/[^a-z0-9]/g, '')
+}
+
+function acmeHeaderIndex(headers: string[], names: string[], options: { exclude?: string[] } = {}): number {
+  const normalizedNames = names.map(normalizeCsvHeader)
+  const excluded = (options.exclude ?? []).map(normalizeCsvHeader)
+  const candidates = headers
+    .map((header, index) => ({ header, normalized: normalizeCsvHeader(header), index }))
+    .filter(item => !excluded.some(name => item.normalized === name || item.normalized.includes(name)))
+  const exact = candidates.find(item => normalizedNames.some(name => item.normalized === name))
+  if (exact) return exact.index
+  const fuzzy = candidates.find(item => normalizedNames.some(name => item.normalized.includes(name)))
+  return fuzzy ? fuzzy.index : -1
+}
+
+function csvNumber(value: unknown): number | null {
+  const text = String(value ?? '').trim()
+  const negative = /^\(.*\)$/.test(text)
+  const cleaned = text.replace(/[()$,%\s,]/g, '')
+  const parsed = Number(cleaned)
+  return Number.isFinite(parsed) ? (negative ? -Math.abs(parsed) : parsed) : null
+}
+
+function acmeMean(values: number[]): number {
+  return values.length ? values.reduce((total, value) => total + value, 0) / values.length : 0
+}
+
+function acmeStdev(values: number[]): number {
+  if (values.length < 2) return 0
+  const mean = acmeMean(values)
+  const variance = values.reduce((total, value) => total + (value - mean) ** 2, 0) / (values.length - 1)
+  return Math.sqrt(variance)
+}
+
+function acmeDownsideDeviation(returns: number[], target = 0): number {
+  if (!returns.length) return 0
+  return Math.sqrt(acmeMean(returns.map(value => Math.min(0, value - target) ** 2)))
+}
+
+function acmeMaxDrawdown(values: number[]): number {
+  let peak = 0
+  let worst = 0
+  let equity = 0
+  values.forEach(value => {
+    equity += value
+    peak = Math.max(peak, equity)
+    worst = Math.min(worst, equity - peak)
+  })
+  return Math.abs(worst)
+}
+
+function parseTradeTimestamp(value: unknown): number {
+  const text = String(value ?? '').trim()
+  if (!text) return Number.NaN
+  const direct = Date.parse(text)
+  if (Number.isFinite(direct)) return direct
+  const chicago = text.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})\s+CT$/i)
+  if (!chicago) return Number.NaN
+  return new Date(
+    Number(chicago[1]),
+    Number(chicago[2]) - 1,
+    Number(chicago[3]),
+    Number(chicago[4]),
+    Number(chicago[5]),
+    Number(chicago[6]),
+  ).getTime()
+}
+
+function equityCurveFromPnls(pnls: number[], accountSize = TRADE_ANALYTICS_ACCOUNT_SIZE): AcmeTradeAnalyticsState['curve'] {
+  let cumulative = 0
+  let peak = 0
+  let maxDrawdown = 0
+  return pnls.map((pnl, index) => {
+    cumulative += pnl
+    peak = Math.max(peak, cumulative)
+    const drawdown = Math.max(0, peak - cumulative)
+    maxDrawdown = Math.max(maxDrawdown, drawdown)
+    return {
+      index,
+      equity: accountSize + cumulative,
+      drawdown,
+      maxDrawdown,
+    }
+  })
+}
+
+function tradeAnalyticsRiskLevel(metrics: AcmeTradeAnalyticsState['metrics']): string {
+  if (metrics.drawdownPct >= 0.02 || metrics.total < 0 || metrics.sharpe < 0 || metrics.calmar < 0) return 'High'
+  if (metrics.drawdownPct >= 0.01 || metrics.profitFactor < 1.2 || metrics.sharpe < 0.5) return 'Elevated'
+  return 'Controlled'
+}
+
+function buildTradeAnalyticsStudies(metrics: AcmeTradeAnalyticsState['metrics']): AcmeTradeAnalyticsState['studies'] {
+  const known = metrics.knownInstrumentRows ?? Math.round(metrics.studyCoverage * metrics.rows)
+  return [
+    {
+      study: 'Risk assessment',
+      passed: tradeAnalyticsRiskLevel(metrics) === 'Controlled',
+      result: tradeAnalyticsRiskLevel(metrics),
+      read: `Drawdown ${fmtPct(metrics.drawdownPct)}, Sharpe ${fmtNum(metrics.sharpe, 2)}, Calmar ${fmtNum(metrics.calmar, 2)}`,
+    },
+    {
+      study: 'Account base',
+      passed: metrics.returnPct >= 0,
+      result: fmtPct(metrics.returnPct),
+      read: `${fmtMoney(metrics.total)} on ${fmtMoney(metrics.accountSize)}`,
+    },
+    {
+      study: 'Drawdown control',
+      passed: metrics.drawdownPct <= 0.01,
+      result: fmtPct(metrics.drawdownPct),
+      read: metrics.drawdownPct <= 0.01 ? 'Inside 1% daily drawdown band' : 'Review size, stops, or sequencing',
+    },
+    {
+      study: 'Expectancy',
+      passed: metrics.expectancy > 0 && metrics.profitFactor >= 1,
+      result: `${fmtMoney(metrics.expectancy)} / ${fmtNum(metrics.profitFactor, 2)} PF`,
+      read: metrics.expectancy > 0 ? 'Positive average trade contribution' : 'Negative expectancy day',
+    },
+    {
+      study: 'Loss concentration',
+      passed: (metrics.largestLossPct ?? 0) <= 0.005,
+      result: fmtPct(metrics.largestLossPct ?? 0),
+      read: (metrics.largestLossPct ?? 0) <= 0.005 ? 'No single loss exceeded 0.5% of account' : 'Largest loss exceeded 0.5% of account',
+    },
+    {
+      study: 'Study coverage',
+      passed: metrics.studyCoverage >= 0.8,
+      result: fmtPct(metrics.studyCoverage),
+      read: `${known}/${metrics.rows} rows mapped to defined products or spreads`,
+    },
+  ]
+}
+
+function buildTradeAnalyticsReport(
+  metrics: AcmeTradeAnalyticsState['metrics'],
+  records: ImportedFillRecord[],
+): NonNullable<AcmeTradeAnalyticsState['report']> {
+  const best = records.reduce<ImportedFillRecord | null>((winner, record) => !winner || record.pnl > winner.pnl ? record : winner, null)
+  const worst = records.reduce<ImportedFillRecord | null>((loser, record) => !loser || record.pnl < loser.pnl ? record : loser, null)
+  return [
+    {
+      label: 'Risk assessment',
+      value: tradeAnalyticsRiskLevel(metrics),
+      read: metrics.total < 0
+        ? 'Negative P&L with drawdown pressure. Reduce size or review trade selection before scaling.'
+        : metrics.drawdownPct > 0.01
+          ? 'Positive P&L, but drawdown exceeded 1% of the assumed account.'
+          : 'P&L and drawdown are within the current risk envelope.',
+    },
+    {
+      label: 'Period result',
+      value: `${fmtMoney(metrics.total)} / ${fmtPct(metrics.returnPct)}`,
+      read: metrics.total >= 0 ? 'Net positive against the account base.' : 'Net negative against the account base.',
+    },
+    {
+      label: 'Risk-adjusted return',
+      value: `Sharpe ${fmtNum(metrics.sharpe, 2)} | Sortino ${fmtNum(metrics.sortino, 2)} | Calmar ${fmtNum(metrics.calmar, 2)}`,
+      read: 'Calculated from fill-level account returns using a zero risk-free/minimum acceptable return.',
+    },
+    {
+      label: 'Drawdown',
+      value: `${fmtMoney(metrics.drawdown)} / ${fmtPct(metrics.drawdownPct)}`,
+      read: metrics.drawdown ? 'Peak-to-trough realized account P&L drawdown.' : 'No realized drawdown in the imported sequence.',
+    },
+    {
+      label: 'Intraday curve',
+      value: `Peak ${fmtMoney(metrics.peakEquity)} | Trough ${fmtMoney(metrics.troughEquity)} | End ${fmtMoney(metrics.endEquity)}`,
+      read: metrics.worstDrawdownPoint ? `Max drawdown at ${metrics.worstDrawdownPoint.displayTimestamp || metrics.worstDrawdownPoint.timestamp || 'unknown time'}.` : 'No drawdown point available.',
+    },
+    {
+      label: 'Expectancy',
+      value: `${fmtMoney(metrics.expectancy)} per fill`,
+      read: `${fmtPct(metrics.winRate)} win rate with ${fmtNum(metrics.profitFactor, 2)} profit factor.`,
+    },
+    {
+      label: 'Product contribution',
+      value: metrics.productSummary || '-',
+      read: 'Realized P&L grouped by product from the imported fill rows.',
+    },
+    {
+      label: 'Best fill',
+      value: best ? `${fmtMoney(best.pnl)} ${best.instrument || ''}` : '-',
+      read: best?.displayTimestamp || best?.timestamp || 'No timestamp available.',
+    },
+    {
+      label: 'Worst fill',
+      value: worst ? `${fmtMoney(worst.pnl)} ${worst.instrument || ''}` : '-',
+      read: worst?.displayTimestamp || worst?.timestamp || 'No timestamp available.',
+    },
+  ]
+}
+
+function analyzeTradeAnalyticsCsv(text: string, filename = 'fills.csv'): AcmeTradeAnalyticsState {
+  const rows = parseAcmeCsv(text)
+  if (rows.length < 2) throw new Error('CSV needs a header row and at least one fill row')
+  const headers = rows[0].map(value => value.trim())
+  const pnlIndex = acmeHeaderIndex(headers, ['realizedPnl', 'closedPnl', 'netPnl', 'tradePnl', 'pnl', 'profit', 'net', 'realized'], {
+    exclude: ['openPnl', 'cumulativePnl', 'accountDrawdown', 'accountMaxDrawdown', 'accountEquity'],
+  })
+  if (pnlIndex < 0) throw new Error('Could not find a realized P&L column. Try realizedPnl, pnl, profit, net, or realized.')
+
+  const instrumentIndex = acmeHeaderIndex(headers, ['instrument', 'instrumentId', 'symbol', 'product', 'market'])
+  const sideIndex = acmeHeaderIndex(headers, ['side', 'buy/sell'])
+  const qtyIndex = acmeHeaderIndex(headers, ['qty', 'quantity', 'size'])
+  const priceIndex = acmeHeaderIndex(headers, ['price', 'fillPrice', 'fill price'])
+  const timestampIndex = acmeHeaderIndex(headers, ['timestamp'])
+  const timestampChicagoIndex = acmeHeaderIndex(headers, ['timestampChicago'])
+  const timeIndex = acmeHeaderIndex(headers, ['time', 'date'])
+  const cumulativeIndex = acmeHeaderIndex(headers, ['cumulativePnl'])
+  const drawdownIndex = acmeHeaderIndex(headers, ['accountMaxDrawdown', 'maxDrawdown'])
+  const currentDrawdownIndex = acmeHeaderIndex(headers, ['accountDrawdown', 'drawdown'])
+  const knownProducts = new Set(['ES', 'NQ', 'YM', 'RTY', 'ES_NQ', 'YM_ES', 'RTY_ES', 'ES/NQ', 'YM/ES', 'RTY/ES', 'ZM', 'ZS', 'CL', 'GC'])
+
+  const records = rows.slice(1).map(row => {
+    const pnl = csvNumber(row[pnlIndex])
+    const timestamp = timestampIndex >= 0 ? String(row[timestampIndex] || '').trim() : ''
+    const displayTimestamp = timestampChicagoIndex >= 0 ? String(row[timestampChicagoIndex] || '').trim() : timestamp
+    const fallbackTimestamp = timeIndex >= 0 ? String(row[timeIndex] || '').trim() : ''
+    return {
+      pnl: pnl ?? Number.NaN,
+      cumulativePnl: cumulativeIndex >= 0 ? csvNumber(row[cumulativeIndex]) : null,
+      accountMaxDrawdown: drawdownIndex >= 0 ? csvNumber(row[drawdownIndex]) : null,
+      accountDrawdown: currentDrawdownIndex >= 0 ? csvNumber(row[currentDrawdownIndex]) : null,
+      instrument: instrumentIndex >= 0 ? String(row[instrumentIndex] || '').trim().toUpperCase() : '',
+      side: sideIndex >= 0 ? String(row[sideIndex] || '').trim() : '',
+      qty: qtyIndex >= 0 ? csvNumber(row[qtyIndex]) : null,
+      price: priceIndex >= 0 ? csvNumber(row[priceIndex]) : null,
+      timestamp: timestamp || fallbackTimestamp,
+      displayTimestamp: displayTimestamp || fallbackTimestamp,
+      timestampMs: parseTradeTimestamp(timestamp || fallbackTimestamp || displayTimestamp),
+    } satisfies ImportedFillRecord
+  }).filter(record => Number.isFinite(record.pnl))
+
+  records.sort((a, b) => {
+    const left = Number(a.timestampMs)
+    const right = Number(b.timestampMs)
+    if (Number.isFinite(left) && Number.isFinite(right)) return left - right
+    return 0
+  })
+
+  const pnls = records.map(record => record.pnl)
+  if (!pnls.length) throw new Error('No numeric P&L rows found.')
+  const total = pnls.reduce((sum, value) => sum + value, 0)
+  const wins = pnls.filter(value => value > 0)
+  const losses = pnls.filter(value => value < 0)
+  const grossProfit = wins.reduce((sum, value) => sum + value, 0)
+  const grossLoss = Math.abs(losses.reduce((sum, value) => sum + value, 0))
+  const returns = pnls.map(value => value / TRADE_ANALYTICS_ACCOUNT_SIZE)
+  const meanReturn = acmeMean(returns)
+  const sigma = acmeStdev(returns)
+  const downside = acmeDownsideDeviation(returns, 0)
+  const curve = equityCurveFromPnls(pnls)
+  const reportedDrawdown = Math.max(0, ...records.map(record => Number(record.accountMaxDrawdown)).filter(Number.isFinite))
+  const drawdown = reportedDrawdown || (curve.length ? curve[curve.length - 1].maxDrawdown : acmeMaxDrawdown(pnls))
+  const peakPoint = curve.reduce<AcmeTradeAnalyticsState['curve'][number] | null>((winner, point) => !winner || point.equity > winner.equity ? point : winner, null)
+  const troughPoint = curve.reduce<AcmeTradeAnalyticsState['curve'][number] | null>((loser, point) => !loser || point.equity < loser.equity ? point : loser, null)
+  const worstDrawdownPoint = records.reduce<ImportedFillRecord | null>((worst, record) => {
+    const value = Number(record.accountDrawdown)
+    if (!Number.isFinite(value)) return worst
+    if (!worst || value > Number(worst.accountDrawdown)) return record
+    return worst
+  }, null)
+  const productTotalsMap = records.reduce<Record<string, number>>((map, record) => {
+    const key = record.instrument || 'UNKNOWN'
+    map[key] = (map[key] || 0) + record.pnl
+    return map
+  }, {})
+  const productTotals = Object.entries(productTotalsMap)
+    .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
+    .map(([instrument, pnl]) => ({ instrument, pnl }))
+  const returnPct = total / TRADE_ANALYTICS_ACCOUNT_SIZE
+  const drawdownPct = drawdown / TRADE_ANALYTICS_ACCOUNT_SIZE
+  const knownInstrumentRows = records.filter(record => knownProducts.has(record.instrument)).length
+  const metrics: AcmeTradeAnalyticsState['metrics'] = {
+    rows: records.length,
+    accountSize: TRADE_ANALYTICS_ACCOUNT_SIZE,
+    total,
+    returnPct,
+    winRate: wins.length / records.length,
+    sharpe: sigma ? meanReturn / sigma * Math.sqrt(returns.length) : 0,
+    sortino: downside ? meanReturn / downside * Math.sqrt(returns.length) : 0,
+    calmar: drawdownPct ? returnPct / drawdownPct : 0,
+    profitFactor: grossLoss ? grossProfit / grossLoss : grossProfit || 0,
+    expectancy: acmeMean(pnls),
+    drawdown,
+    drawdownPct,
+    studyCoverage: records.length ? knownInstrumentRows / records.length : 0,
+    largestLossPct: Math.abs(Math.min(0, ...pnls)) / TRADE_ANALYTICS_ACCOUNT_SIZE,
+    knownInstrumentRows,
+    peakEquity: peakPoint ? peakPoint.equity : TRADE_ANALYTICS_ACCOUNT_SIZE,
+    troughEquity: troughPoint ? troughPoint.equity : TRADE_ANALYTICS_ACCOUNT_SIZE,
+    endEquity: curve.length ? curve[curve.length - 1].equity : TRADE_ANALYTICS_ACCOUNT_SIZE,
+    productSummary: productTotals.map(row => `${row.instrument} ${fmtMoney(row.pnl)}`).join(' | '),
+    worstDrawdownPoint,
+  }
+  const studies = buildTradeAnalyticsStudies(metrics)
+  const report = buildTradeAnalyticsReport(metrics, records)
+  return {
+    service: 'analytics.trade.imported',
+    fetchedAt: new Date().toISOString(),
+    status: `Imported ${records.length} row(s); account base ${fmtMoney(TRADE_ANALYTICS_ACCOUNT_SIZE)}.`,
+    riskLevel: tradeAnalyticsRiskLevel(metrics),
+    metrics,
+    studies,
+    curve,
+    productTotals,
+    report,
+    records,
+    source: 'imported',
+    filename,
+  }
+}
+
+function loadImportedTradeAnalytics(): AcmeTradeAnalyticsState | null {
+  try {
+    const raw = window.localStorage.getItem(TRADE_ANALYTICS_IMPORT_KEY)
+    return raw ? JSON.parse(raw) as AcmeTradeAnalyticsState : null
+  } catch {
+    return null
+  }
 }
 
 function useAcmeIntelligence(intervalMs = 60000): AcmeIntelligence | null {
@@ -1708,6 +2006,50 @@ async function publishAlgoGuardAuditEvent(algo: AlgoDefinition, marketKey: strin
     })
   } catch {
     // Local pause still protects the order path if audit publishing is down.
+  }
+}
+
+async function submitSharedOrder(order: Partial<SimOrder> & {
+  marketKey: string
+  side: 'bid' | 'offer'
+  price: number
+  size: number
+  operator: string
+  source: 'manual' | 'algo'
+}): Promise<SimOrder | undefined> {
+  const response = await fetch('/api/order', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(order),
+  })
+  const payload = await response.json().catch(() => ({}))
+  if (!response.ok || !payload.ok) {
+    throw new Error(String(payload.detail || payload.message || `Order rejected HTTP ${response.status}`))
+  }
+  if (payload.state) {
+    useStore.getState().setSimTradingState({
+      simOrders: payload.state.simOrders,
+      simPositions: payload.state.simPositions,
+      fills: payload.state.fills,
+      simMessages: payload.state.simMessages,
+    })
+  }
+  return payload.order as SimOrder | undefined
+}
+
+async function cancelSharedOrder(orderId: string): Promise<void> {
+  const response = await fetch(`/api/acme/orders/${encodeURIComponent(orderId)}/cancel`, { method: 'POST' })
+  const payload = await response.json().catch(() => ({}))
+  if (!response.ok || !payload.ok) {
+    throw new Error(String(payload.detail || payload.message || `Cancel rejected HTTP ${response.status}`))
+  }
+  if (payload.state) {
+    useStore.getState().setSimTradingState({
+      simOrders: payload.state.simOrders,
+      simPositions: payload.state.simPositions,
+      fills: payload.state.fills,
+      simMessages: payload.state.simMessages,
+    })
   }
 }
 
@@ -1929,7 +2271,6 @@ function WorkspaceWindowFrame({
   onMove,
   onResize,
   onToggleCollapse,
-  onPopout,
   onClone,
   onClose,
   getWorkspacePan,
@@ -1943,7 +2284,6 @@ function WorkspaceWindowFrame({
   onMove: (id: string, x: number, y: number) => void
   onResize: (id: string, patch: Partial<Pick<WorkspaceWindow, 'x' | 'y' | 'w' | 'h'>>) => void
   onToggleCollapse: () => void
-  onPopout: () => void
   onClone: () => void
   onClose: () => void
   getWorkspacePan: () => { x: number; y: number }
@@ -2093,9 +2433,6 @@ function WorkspaceWindowFrame({
           <span className="truncate text-[11px] font-bold uppercase tracking-wide text-white">{displayTitle}</span>
         </div>
         <div className="flex items-center gap-1">
-          <button className="btn-neutral rounded p-1" title="Float window" onClick={onPopout}>
-            <ExternalLink size={13} />
-          </button>
           <button className="btn-neutral rounded p-1" title="Clone window" onClick={onClone}>
             <Copy size={13} />
           </button>
@@ -2124,11 +2461,6 @@ function WorkspaceWindowFrame({
       )}
     </section>
   )
-}
-
-function fmtPercent(n: number | undefined): string {
-  if (n === undefined || Number.isNaN(n)) return '-'
-  return `${n.toFixed(1)}%`
 }
 
 function fmtSignedPct(n: number | undefined): string {
@@ -2261,7 +2593,7 @@ function useCmeMarketDataSubscriptions(symbols: string[]) {
     const store = () => useStore.getState()
     const wsBase = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`
 
-    const acceptBook = (target: string, book: CmeBook) => {
+    const ingestBook = (target: string, book: CmeBook) => {
       if (!alive || book.symbol?.toUpperCase() !== target) return
       store().setPolyBook(target, cmeBookToPolyCompat(book))
     }
@@ -2276,7 +2608,7 @@ function useCmeMarketDataSubscriptions(symbols: string[]) {
         fetch(`/api/cme/book/${encodeURIComponent(target)}`)
           .then(response => response.ok ? response.json() : null)
           .then((payload: CmeBook | null) => {
-            if (payload) acceptBook(target, payload)
+            if (payload) ingestBook(target, payload)
           })
           .catch(() => undefined)
       }
@@ -2297,11 +2629,11 @@ function useCmeMarketDataSubscriptions(symbols: string[]) {
           if (payload.type === 'snapshot') {
             const cmeBooks = payload.cme_books as Record<string, CmeBook> | undefined
             const cmeTrades = payload.cme_trades as Record<string, CmeTradeTick[]> | undefined
-            if (cmeBooks?.[target]) acceptBook(target, cmeBooks[target])
+            if (cmeBooks?.[target]) ingestBook(target, cmeBooks[target])
             for (const trade of cmeTrades?.[target] ?? []) acceptTrade(target, trade)
             return
           }
-          if (payload.type === 'cme_book' && payload.symbol === target) acceptBook(target, payload.data as CmeBook)
+          if (payload.type === 'cme_book' && payload.symbol === target) ingestBook(target, payload.data as CmeBook)
           if (payload.type === 'cme_trade' && payload.symbol === target) acceptTrade(target, payload.data as CmeTradeTick)
           if (payload.type === 'markets') store().setMarkets(payload.data, true)
         } catch {
@@ -2931,13 +3263,13 @@ function useDepthMarketStream(asset: Asset | string | undefined, provider: Provi
     let retryId: ReturnType<typeof setTimeout> | undefined
     let ws: WebSocket | null = null
     let endpointIndex = 0
+    const configuredWsBase = (import.meta.env.VITE_CERIOUS_WS_BASE as string | undefined)?.trim()
     const endpoints = [
-      `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`,
-      `${location.protocol === 'https:' ? 'wss' : 'ws'}://127.0.0.1:8000/ws`,
+      configuredWsBase || `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`,
     ]
     const target = String(asset).toUpperCase()
 
-    const acceptBook = (nextBook: CmeBook, source: 'ws' | 'snapshot' | 'rest') => {
+    const ingestBook = (nextBook: CmeBook, source: 'ws' | 'snapshot' | 'rest') => {
       if (!alive || nextBook.symbol?.toUpperCase() !== target) return
       setBook(nextBook)
       const store = useStore.getState()
@@ -2958,7 +3290,7 @@ function useDepthMarketStream(asset: Asset | string | undefined, provider: Provi
       fetch(`/api/cme/book/${encodeURIComponent(target)}`)
         .then(response => response.ok ? response.json() : null)
         .then((payload: CmeBook | null) => {
-          if (payload) acceptBook(payload, 'rest')
+          if (payload) ingestBook(payload, 'rest')
         })
         .catch(() => undefined)
     }
@@ -2968,7 +3300,7 @@ function useDepthMarketStream(asset: Asset | string | undefined, provider: Provi
       store.loadSnapshot(target as Asset, snapshot)
       const cmeBooks = snapshot.cme_books as Record<string, CmeBook> | undefined
       const cmeTrades = snapshot.cme_trades as Record<string, CmeTradeTick[]> | undefined
-      if (cmeBooks?.[target]) acceptBook(cmeBooks[target], 'snapshot')
+      if (cmeBooks?.[target]) ingestBook(cmeBooks[target], 'snapshot')
       for (const trade of cmeTrades?.[target] ?? []) acceptTrade(trade, 'snapshot')
     }
 
@@ -2976,7 +3308,7 @@ function useDepthMarketStream(asset: Asset | string | undefined, provider: Provi
       const store = useStore.getState()
       if (msg.type === 'book' && msg.asset === target) store.setBook(msg.asset, msg.data)
       if (msg.type === 'tick' && msg.asset === target) store.pushTick(msg.asset, msg.data)
-      if (msg.type === 'cme_book' && msg.symbol === target) acceptBook(msg.data, 'ws')
+      if (msg.type === 'cme_book' && msg.symbol === target) ingestBook(msg.data, 'ws')
       if (msg.type === 'cme_trade' && msg.symbol === target) acceptTrade(msg.data, 'ws')
       if (msg.type === 'markets') store.setMarkets(msg.data, true)
     }
@@ -3057,6 +3389,7 @@ function NormalDepthLadderWindow({
   const activeSymbol = symbol || ''
   const option = activeSymbol ? options.find(item => item.provider === activeProvider && item.symbol === activeSymbol) : undefined
   const marketKey = option?.marketKey ?? (activeSymbol ? activeSymbol.toUpperCase() : undefined)
+  const ladderMarketAliases = useMemo(() => productAliasSet(option, activeSymbol), [activeSymbol, option])
   const streamAsset = useMemo(() => {
     const raw = option?.marketKey ?? option?.asset ?? activeSymbol
     const key = String(raw || '').trim().toUpperCase()
@@ -3064,7 +3397,6 @@ function NormalDepthLadderWindow({
   }, [activeSymbol, option?.asset, option?.marketKey])
   const depthStream = useDepthMarketStream(streamAsset, activeProvider)
   const simulationEnabled = useStore(s => s.simulationEnabled)
-  const placeSimOrder = useStore(s => s.placeSimOrder)
   const cancelSimOrder = useStore(s => s.cancelSimOrder)
   const simOrders = useStore(s => s.simOrders)
   const simPositions = useStore(s => s.simPositions)
@@ -3108,12 +3440,12 @@ function NormalDepthLadderWindow({
   const columnMinWidths: Record<DepthColumnKey, number> = { orders: 48, bid: 64, price: 68, ask: 64 }
   const ladderGridTemplate = columnOrder.map(column => `minmax(${columnMinWidths[column]}px, ${columnWidths[column]}fr)`).join(' ')
   const buyColor = {
-    bg: '#008cff',
-    bgSoft: 'rgba(0, 140, 255, .25)',
-    bgHover: 'rgba(0, 166, 255, .38)',
-    bar: 'rgba(0, 140, 255, .5)',
+    bg: '#1f6fff',
+    bgSoft: 'rgba(31, 111, 255, .25)',
+    bgHover: 'rgba(31, 111, 255, .38)',
+    bar: 'rgba(31, 111, 255, .5)',
     text: '#eff6ff',
-    strong: '#66e8ff',
+    strong: '#9fc5ff',
     border: '#e6fbff',
   }
   const sellColor = {
@@ -3129,9 +3461,19 @@ function NormalDepthLadderWindow({
   const rowLine = softGrid ? '#1b2533' : '#0b0f17'
   const mdCellLine = softGrid ? 'rgba(148, 163, 184, .18)' : 'rgba(148, 163, 184, .11)'
   const mdRowLine = softGrid ? 'rgba(148, 163, 184, .14)' : 'rgba(148, 163, 184, .08)'
-  const laneGrey = '#4b5563'
-  const laneGreyInside = '#64748b'
+  const laneGrey = '#687384'
+  const laneGreyInside = '#7b8798'
   const laneText = '#f8fafc'
+  const bidColumnBg = '#061a3b'
+  const bidColumnBgHover = '#082652'
+  const bidDepthBg = '#1f6fff'
+  const bidDepthBgSoft = '#114fb8'
+  const bidDepthBgHover = '#2f82ff'
+  const askColumnBg = '#26070d'
+  const askColumnBgHover = '#3a0a12'
+  const askDepthBg = '#9f1028'
+  const askDepthBgStrong = '#d10f2f'
+  const askDepthBgHover = '#ff1744'
   const depthDisplayContract = useMemo(() => {
     return resolveDepthDisplayContract({
       publishedTickSize: book?.tickSize,
@@ -3256,10 +3598,11 @@ function NormalDepthLadderWindow({
   const simDepthOrders = useMemo(() => {
     if (!marketKey || !Number.isFinite(ladderModel.rowStep) || ladderModel.rowStep <= 0) return []
     return simOrders
-      .filter(order => order.marketKey === marketKey && (order.status === 'working' || order.status === 'partially_filled') && order.remaining > 0)
+      .filter(order => ladderMarketAliases.has(normalizeProductKey(order.marketKey)) && (order.status === 'working' || order.status === 'partially_filled') && order.remaining > 0)
       .map(order => ({
         id: order.id,
         side: order.side === 'bid' ? 'BID' as const : 'ASK' as const,
+        price: order.price,
         priceKey: fmtLadderPrice(roundToTick(order.price, ladderModel.rowStep), ladderModel.rowStep),
         size: order.remaining,
         orderType: order.orderType,
@@ -3281,7 +3624,7 @@ function NormalDepthLadderWindow({
         tickValue: order.tickValue,
         multiplier: order.multiplier,
       }))
-  }, [ladderModel.rowStep, marketKey, simOrders])
+  }, [ladderMarketAliases, ladderModel.rowStep, marketKey, simOrders])
 
   const displayActiveOrders = useMemo(() => {
     const simIds = new Set(simOrders.map(order => order.id))
@@ -3392,7 +3735,7 @@ function NormalDepthLadderWindow({
   )
   const localDepthPosition = useMemo(() => {
     const livePositions = marketKey
-      ? simPositions.filter(position => position.marketKey === marketKey && position.status === 'open')
+      ? simPositions.filter(position => ladderMarketAliases.has(normalizeProductKey(position.marketKey)) && position.status === 'open')
       : []
     if (livePositions.length > 0) {
       const net = livePositions.reduce((sum, position) => sum + Number(position.size || 0), 0)
@@ -3414,7 +3757,7 @@ function NormalDepthLadderWindow({
       avg: size > 0 ? notional / size : undefined,
       openPnl: 0,
     }
-  }, [activeOrders, marketKey, simPositions])
+  }, [activeOrders, ladderMarketAliases, marketKey, simPositions])
 
   const getSimFillPrice = (side: DepthOrderSide, orderType: 'limit' | 'market', limitPrice: number): number | null => {
     const bestBid = Number(ladderModel.bid)
@@ -3470,7 +3813,7 @@ function NormalDepthLadderWindow({
     })
     setActiveOrders(current => [order, ...current].slice(0, 80))
     if (simulationEnabled) {
-      placeSimOrder({
+      await submitSharedOrder({
         id,
         marketKey,
         outcome: 'yes',
@@ -3539,7 +3882,9 @@ function NormalDepthLadderWindow({
     setActiveOrders(current => current.filter(order => !(order.side === side && order.priceKey === priceKey)))
     simDepthOrders
       .filter(order => order.side === side && order.priceKey === priceKey)
-      .forEach(order => cancelSimOrder(order.id))
+      .forEach(order => {
+        void cancelSharedOrder(order.id).catch(() => cancelSimOrder(order.id))
+      })
   }
 
   const moveOrder = (targetPriceKey: string) => {
@@ -3554,7 +3899,8 @@ function NormalDepthLadderWindow({
     )))
     if (simulationEnabled) {
       cancelSimOrder(draggingOrder.id)
-      placeSimOrder({
+      void cancelSharedOrder(draggingOrder.id).catch(() => undefined)
+      void submitSharedOrder({
         id: draggingOrder.id,
         marketKey: marketKey ?? '',
         outcome: 'yes',
@@ -3578,7 +3924,7 @@ function NormalDepthLadderWindow({
         tickSize: draggingOrder.tickSize ?? book?.tickSize ?? option?.tickSize,
         tickValue: draggingOrder.tickValue ?? book?.tickValue ?? option?.tickValue,
         multiplier: draggingOrder.multiplier ?? book?.multiplier ?? option?.multiplier,
-      })
+      }).catch(() => undefined)
     }
     setDraggingOrder(null)
     setDragTargetPriceKey(null)
@@ -3604,7 +3950,9 @@ function NormalDepthLadderWindow({
     setActiveOrders(current => side ? current.filter(order => order.side !== side) : [])
     simDepthOrders
       .filter(order => !side || order.side === side)
-      .forEach(order => cancelSimOrder(order.id))
+      .forEach(order => {
+        void cancelSharedOrder(order.id).catch(() => cancelSimOrder(order.id))
+      })
   }
 
   const moveDepthColumn = (target: DepthColumnKey) => {
@@ -3768,7 +4116,11 @@ function NormalDepthLadderWindow({
     return (
       <div
         className="flex h-full items-center gap-px px-1"
-        style={{ backgroundColor: laneGrey, color: laneText }}
+        style={{
+          backgroundColor: laneGrey,
+          color: laneText,
+          boxShadow: `inset 0 -1px 0 ${mdRowLine}, inset 1px 0 0 ${mdCellLine}, inset -1px 0 0 ${mdCellLine}`,
+        }}
         title={hasOrders ? `My orders @ ${priceKey}` : 'My orders'}
       >
         {hasOrders ? (
@@ -3805,7 +4157,7 @@ function NormalDepthLadderWindow({
           className={cx('relative border-r px-1 py-1 text-center text-[10px]', draggingColumn === column && 'opacity-60')}
           style={mdGridStyle(column, {
             borderColor: gridLine,
-            backgroundColor: '#030509',
+            backgroundColor: bidColumnBg,
             color: activeForSide('BID') ? '#ffe800' : buyColor.bg,
             boxShadow: activeForSide('BID') ? 'inset 0 -2px 0 rgba(255,232,0,.75)' : undefined,
           })}
@@ -3839,7 +4191,7 @@ function NormalDepthLadderWindow({
         className={cx('relative px-1 py-1 text-center text-[10px]', draggingColumn === column && 'opacity-60')}
         style={mdGridStyle(column, {
           borderColor: gridLine,
-          backgroundColor: '#030509',
+          backgroundColor: askColumnBg,
           color: activeForSide('ASK') ? '#ffe800' : sellColor.bg,
           boxShadow: activeForSide('ASK') ? 'inset 0 -2px 0 rgba(255,232,0,.75)' : undefined,
         })}
@@ -3901,13 +4253,13 @@ function NormalDepthLadderWindow({
     if (column === 'bid') {
       const visibleSize = (Number(level.bidSize) || 0) + (Number(level.myBidSize) || 0)
       const hasDepth = visibleSize > 0
-      const cellBg = hasDepth ? (level.myBidSize ? '#006fff' : '#004aa8') : '#030509'
+      const cellBg = hasDepth ? (level.myBidSize ? bidDepthBg : bidDepthBgSoft) : bidColumnBg
       return (
         <button
           key={column}
           className="relative h-full cursor-pointer overflow-hidden border-r px-1 text-right font-semibold hover:brightness-125"
           style={mdGridStyle(column, { borderColor: gridLine, color: hasDepth ? '#f8fbff' : buyColor.text, backgroundColor: cellBg })}
-          onMouseEnter={event => { event.currentTarget.style.backgroundColor = hasDepth ? '#008cff' : '#07111f' }}
+          onMouseEnter={event => { event.currentTarget.style.backgroundColor = hasDepth ? bidDepthBgHover : bidColumnBgHover }}
           onMouseLeave={event => { event.currentTarget.style.backgroundColor = cellBg }}
           onClick={() => submitDepthOrder('BID', level.key)}
           title={`${actionMode.toUpperCase()} BID @ ${level.key}`}
@@ -3921,13 +4273,13 @@ function NormalDepthLadderWindow({
     }
     const visibleSize = (Number(level.askSize) || 0) + (Number(level.myAskSize) || 0)
     const hasDepth = visibleSize > 0
-    const cellBg = hasDepth ? (level.myAskSize ? '#d10f2f' : '#9f1028') : '#030509'
+    const cellBg = hasDepth ? (level.myAskSize ? askDepthBgStrong : askDepthBg) : askColumnBg
     return (
       <button
           key={column}
           className="relative h-full cursor-pointer overflow-hidden px-1 text-left font-semibold hover:brightness-125"
         style={mdGridStyle(column, { color: hasDepth ? '#fff7f8' : sellColor.text, backgroundColor: cellBg })}
-        onMouseEnter={event => { event.currentTarget.style.backgroundColor = hasDepth ? '#ff1744' : '#1a070a' }}
+        onMouseEnter={event => { event.currentTarget.style.backgroundColor = hasDepth ? askDepthBgHover : askColumnBgHover }}
         onMouseLeave={event => { event.currentTarget.style.backgroundColor = cellBg }}
         onClick={() => submitDepthOrder('ASK', level.key)}
         title={`${actionMode.toUpperCase()} ASK @ ${level.key}`}
@@ -4557,8 +4909,13 @@ function OrderBookWindow({ operatorName }: { operatorName: string }) {
   const cancelOrderRow = async (row: AccountExecutionRow) => {
     if (!row || /closed|filled|cancel/i.test(row.status)) return
     if (row.provider === 'sim') {
-      cancelSimOrder(row.order_id)
-      setCancelStatus(`Cancelled ${row.order_tag} ${row.order_id}`)
+      try {
+        await cancelSharedOrder(row.order_id)
+        setCancelStatus(`Cancelled ${row.order_tag} ${row.order_id}`)
+      } catch {
+        cancelSimOrder(row.order_id)
+        setCancelStatus(`Cancelled local fallback ${row.order_tag} ${row.order_id}`)
+      }
       return
     }
     setCancelStatus(`Cancelling ${row.order_id}...`)
@@ -4591,6 +4948,18 @@ function OrderBookWindow({ operatorName }: { operatorName: string }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ scope: 'all', account: 'parent', operator: operatorName, timestamp: Date.now() }),
     })))
+    const acmeCancel = await fetch('/api/acme/orders/cancel-all', { method: 'POST' }).catch(() => null)
+    if (acmeCancel?.ok) {
+      const payload = await acmeCancel.json().catch(() => ({}))
+      if (payload.state) {
+        useStore.getState().setSimTradingState({
+          simOrders: payload.state.simOrders,
+          simPositions: payload.state.simPositions,
+          fills: payload.state.fills,
+          simMessages: payload.state.simMessages,
+        })
+      }
+    }
     const ok = results.filter(result => result.status === 'fulfilled' && result.value.ok).length
     setCancelStatus(ok > 0 ? `Cancel all accepted by ${ok} service${ok === 1 ? '' : 's'} + Sim Exchange` : 'Sim Exchange cancelled local orders; no live adapter acknowledged yet')
   }
@@ -5313,12 +5682,12 @@ function AlgoBuilderWindow({
       provider,
       symbol,
       marketKey: selectedOption?.marketKey,
-      name: current.name || `${selectedOption?.asset ?? symbol} Theo Quoter`,
+      name: current.name || `${selectedOption?.asset ?? symbol} Mean Reversion`,
       operator: operatorName,
     }))
   }, [operatorName, provider, selectedOption?.marketKey, symbol])
 
-  const quote = computeTheoQuote(selectedOption, draft.theoModel, draft.quoteWidth)
+  const quote = computeAlgoQuote(selectedOption, draft.quoteModel, draft.quoteWidth)
   const saveDraft = (status: AlgoStatus) => {
     const saveSymbol = selectedOption?.marketKey ?? symbol
     const acmeFields = normalizeAcmeFields({
@@ -5383,17 +5752,14 @@ function AlgoBuilderWindow({
               Template
               <select className="input-field mt-1 w-full py-1 text-[11px]" value={draft.template} onChange={event => setTemplate(event.target.value as AlgoTemplate)}>
                 <option value="mean-reversion-v2">Mean Reversion v2</option>
-                <option value="theo-quoter">Theo Quoter</option>
                 <option value="scale-in">Scale In</option>
-                <option value="ptb-trigger">PTB Trigger</option>
               </select>
             </label>
             <label className="text-[10px] uppercase text-muted">
-              Theo Model
-              <select className="input-field mt-1 w-full py-1 text-[11px]" value={draft.theoModel} onChange={event => setDraft(current => ({ ...current, theoModel: event.target.value as TheoModel }))}>
-                <option value="truth">Truth Engine</option>
+              Pricing Model
+              <select className="input-field mt-1 w-full py-1 text-[11px]" value={draft.quoteModel} onChange={event => setDraft(current => ({ ...current, quoteModel: event.target.value as QuoteModel }))}>
+                <option value="study-peg">Study Peg</option>
                 <option value="market-mid">Market Mid</option>
-                <option value="ptb-edge">PTB Edge</option>
               </select>
             </label>
             <label className="text-[10px] uppercase text-muted">
@@ -5534,7 +5900,7 @@ function AlgoBuilderWindow({
           </div>
         </div>
         <div className="rounded border border-surface-border bg-surface-card p-2 font-mono">
-          <div className="text-[10px] font-black uppercase text-accent">Theo Quote</div>
+          <div className="text-[10px] font-black uppercase text-accent">Peg Quote</div>
           <div className="mt-2 grid grid-cols-2 gap-y-1 text-[10px]">
             <span className="text-muted">Fair</span><span className="text-right font-black text-slate-100">{quote.fair.toFixed(1)}c</span>
             <span className="text-muted">Bid</span><span className="text-right font-black text-blue-300">{quote.bid.toFixed(1)}c</span>
@@ -5625,7 +5991,7 @@ function regressionBandsForPeg(stat: AcmeSpreadStat | undefined, period: number,
 }
 
 function algoRequiresRegressionPeg(algo: AlgoDefinition): boolean {
-  const symbol = algo.marketKey ?? algo.symbol
+  const symbol = algoMarketCandidates(algo)[0] || 'ES_NQ'
   const acmeFields = normalizeAcmeFields(algo, symbol)
   const entryPeg = algo.entryPeg ?? acmeFields.entryPeg
   return Boolean(entryPeg.pegBuySideToMinus2 || entryPeg.pegSellSideToPlus2)
@@ -5633,7 +5999,7 @@ function algoRequiresRegressionPeg(algo: AlgoDefinition): boolean {
 
 function validateAlgoStudyFreshness(algo: AlgoDefinition, stat: AcmeSpreadStat | undefined): string | null {
   if (!algoRequiresRegressionPeg(algo)) return null
-  const symbol = algo.marketKey ?? algo.symbol
+  const symbol = algoMarketCandidates(algo)[0] || algo.symbol
   if (!stat) return `${algo.name}: send price not published for ${symbol}; missing spread study`
   const mean = finiteOptional(stat.lr27Mean)
   const upper = finiteOptional(stat.lr27Upper2)
@@ -5658,7 +6024,7 @@ function validateAlgoStudyFreshness(algo: AlgoDefinition, stat: AcmeSpreadStat |
 }
 
 function validateAlgoProductDefinition(algo: AlgoDefinition, option: ProductOption | undefined): string | null {
-  const symbol = algo.marketKey ?? option?.marketKey ?? algo.symbol
+  const symbol = resolveAlgoMarketKey(algo, option)
   if (!option) return `${algo.name}: send price not published for ${symbol}; product definition missing`
   const tick = finiteDepthPrice(option.tickSize)
   if (tick === undefined || tick <= 0) return `${algo.name}: send price not published for ${symbol}; product tick size not published`
@@ -5720,13 +6086,13 @@ function statWithFreshLr27(marketKey: string, lr: AcmeLr27State, fallback?: Acme
 }
 
 function buildAlgoDeploymentOrders(algo: AlgoDefinition, option: ProductOption | undefined, spreadStat?: AcmeSpreadStat): AlgoDeploymentOrder[] {
-  const symbol = algo.marketKey ?? algo.symbol
+  const symbol = resolveAlgoMarketKey(algo, option)
   const acmeFields = normalizeAcmeFields(algo, symbol)
   const layerPlan = algo.layerPlan ?? acmeFields.layerPlan
   const risk = algo.risk ?? acmeFields.risk
   const entryPeg = algo.entryPeg ?? acmeFields.entryPeg
   const exitPolicy = algo.exitPolicy ?? acmeFields.exitPolicy
-  const quote = computeTheoQuote(option, algo.theoModel, algo.quoteWidth)
+  const quote = computeAlgoQuote(option, algo.quoteModel, algo.quoteWidth)
   const tick = finiteDepthPrice(option?.tickSize)
   if (tick === undefined || tick <= 0) return []
   if (validateAlgoStudyFreshness(algo, spreadStat)) return []
@@ -5774,7 +6140,6 @@ function AlgoManagerWindow() {
   const { algos, updateAlgo, removeAlgo } = useAlgoLibrary()
   const options = useProductOptions()
   const intelligence = useAcmeIntelligence()
-  const placeSimOrder = useStore(s => s.placeSimOrder)
   const cancelSimOrders = useStore(s => s.cancelSimOrders)
   const simOrders = useStore(s => s.simOrders)
   const [statusFilter, setStatusFilter] = useState<AlgoStatus | 'all'>('all')
@@ -5833,9 +6198,8 @@ function AlgoManagerWindow() {
       const requiredMarkets = Array.from(new Set(selected
         .filter(algoRequiresRegressionPeg)
         .map(algo => {
-          const option = options.find(item => item.provider === algo.provider && item.symbol === algo.symbol)
-            ?? options.find(item => item.marketKey === algo.marketKey)
-          return algo.marketKey ?? option?.marketKey ?? algo.symbol
+          const option = findProductOptionForAlgo(options, algo)
+          return resolveAlgoMarketKey(algo, option)
         })))
       for (const marketKey of requiredMarkets) {
         try {
@@ -5869,9 +6233,8 @@ function AlgoManagerWindow() {
       }
       const blockers: Array<{ algo: AlgoDefinition; marketKey: string; reason: string }> = []
       selected.forEach(algo => {
-        const option = options.find(item => item.provider === algo.provider && item.symbol === algo.symbol)
-          ?? options.find(item => item.marketKey === algo.marketKey)
-        const marketKey = algo.marketKey ?? option?.marketKey ?? algo.symbol
+        const option = findProductOptionForAlgo(options, algo)
+        const marketKey = resolveAlgoMarketKey(algo, option)
         const blocker = validateAlgoProductDefinition(algo, option)
           ?? validateAlgoStudyFreshness(algo, freshSpreadStatsByKey.get(marketKey))
         if (blocker) blockers.push({ algo, marketKey, reason: blocker })
@@ -5883,15 +6246,18 @@ function AlgoManagerWindow() {
         return 0
       }
 
-      selected.forEach(algo => {
-        const option = options.find(item => item.provider === algo.provider && item.symbol === algo.symbol)
-          ?? options.find(item => item.marketKey === algo.marketKey)
-        const marketKey = algo.marketKey ?? option?.marketKey ?? algo.symbol
+      let restedCount = 0
+      let filledImmediatelyCount = 0
+      let cancelledImmediatelyCount = 0
+      for (const algo of selected) {
+        const option = findProductOptionForAlgo(options, algo)
+        const marketKey = resolveAlgoMarketKey(algo, option)
         const deploymentOrders = buildAlgoDeploymentOrders(algo, option, freshSpreadStatsByKey.get(marketKey))
-        if (!deploymentOrders.length) return
-        deploymentOrders.forEach(order => {
-          placeSimOrder({
-            id: `algo-${algo.id}-${order.side}-${order.layer}-${Date.now()}-${orderCount}`,
+        if (!deploymentOrders.length) continue
+        for (const order of deploymentOrders) {
+          const orderId = `algo-${algo.id}-${order.side}-${order.layer}-${Date.now()}-${orderCount}`
+          const placed = await submitSharedOrder({
+            id: orderId,
             marketKey,
             outcome: algo.outcome,
             side: order.side,
@@ -5914,19 +6280,28 @@ function AlgoManagerWindow() {
             tickValue: option?.tickValue,
             multiplier: option?.multiplier,
           })
+          if (placed && (placed.status === 'working' || placed.status === 'partially_filled') && placed.remaining > 0) {
+            restedCount += 1
+          } else if (placed?.status === 'filled') {
+            filledImmediatelyCount += 1
+          } else if (placed?.status === 'cancelled') {
+            cancelledImmediatelyCount += 1
+          }
           orderCount += 1
-        })
+        }
         updateAlgo(algo.id, { status: 'quoting' })
-      })
-      setDeployStatus(orderCount ? `Deployed ${orderCount} algo order${orderCount === 1 ? '' : 's'} from fresh LR27 studies` : 'No deployable orders were generated')
+      }
+      setDeployStatus(orderCount
+        ? `Released ${orderCount} algo order${orderCount === 1 ? '' : 's'}: ${restedCount} working in ladders/book, ${filledImmediatelyCount} filled immediately${cancelledImmediatelyCount ? `, ${cancelledImmediatelyCount} cancelled` : ''}.`
+        : 'No deployable orders were generated')
       return orderCount
     } catch (err) {
       const blockers = selected
         .filter(algoRequiresRegressionPeg)
         .map(algo => ({
           algo,
-          marketKey: algo.marketKey ?? algo.symbol,
-          reason: `${algo.name}: send price not published for ${algo.marketKey ?? algo.symbol}; ${err instanceof Error ? err.message : 'fresh study refresh failed'}`,
+          marketKey: resolveAlgoMarketKey(algo, findProductOptionForAlgo(options, algo)),
+          reason: `${algo.name}: send price not published for ${resolveAlgoMarketKey(algo, findProductOptionForAlgo(options, algo))}; ${err instanceof Error ? err.message : 'fresh study refresh failed'}`,
         }))
       await pauseAndAuditSendPriceBlockers(blockers)
       setDeployStatus(`DEPLOY BLOCKED: ${blockers[0]?.reason ?? (err instanceof Error ? err.message : 'fresh study refresh failed')}`)
@@ -5939,9 +6314,27 @@ function AlgoManagerWindow() {
     const selected = stagedAlgos.filter(algo => selectedDeployIds.includes(algo.id))
     void deployAlgoDefinitions(selected)
   }
-  const killAllAlgos = () => {
+  const killAllAlgos = async () => {
     const pausedCount = algos.filter(algo => algo.status !== 'draft').length
     cancelSimOrders({ source: 'algo' })
+    try {
+      const response = await fetch('/api/acme/orders/cancel-all', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source: 'algo' }),
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (payload.state) {
+        useStore.getState().setSimTradingState({
+          simOrders: payload.state.simOrders,
+          simPositions: payload.state.simPositions,
+          fills: payload.state.fills,
+          simMessages: payload.state.simMessages,
+        })
+      }
+    } catch {
+      // Local cancel still pauses the UI if the gateway is unavailable.
+    }
     algos.forEach(algo => {
       if (algo.status !== 'draft') updateAlgo(algo.id, { status: 'paused' })
     })
@@ -5999,9 +6392,8 @@ function AlgoManagerWindow() {
         </div>
         <div className="max-h-40 overflow-y-auto border-x border-b border-surface-border">
           {stagedAlgos.map(algo => {
-            const option = options.find(item => item.provider === algo.provider && item.symbol === algo.symbol)
-              ?? options.find(item => item.marketKey === algo.marketKey)
-            const marketKey = algo.marketKey ?? option?.marketKey ?? algo.symbol
+            const option = findProductOptionForAlgo(options, algo)
+            const marketKey = resolveAlgoMarketKey(algo, option)
             const deploymentOrders = buildAlgoDeploymentOrders(algo, option, spreadStatsByKey.get(marketKey))
             const firstBid = deploymentOrders.find(order => order.side === 'bid')
             const firstAsk = deploymentOrders.find(order => order.side === 'offer')
@@ -6033,7 +6425,7 @@ function AlgoManagerWindow() {
           <div key={algo.id} className="grid grid-cols-[1.2fr_82px_82px_70px_74px_76px_108px] items-center gap-1 border-b border-surface-border/50 px-2 py-1.5 font-mono text-[10px]">
             <div className="min-w-0">
               <div className="truncate font-black text-slate-100">{algo.name}</div>
-              <div className="truncate text-[9px] text-muted">{theoModelLabel(algo.theoModel)} / {algo.operator}</div>
+              <div className="truncate text-[9px] text-muted">{quoteModelLabel(algo.quoteModel)} / {algo.operator}</div>
             </div>
             <span className="truncate text-accent">{algo.symbol}</span>
             <span className="truncate text-slate-300">{algoTemplateLabel(algo.template)}</span>
@@ -6048,59 +6440,6 @@ function AlgoManagerWindow() {
           </div>
         ))}
         {filtered.length === 0 && <div className="p-4 text-center text-muted">No algos staged yet. Add one from Algo Builder.</div>}
-      </div>
-    </div>
-  )
-}
-
-export function TheoQuoterWindow({
-  provider,
-  symbol,
-  onSelect,
-}: {
-  provider: ProviderKey
-  symbol: string
-  onSelect: (provider: ProviderKey, symbol: string) => void
-}) {
-  const options = useProductOptions()
-  const { algos } = useAlgoLibrary()
-  const [model, setModel] = useState<TheoModel>('truth')
-  const [width, setWidth] = useState(2)
-  const selectedOption = options.find(option => option.provider === provider && option.symbol === symbol)
-  const quote = computeTheoQuote(selectedOption, model, width)
-  const productAlgos = algos.filter(algo => algo.provider === provider && algo.symbol === symbol)
-
-  return (
-    <div className="flex h-full flex-col bg-surface text-xs">
-      <div className="grid grid-cols-[1fr_120px_80px] gap-2 border-b border-surface-border bg-surface-panel p-2">
-        <ProductSelector provider={provider} symbol={symbol} onSelect={onSelect} compact />
-        <select className="input-field py-1 text-[11px]" value={model} onChange={event => setModel(event.target.value as TheoModel)}>
-          <option value="truth">Truth Engine</option>
-          <option value="market-mid">Market Mid</option>
-          <option value="ptb-edge">PTB Edge</option>
-        </select>
-        <input className="input-field py-1 text-[11px]" type="number" step={0.5} value={width} onChange={event => setWidth(Number(event.target.value) || 0)} title="Quote width in cents" />
-      </div>
-      <div className="grid grid-cols-4 gap-2 border-b border-surface-border p-3 font-mono">
-        <div className="rounded border border-surface-border bg-surface-card p-2"><div className="text-[9px] uppercase text-muted">Market</div><div className="text-lg font-black text-slate-100">{quote.market.toFixed(1)}c</div></div>
-        <div className="rounded border border-surface-border bg-surface-card p-2"><div className="text-[9px] uppercase text-muted">Theo</div><div className="text-lg font-black text-accent">{quote.fair.toFixed(1)}c</div></div>
-        <div className="rounded border border-blue-500/30 bg-blue-500/10 p-2"><div className="text-[9px] uppercase text-blue-200">Bid</div><div className="text-lg font-black text-blue-200">{quote.bid.toFixed(1)}c</div></div>
-        <div className="rounded border border-red-500/30 bg-red-500/10 p-2"><div className="text-[9px] uppercase text-red-200">Ask</div><div className="text-lg font-black text-red-200">{quote.ask.toFixed(1)}c</div></div>
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-2">
-        <div className="mb-2 flex items-center justify-between font-mono text-[10px]">
-          <span className="font-bold uppercase text-muted">Product algos</span>
-          <span className={cx('font-black', quote.edge >= 0 ? 'text-up' : 'text-down')}>edge {quote.edge >= 0 ? '+' : ''}{quote.edge.toFixed(1)}c</span>
-        </div>
-        {productAlgos.map(algo => (
-          <div key={algo.id} className="mb-1 grid grid-cols-[1fr_70px_70px_64px] rounded border border-surface-border bg-surface-card px-2 py-1 font-mono text-[10px]">
-            <span className="truncate font-bold text-slate-100">{algo.name}</span>
-            <span className="text-muted">{algoTemplateLabel(algo.template)}</span>
-            <span className={algo.status === 'quoting' ? 'text-up' : 'text-warn'}>{algo.status}</span>
-            <span className="text-right text-accent">{algo.clipSize}x</span>
-          </div>
-        ))}
-        {productAlgos.length === 0 && <div className="rounded border border-surface-border bg-surface-card p-4 text-center text-muted">No algo uses this product yet.</div>}
       </div>
     </div>
   )
@@ -6413,13 +6752,7 @@ function AlertsWindow({
       : undefined
     if (alert.field === 'last') return { option, actual: last, message: `Last traded ${option?.provider === 'cme' ? fmtLadderPrice(Number(last)) : moneyProduct ? fmtMoney(last) : fmtCents(last)}`, moneyProduct }
     if (alert.field === 'fill') return { option, actual: lastFill?.timestamp, message: fillMessage, moneyProduct: false, fillKey }
-    if (alert.field === 'probability') return { option, actual: market?.up_pct ?? option?.yes, message: `YES probability ${fmtPercent(market?.up_pct ?? option?.yes)}`, moneyProduct: false }
-    if (alert.field === 'edge') {
-      const actual = market ? (market.truth_up_pct ?? 0) - market.up_pct : undefined
-      return { option, actual, message: `Edge ${actual !== undefined ? fmtCents(actual) : '-'}`, moneyProduct: false }
-    }
-    if (alert.field === 'gamma') return { option, actual: market?.gamma, message: `Gamma ${market?.gamma?.toFixed(4) ?? '-'}`, moneyProduct: false }
-    return { option, actual: market?.theta, message: `Theta ${market?.theta?.toFixed(4) ?? '-'}`, moneyProduct: false }
+    return { option, actual: last, message: `Last traded ${option?.provider === 'cme' ? fmtLadderPrice(Number(last)) : moneyProduct ? fmtMoney(last) : fmtCents(last)}`, moneyProduct }
   }
 
   useEffect(() => {
@@ -6521,10 +6854,6 @@ function AlertsWindow({
                 >
                   <option value="last">last trade</option>
                   <option value="fill">fill message</option>
-                  <option value="probability">probability</option>
-                  <option value="edge">edge</option>
-                  <option value="gamma">gamma</option>
-                  <option value="theta">theta</option>
                 </select>
                 {alert.field === 'fill' ? (
                   <span className="rounded border border-surface-border bg-surface px-1 py-1 text-center text-[10px] font-bold text-muted">any fill</span>
@@ -6635,46 +6964,6 @@ function AlertsWindow({
         })}
         {alerts.length === 0 && <div className="p-4 text-center text-muted">No alerts configured.</div>}
       </div>
-    </div>
-  )
-}
-
-function GreeksWindow() {
-  return (
-    <div className="flex h-full flex-col bg-surface">
-      <div className="grid grid-cols-3 gap-1 border-b border-surface-border bg-surface-card p-2">
-        {GREEK_ENGINES.map(engine => (
-          <div key={engine.key} className="rounded border border-surface-border bg-surface-panel px-2 py-1">
-            <div className="text-[10px] font-bold uppercase text-accent">{engine.label}</div>
-            <div className="text-[9px] font-mono text-muted">{engine.service}</div>
-          </div>
-        ))}
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <GreeksEducationPanel />
-      </div>
-    </div>
-  )
-}
-
-function KnowledgeWindow() {
-  return (
-    <div className="h-full overflow-y-auto bg-surface p-3 text-xs text-slate-300">
-      <div className="mb-3 flex items-center gap-2">
-        <BookOpen size={16} className="text-accent" />
-        <div className="text-[10px] text-muted">Service boundary for education, definitions, and playbooks.</div>
-      </div>
-      {[
-        ['Microstructure', 'Z-score, OFI, VPIN, Keltner stretch, DIDI trend state, and trapped trader diagnostics.'],
-        ['Truth Engine', 'Merton jump-diffusion, Student-t tails, micro-drift, and Bayesian edge detection.'],
-        ['Greeks', 'Delta, Gamma, Theta, Vega, Vanna, and Charm as independent engines with publishable outputs.'],
-        ['Execution', 'RiskGate, order router, journal, fills, and alert state can become separately deployable services.'],
-      ].map(([title, body]) => (
-        <div key={title} className="mb-2 rounded border border-surface-border bg-surface-card p-3">
-          <div className="mb-1 font-bold text-slate-100">{title}</div>
-          <p className="text-[11px] leading-relaxed text-muted">{body}</p>
-        </div>
-      ))}
     </div>
   )
 }
@@ -6808,56 +7097,6 @@ const ACME_PANEL_DETAILS: Partial<Record<WorkspaceWindowKind, { service: string;
     body: 'Model Research & Governance window from Acme, reserved for model versioning and review state.',
     bullets: ['Version registry', 'Research status', 'Approval state'],
   },
-}
-
-export function AcmeProductLibraryWindow({ onSelect }: { onSelect: (provider: ProviderKey, symbol: string) => void }) {
-  const options = useProductOptions()
-  const rows = options.filter(option => PRODUCT_ASSETS.includes(option.asset ?? 'EVENT') || ACME_SPREAD_PRODUCTS.some(product => product.symbol === option.symbol))
-  const ordered = [...rows].sort((a, b) => {
-    const aSpread = ACME_SPREAD_PRODUCTS.some(product => product.symbol === a.symbol)
-    const bSpread = ACME_SPREAD_PRODUCTS.some(product => product.symbol === b.symbol)
-    if (aSpread !== bSpread) return aSpread ? -1 : 1
-    return a.symbol.localeCompare(b.symbol)
-  })
-
-  return (
-    <div className="h-full overflow-y-auto bg-surface p-3">
-      <div className="mb-3 flex items-center justify-between">
-        <div>
-          <div className="text-xs font-black uppercase tracking-wide text-slate-100">Acme Product Library</div>
-          <div className="mt-1 text-[10px] text-muted">Outrights plus Acme synthetic spread products.</div>
-        </div>
-        <span className="rounded border border-accent/30 bg-accent/10 px-2 py-1 font-mono text-[10px] font-bold text-accent">
-          {ordered.length} products
-        </span>
-      </div>
-      <div className="grid gap-2">
-        {ordered.map(option => {
-          const spread = ACME_SPREAD_PRODUCTS.find(product => product.symbol === option.symbol)
-          return (
-            <button
-              key={`${option.provider}-${option.symbol}`}
-              className="rounded border border-surface-border bg-surface-card p-2 text-left hover:border-accent/50 hover:bg-surface-hover"
-              onClick={() => onSelect(option.provider, option.symbol)}
-            >
-              <div className="flex items-center justify-between gap-3">
-                <span className="font-mono text-xs font-black text-slate-100">{spread?.label ?? option.label}</span>
-                <span className={cx('rounded px-1.5 py-0.5 text-[9px] font-bold uppercase', spread ? 'bg-accent/15 text-accent' : 'bg-surface text-muted')}>
-                  {spread ? 'Synthetic' : 'Outright'}
-                </span>
-              </div>
-              <div className="mt-1 text-[10px] text-muted">{spread?.legs ?? option.subtitle}</div>
-              <div className="mt-2 flex justify-between font-mono text-[10px]">
-                <span className="text-up">Bid {fmtProb(option.yes)}</span>
-                <span className="text-down">Ask {fmtProb(option.no)}</span>
-                <span className="text-muted">{option.live ? 'LIVE' : 'staged'}</span>
-              </div>
-            </button>
-          )
-        })}
-      </div>
-    </div>
-  )
 }
 
 function AcmeDepthTraderWindow({
@@ -7162,75 +7401,6 @@ function acmeVolumeAtPriceShapes(rows: Bar[], studies: AcmeChartStudy[]) {
         layer: 'below',
       }
     })
-}
-
-function AcmePlotlyChart({ stat }: { stat: AcmeSpreadStat }) {
-  const ref = useRef<HTMLDivElement | null>(null)
-
-  useEffect(() => {
-    const node = ref.current
-    if (!node) return
-    let cancelled = false
-    let retryId = 0
-    const render = () => {
-      const plotly = (window as typeof window & { Plotly?: PlotlyLike }).Plotly
-      if (!plotly) {
-        retryId = window.setTimeout(render, 250)
-        return
-      }
-      const bars = stat.bars ?? []
-      const x = bars.map(bar => new Date(bar.timestamp))
-      const y = bars.map(bar => bar.close)
-      const mean = stat.mean
-      const upper = stat.mean + 2 * stat.atr
-      const lower = stat.mean - 2 * stat.atr
-      const traces = [
-        { x, y, type: 'scatter', mode: 'lines', name: stat.label, line: { color: '#00d8ff', width: 2 } },
-        { x, y: y.map(() => mean), type: 'scatter', mode: 'lines', name: 'Mean', line: { color: '#e5f0ff', width: 1, dash: 'dot' } },
-        { x, y: y.map(() => upper), type: 'scatter', mode: 'lines', name: '+2 ATR', line: { color: '#ff3045', width: 1, dash: 'dash' } },
-        { x, y: y.map(() => lower), type: 'scatter', mode: 'lines', name: '-2 ATR', line: { color: '#38bdf8', width: 1, dash: 'dash' } },
-      ]
-      const layout = {
-        paper_bgcolor: '#05070b',
-        plot_bgcolor: '#05070b',
-        margin: { l: 42, r: 18, t: 8, b: 28 },
-        font: { color: '#e5f0ff', size: 10 },
-        xaxis: { gridcolor: 'rgba(38,50,65,.42)', linecolor: '#4b5f76', tickcolor: '#4b5f76', tickfont: { color: '#a8b4c4' }, zeroline: false },
-        yaxis: { gridcolor: 'rgba(38,50,65,.42)', linecolor: '#4b5f76', tickcolor: '#4b5f76', tickfont: { color: '#a8b4c4' }, zeroline: false },
-        showlegend: false,
-      }
-      if (!cancelled) void plotly.react(node, traces, layout, { displayModeBar: false, responsive: true })
-    }
-    render()
-    return () => {
-      cancelled = true
-      if (retryId) window.clearTimeout(retryId)
-    }
-  }, [stat])
-
-  return <div ref={ref} className="h-full w-full" />
-}
-
-function AcmePlotlyPanelWindow({ panels }: { panels: 2 | 3 }) {
-  const data = useAcmeIntelligence()
-  const spreads = data?.spreadPack?.spreads ?? []
-  const visible = spreads.slice(0, panels)
-  return (
-    <div className={cx('grid h-full gap-2 bg-surface p-2', panels === 3 ? 'grid-rows-3' : 'grid-rows-2')}>
-      {visible.map(stat => (
-        <div key={stat.key} className="min-h-0 rounded border border-surface-border bg-surface-card p-2">
-          <div className="mb-1 flex items-center justify-between">
-            <span className="font-mono text-[11px] font-black text-accent">{stat.label}</span>
-            <span className={cx('font-mono text-[10px] font-black', stat.z >= 0 ? 'text-down' : 'text-up')}>z {stat.z.toFixed(2)}</span>
-          </div>
-          <div className="h-[calc(100%-22px)] min-h-0 overflow-hidden">
-            <AcmePlotlyChart stat={stat} />
-          </div>
-        </div>
-      ))}
-      {!visible.length && <div className="rounded border border-surface-border bg-surface-card p-4 text-center text-muted">Waiting for Acme spread bars.</div>}
-    </div>
-  )
 }
 
 function AcmeProductCandleChart({
@@ -7714,21 +7884,6 @@ function AcmeSingleChartWindow({
       </div>
       <div className="border-t border-surface-border bg-surface-panel px-2 py-1 font-mono text-[9px] text-muted">
         ACME Product Chart | {selectedSymbol} | {timeframe} REST bars | {mode === 'candles' ? 'Candlesticks' : 'Line'} | {compressBlankSessions ? 'No blank sessions' : 'Calendar time'} | {showGrid ? 'Grid' : 'No grid'} | {studyStatus}
-      </div>
-    </div>
-  )
-}
-
-function AcmeSpreadGuideWindow({ symbol }: { symbol: string }) {
-  const product = ACME_SPREAD_PRODUCTS.find(item => item.symbol === symbol)
-  return (
-    <div className="flex h-full flex-col bg-surface">
-      <div className="border-b border-surface-border bg-surface-panel px-3 py-2">
-        <div className="font-mono text-xs font-black text-accent">{product?.label ?? symbol}</div>
-        <div className="mt-1 text-[10px] text-muted">{product?.legs ?? 'Acme synthetic spread'}</div>
-      </div>
-      <div className="min-h-0 flex-1">
-        <Chart asset={symbol as Asset} />
       </div>
     </div>
   )
@@ -8238,31 +8393,95 @@ function AcmeOpportunityMapWindow() {
 
 function AcmeTradeAnalyticsWindow() {
   const { data, error } = useAcmeEndpoint<AcmeTradeAnalyticsState>('/api/acme/trade-analytics', 10000)
-  const metrics = data?.metrics
-  const curve = data?.curve ?? []
+  const [imported, setImported] = useState<AcmeTradeAnalyticsState | null>(() => loadImportedTradeAnalytics())
+  const [importStatus, setImportStatus] = useState('')
+  const fileRef = useRef<HTMLInputElement | null>(null)
+  const active = imported ?? (data ? { ...data, source: 'live' as const } : null)
+  const metrics = active?.metrics
+  const curve = active?.curve ?? []
   const maxEquity = Math.max(...curve.map(point => point.equity), metrics?.accountSize ?? 1)
   const minEquity = Math.min(...curve.map(point => point.equity), metrics?.accountSize ?? 0)
   const span = maxEquity - minEquity || 1
-  const line = curve.map((point, index) => {
+  const equityLine = curve.map((point, index) => {
     const x = curve.length <= 1 ? 0 : (index / (curve.length - 1)) * 100
     const y = 80 - ((point.equity - minEquity) / span) * 70
     return `${x.toFixed(1)},${y.toFixed(1)}`
   }).join(' ')
+  const maxDrawdown = Math.max(...curve.map(point => point.maxDrawdown), metrics?.drawdown ?? 0, 1)
+  const drawdownLine = curve.map((point, index) => {
+    const x = curve.length <= 1 ? 0 : (index / (curve.length - 1)) * 100
+    const y = 12 + (point.drawdown / maxDrawdown) * 66
+    return `${x.toFixed(1)},${y.toFixed(1)}`
+  }).join(' ')
+  const riskLevel = active?.riskLevel ?? 'Waiting'
+  const miniBars = metrics
+    ? [
+        { label: 'Win rate', pct: clamp(metrics.winRate * 100, 0, 100), value: fmtPct(metrics.winRate) },
+        { label: 'Return/risk', pct: clamp(Math.abs(metrics.sharpe) * 25, 0, 100), value: fmtNum(metrics.sharpe, 2) },
+        { label: 'Account return', pct: clamp(metrics.returnPct * 1000, 0, 100), value: fmtPct(metrics.returnPct) },
+        { label: 'Drawdown', pct: clamp(100 - (metrics.drawdown / (metrics.accountSize || TRADE_ANALYTICS_ACCOUNT_SIZE)) * 5000, 0, 100), value: fmtMoney(metrics.drawdown) },
+      ]
+    : []
+  const productTotals = active?.productTotals ?? []
+  const report = active?.report ?? (metrics ? buildTradeAnalyticsReport(metrics, active?.records ?? []) : [])
+
+  const handleImportFile = async (file: File | undefined) => {
+    if (!file) return
+    try {
+      const text = await file.text()
+      const next = analyzeTradeAnalyticsCsv(text, file.name)
+      window.localStorage.setItem(TRADE_ANALYTICS_IMPORT_KEY, JSON.stringify(next))
+      setImported(next)
+      setImportStatus(next.status)
+    } catch (err) {
+      setImportStatus(err instanceof Error ? err.message : 'Import failed')
+    } finally {
+      if (fileRef.current) fileRef.current.value = ''
+    }
+  }
+
+  const clearImport = () => {
+    window.localStorage.removeItem(TRADE_ANALYTICS_IMPORT_KEY)
+    setImported(null)
+    setImportStatus('Imported fills cleared; live fill journal is active.')
+  }
+
   return (
     <div className="h-full overflow-y-auto bg-surface p-3 text-xs">
-      <div className="mb-3 flex items-center justify-between">
-        <span className={cx('rounded border px-2 py-1 font-mono text-[10px] font-black uppercase', data?.riskLevel === 'Controlled' ? 'border-blue-500/35 bg-blue-500/15 text-blue-300' : data?.riskLevel === 'High' ? 'border-red-500/35 bg-red-500/15 text-red-300' : 'border-amber-500/35 bg-amber-500/15 text-amber-300')}>{data?.riskLevel ?? 'Waiting'} Risk</span>
-        <span className="font-mono text-[10px] text-muted">{error || data?.status || 'Analyzer ready.'}</span>
+      <div className="mb-3 grid gap-2 border border-surface-border bg-surface-card p-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className={cx('rounded border px-2 py-1 font-mono text-[10px] font-black uppercase', riskLevel === 'Controlled' ? 'border-blue-500/35 bg-blue-500/15 text-blue-300' : riskLevel === 'High' ? 'border-red-500/35 bg-red-500/15 text-red-300' : 'border-amber-500/35 bg-amber-500/15 text-amber-300')}>{riskLevel} Risk</span>
+          <span className="font-mono text-[10px] text-muted">
+            {imported ? `Imported file: ${imported.filename ?? 'fills.csv'}` : 'Live fill journal'}
+          </span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="btn-accent cursor-pointer px-3 py-2 text-[11px]">
+            Import Fills
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".csv,.txt"
+              className="hidden"
+              onChange={event => handleImportFile(event.currentTarget.files?.[0])}
+            />
+          </label>
+          <button className="btn-neutral px-3 py-2 text-[11px]" onClick={clearImport} disabled={!imported}>Use Live Journal</button>
+          <span className={cx('font-mono text-[10px]', importStatus || error ? 'text-amber-300' : 'text-muted')}>{importStatus || error || active?.status || 'Analyzer ready.'}</span>
+        </div>
       </div>
       <div className="grid grid-cols-4 gap-2">
         {[
-          ['Rows', metrics?.rows.toFixed(0)],
+          ['Rows', fmtInt(metrics?.rows)],
+          ['Account', fmtMoney(metrics?.accountSize)],
           ['Total P&L', fmtMoney(metrics?.total)],
+          ['Return', fmtPct(metrics?.returnPct)],
           ['Win Rate', fmtPct(metrics?.winRate)],
           ['Max Drawdown', `${fmtMoney(metrics?.drawdown)} (${fmtPct(metrics?.drawdownPct)})`],
           ['Sharpe', fmtNum(metrics?.sharpe, 2)],
           ['Sortino', fmtNum(metrics?.sortino, 2)],
           ['Calmar', fmtNum(metrics?.calmar, 2)],
+          ['Profit Factor', fmtNum(metrics?.profitFactor, 2)],
           ['Expectancy', fmtMoney(metrics?.expectancy)],
         ].map(([label, value]) => (
           <div key={label} className="rounded border border-surface-border bg-surface-card p-2">
@@ -8271,20 +8490,68 @@ function AcmeTradeAnalyticsWindow() {
           </div>
         ))}
       </div>
+      <div className="mt-3 grid gap-1 rounded border border-surface-border bg-surface-card p-2">
+        {miniBars.length ? miniBars.map(row => (
+          <div key={row.label} className="grid grid-cols-[90px_1fr_72px] items-center gap-2 font-mono text-[10px]">
+            <span className="text-muted">{row.label}</span>
+            <span className="h-2 overflow-hidden rounded bg-[#03070d]">
+              <span className="block h-full rounded bg-blue-400" style={{ width: `${row.pct}%` }} />
+            </span>
+            <span className="text-right text-slate-200">{row.value}</span>
+          </div>
+        )) : <div className="font-mono text-[10px] text-muted">Import fills or generate live fills to populate analytics bars.</div>}
+      </div>
       <div className="mt-3 rounded border border-surface-border bg-surface-card p-2">
-        <svg viewBox="0 0 100 86" className="h-32 w-full" preserveAspectRatio="none">
+        <div className="mb-1 flex justify-between font-mono text-[10px] text-muted">
+          <span>Account Equity Curve</span>
+          <span>{fmtMoney(curve[curve.length - 1]?.equity)}</span>
+        </div>
+        <svg viewBox="0 0 100 86" className="h-28 w-full" preserveAspectRatio="none">
           <rect x="0" y="0" width="100" height="86" fill="rgba(8,13,20,.18)" />
-          {line && <polyline points={line} fill="none" stroke="#00d8ff" strokeWidth="1.8" vectorEffect="non-scaling-stroke" />}
+          {equityLine && <polyline points={equityLine} fill="none" stroke="#4da3ff" strokeWidth="1.8" vectorEffect="non-scaling-stroke" />}
+        </svg>
+      </div>
+      <div className="mt-3 rounded border border-surface-border bg-surface-card p-2">
+        <div className="mb-1 flex justify-between font-mono text-[10px] text-muted">
+          <span>Intraday Drawdown</span>
+          <span>{fmtMoney(metrics?.drawdown)}</span>
+        </div>
+        <svg viewBox="0 0 100 86" className="h-24 w-full" preserveAspectRatio="none">
+          <rect x="0" y="0" width="100" height="86" fill="rgba(8,13,20,.18)" />
+          {drawdownLine && <polyline points={drawdownLine} fill="none" stroke="#ffcc66" strokeWidth="1.8" vectorEffect="non-scaling-stroke" />}
         </svg>
       </div>
       <div className="mt-3 grid gap-2">
-        {(data?.studies ?? []).map(study => (
+        {(active?.studies ?? []).map(study => (
           <div key={study.study} className="grid grid-cols-[140px_90px_1fr] rounded border border-surface-border bg-surface-card px-2 py-1.5 font-mono text-[10px]">
             <span className="font-black text-slate-100">{study.study}</span>
             <span className={study.passed ? 'text-blue-300' : 'text-amber-300'}>{study.passed ? 'Pass' : 'Review'} {study.result}</span>
             <span className="text-muted">{study.read}</span>
           </div>
         ))}
+      </div>
+      <div className="mt-3 rounded border border-surface-border bg-surface-card">
+        <div className="border-b border-surface-border px-2 py-1 font-mono text-[10px] font-black uppercase text-muted">Product Contribution</div>
+        <div className="grid gap-1 p-2">
+          {productTotals.length ? productTotals.map(row => (
+            <div key={row.instrument} className="grid grid-cols-[90px_1fr] font-mono text-[10px]">
+              <span className="font-black text-slate-100">{row.instrument}</span>
+              <span className={row.pnl >= 0 ? 'text-blue-300' : 'text-down'}>{fmtMoney(row.pnl)}</span>
+            </div>
+          )) : <div className="font-mono text-[10px] text-muted">No product rows yet.</div>}
+        </div>
+      </div>
+      <div className="mt-3 rounded border border-surface-border bg-surface-card">
+        <div className="grid grid-cols-[130px_150px_1fr] border-b border-surface-border px-2 py-1 font-mono text-[10px] font-black uppercase text-muted">
+          <span>Report</span><span>Value</span><span>Read</span>
+        </div>
+        {report.length ? report.map(row => (
+          <div key={row.label} className="grid grid-cols-[130px_150px_1fr] border-b border-surface-border/60 px-2 py-1.5 font-mono text-[10px]">
+            <span className="font-black text-slate-100">{row.label}</span>
+            <span className="text-slate-200">{row.value}</span>
+            <span className="text-muted">{row.read}</span>
+          </div>
+        )) : <div className="p-3 font-mono text-[10px] text-muted">Import fills to produce a report.</div>}
       </div>
     </div>
   )
@@ -8311,6 +8578,227 @@ function AcmeNotionalCalculatorWindow() {
           </div>
         ))}
       </div>
+    </div>
+  )
+}
+
+const DEFAULT_MODEL_VARIANT: ModelVariantDraft = {
+  name: 'ACME-FactorStack-Monitor',
+  version: 'v0.1',
+  horizon: 'Intraday / 1-week',
+  owner: 'Research',
+  objective: 'Combine independent market, macro, positioning, news, and liquidity signals into a bounded decision-support score with explainable attribution.',
+  notes: 'Baseline factor stack: trend/relative strength, volatility, rates/credit, CFTC positioning, news pressure, and liquidity checks.',
+  changeLog: 'v0.1: Initial governance registry and factor-scoring process documentation.',
+  reviewCriteria: 'Promote only after data-quality checks, walk-forward validation, turnover/slippage review, adverse-regime review, and live-monitoring notes.',
+}
+
+function normalizeModelVariant(raw: Partial<ModelVariantDraft> | null | undefined): ModelVariantDraft | null {
+  if (!raw || typeof raw !== 'object') return null
+  return {
+    ...DEFAULT_MODEL_VARIANT,
+    ...raw,
+    name: String(raw.name || DEFAULT_MODEL_VARIANT.name),
+    version: String(raw.version || DEFAULT_MODEL_VARIANT.version),
+    horizon: String(raw.horizon || DEFAULT_MODEL_VARIANT.horizon),
+    owner: String(raw.owner || DEFAULT_MODEL_VARIANT.owner),
+    objective: String(raw.objective || DEFAULT_MODEL_VARIANT.objective),
+    notes: String(raw.notes || DEFAULT_MODEL_VARIANT.notes),
+    changeLog: String(raw.changeLog || DEFAULT_MODEL_VARIANT.changeLog),
+    reviewCriteria: String(raw.reviewCriteria || DEFAULT_MODEL_VARIANT.reviewCriteria),
+    savedAt: raw.savedAt ? String(raw.savedAt) : undefined,
+    schema: raw.schema ? String(raw.schema) : 'cerious.model.variant.v1',
+  }
+}
+
+function parseModelVariant(raw: string | null): ModelVariantDraft | null {
+  try {
+    return normalizeModelVariant(raw ? JSON.parse(raw) as Partial<ModelVariantDraft> : null)
+  } catch {
+    return null
+  }
+}
+
+function modelVariantKey(variant: Pick<ModelVariantDraft, 'name' | 'version'>): string {
+  return `${variant.name.trim().toLowerCase()}::${variant.version.trim().toLowerCase()}`
+}
+
+function modelVariantLabel(variant: ModelVariantDraft): string {
+  const saved = variant.savedAt ? ` | ${new Date(variant.savedAt).toLocaleString()}` : ''
+  return `${variant.name} ${variant.version}${saved}`
+}
+
+function upsertModelVariantLibrary(list: ModelVariantDraft[], next: ModelVariantDraft): ModelVariantDraft[] {
+  const key = modelVariantKey(next)
+  return [
+    next,
+    ...list.filter(item => modelVariantKey(item) !== key),
+  ].sort((a, b) => (Date.parse(b.savedAt ?? '') || 0) - (Date.parse(a.savedAt ?? '') || 0))
+}
+
+function saveModelVariantLibrary(list: ModelVariantDraft[]): void {
+  window.localStorage.setItem(MODEL_VARIANT_LIBRARY_KEY, JSON.stringify(list))
+}
+
+function loadModelVariantLibrary(): ModelVariantDraft[] {
+  try {
+    const raw = window.localStorage.getItem(MODEL_VARIANT_LIBRARY_KEY)
+    const parsed = raw ? JSON.parse(raw) as Array<Partial<ModelVariantDraft>> : []
+    const library = Array.isArray(parsed)
+      ? parsed.map(normalizeModelVariant).filter((item): item is ModelVariantDraft => !!item)
+      : []
+    const current = parseModelVariant(window.localStorage.getItem(MODEL_VARIANT_KEY))
+    const legacy = parseModelVariant(window.localStorage.getItem(LEGACY_ACME_MODEL_VARIANT_KEY))
+    let merged = library
+    if (current) merged = upsertModelVariantLibrary(merged, current)
+    if (legacy) merged = upsertModelVariantLibrary(merged, { ...legacy, schema: 'acme.model.variant.v1' })
+    return merged
+  } catch {
+    return []
+  }
+}
+
+function loadModelVariantDraft(): ModelVariantDraft {
+  const current = parseModelVariant(window.localStorage.getItem(MODEL_VARIANT_KEY))
+  if (current) return current
+  const library = loadModelVariantLibrary()
+  return library[0] ?? DEFAULT_MODEL_VARIANT
+}
+
+function AcmeModelResearchGovernanceWindow() {
+  const { data, error } = useAcmeEndpoint<AcmeContentState>('/api/acme/content/modelResearchGovernance', 30000)
+  const [draft, setDraft] = useState<ModelVariantDraft>(() => loadModelVariantDraft())
+  const [library, setLibrary] = useState<ModelVariantDraft[]>(() => loadModelVariantLibrary())
+  const [selectedVariantKey, setSelectedVariantKey] = useState(() => draft.savedAt ? modelVariantKey(draft) : '')
+  const [status, setStatus] = useState(() => draft.savedAt ? `Loaded ${draft.name} ${draft.version} saved ${new Date(draft.savedAt).toLocaleString()}.` : 'No model variant saved in this browser yet.')
+  const rows = data?.rows ?? ACME_PANEL_DETAILS.modelResearchGovernance?.bullets.map(item => [item]) ?? []
+  const sections = data?.sections ?? []
+  const updateDraft = (field: keyof ModelVariantDraft, value: string) => {
+    setDraft(current => ({ ...current, [field]: value }))
+    setSelectedVariantKey('')
+    setStatus('Draft edited. Save Variant to persist.')
+  }
+  const persistLibrary = (nextLibrary: ModelVariantDraft[]) => {
+    saveModelVariantLibrary(nextLibrary)
+    setLibrary(nextLibrary)
+  }
+  const loadVariant = (key: string) => {
+    setSelectedVariantKey(key)
+    const variant = library.find(item => modelVariantKey(item) === key)
+    if (!variant) return
+    window.localStorage.setItem(MODEL_VARIANT_KEY, JSON.stringify(variant))
+    setDraft(variant)
+    setStatus(`Loaded ${variant.name} ${variant.version}${variant.savedAt ? ` saved ${new Date(variant.savedAt).toLocaleString()}` : ''}.`)
+  }
+  const saveDraft = () => {
+    const next = { ...draft, savedAt: new Date().toISOString(), schema: 'cerious.model.variant.v1' }
+    const nextLibrary = upsertModelVariantLibrary(library, next)
+    persistLibrary(nextLibrary)
+    window.localStorage.setItem(MODEL_VARIANT_KEY, JSON.stringify(next))
+    setDraft(next)
+    setSelectedVariantKey(modelVariantKey(next))
+    setStatus(`Saved ${next.name || 'model'} ${next.version || ''}.`)
+  }
+  const deleteVariant = () => {
+    if (!selectedVariantKey) return
+    const deleted = library.find(item => modelVariantKey(item) === selectedVariantKey)
+    const nextLibrary = library.filter(item => modelVariantKey(item) !== selectedVariantKey)
+    persistLibrary(nextLibrary)
+    window.localStorage.removeItem(MODEL_VARIANT_KEY)
+    if (deleted?.schema === 'acme.model.variant.v1') window.localStorage.removeItem(LEGACY_ACME_MODEL_VARIANT_KEY)
+    setSelectedVariantKey('')
+    if (deleted && modelVariantKey(draft) === selectedVariantKey) setDraft(DEFAULT_MODEL_VARIANT)
+    setStatus(deleted ? `Deleted ${deleted.name} ${deleted.version}.` : 'Variant removed.')
+  }
+  const clearDraft = () => {
+    window.localStorage.removeItem(MODEL_VARIANT_KEY)
+    setDraft(DEFAULT_MODEL_VARIANT)
+    setSelectedVariantKey('')
+    setStatus('Model variant draft cleared.')
+  }
+  return (
+    <div className="h-full overflow-y-auto bg-surface p-3 text-xs">
+      <div className="mb-3 rounded border border-accent/30 bg-accent/10 p-3">
+        <div className="text-xs font-black uppercase tracking-wide text-slate-100">Model Research & Governance</div>
+        <div className="mt-1 font-mono text-[10px] text-accent">{data?.service ?? 'knowledge.governance'}</div>
+        {error && <div className="mt-2 font-mono text-[10px] text-amber-300">{error}</div>}
+      </div>
+      <div className="grid gap-2">
+        {sections.map(section => (
+          <div key={section.title} className="rounded border border-surface-border bg-surface-card p-3">
+            <div className="mb-1 font-bold text-slate-100">{section.title}</div>
+            <p className="text-[11px] leading-relaxed text-muted">{section.body}</p>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 rounded border border-surface-border bg-surface-card">
+        <div className="grid grid-cols-[150px_1.4fr_1fr] border-b border-surface-border px-2 py-1 font-mono text-[10px] font-black uppercase text-muted">
+          <span>Stage</span><span>Process Rule</span><span>Evidence Captured</span>
+        </div>
+        {rows.map((row, index) => (
+          <div key={`${row[0]}-${index.toString()}`} className="grid grid-cols-[150px_1.4fr_1fr] border-b border-surface-border/60 px-2 py-2 font-mono text-[10px]">
+            <span className="font-black text-slate-100">{row[0]}</span>
+            <span className="text-muted">{row[1] ?? ''}</span>
+            <span className="text-muted">{row[2] ?? ''}</span>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 grid grid-cols-4 gap-2">
+        {[
+          ['name', 'Model Name'],
+          ['version', 'Version'],
+          ['horizon', 'Horizon'],
+          ['owner', 'Owner / Reviewer'],
+        ].map(([field, label]) => (
+          <label key={field} className="grid gap-1 rounded border border-surface-border bg-surface-card p-2">
+            <span className="font-mono text-[9px] font-black uppercase text-muted">{label}</span>
+            <input
+              className="input-field py-1 text-[11px]"
+              value={String(draft[field as keyof ModelVariantDraft] ?? '')}
+              onChange={event => updateDraft(field as keyof ModelVariantDraft, event.currentTarget.value)}
+            />
+          </label>
+        ))}
+      </div>
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        {[
+          ['objective', 'Research Objective'],
+          ['notes', 'Variant Notes'],
+          ['changeLog', 'Change Log'],
+          ['reviewCriteria', 'Review Criteria'],
+        ].map(([field, label]) => (
+          <label key={field} className="grid gap-1 rounded border border-surface-border bg-surface-card p-2">
+            <span className="font-mono text-[9px] font-black uppercase text-muted">{label}</span>
+            <textarea
+              className="input-field min-h-[88px] resize-y py-2 text-[11px] leading-relaxed"
+              value={String(draft[field as keyof ModelVariantDraft] ?? '')}
+              onChange={event => updateDraft(field as keyof ModelVariantDraft, event.currentTarget.value)}
+            />
+          </label>
+        ))}
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <select
+          className="input-field h-8 min-w-[260px] py-1 text-[10px] font-bold"
+          value={selectedVariantKey}
+          onChange={event => loadVariant(event.currentTarget.value)}
+        >
+          <option value="">Load Variant...</option>
+          {library.map(variant => (
+            <option key={modelVariantKey(variant)} value={modelVariantKey(variant)}>
+              {modelVariantLabel(variant)}
+            </option>
+          ))}
+        </select>
+        <button className="btn-accent px-3 py-2 text-[11px]" onClick={saveDraft}>Save Variant</button>
+        <button className="btn-neutral px-3 py-2 text-[11px]" onClick={deleteVariant} disabled={!selectedVariantKey}>Delete Variant</button>
+        <button className="btn-neutral px-3 py-2 text-[11px]" onClick={clearDraft}>Clear Draft</button>
+        <span className="rounded border border-surface-border bg-surface-card px-2 py-1 font-mono text-[10px] text-slate-300">{library.length} saved</span>
+        <span className="font-mono text-[10px] text-muted">{status}</span>
+      </div>
+      <p className="mt-3 rounded border border-surface-border bg-surface-card p-2 font-mono text-[10px] leading-relaxed text-muted">
+        Naming convention: ACME-[SignalFamily]-[Horizon]-[Variant]-vMajor.Minor. Material methodology, feature, weight, threshold, data-source, or execution-policy changes require a new version.
+      </p>
     </div>
   )
 }
@@ -8440,8 +8928,13 @@ function AcmePositionsOrdersWindow() {
   const cancelOrder = async (orderId: string) => {
     if (!orderId || orderId === '-') return
     if (liveOrderIds.has(orderId)) {
-      cancelSimOrderLive(orderId)
-      setActionStatus(`Cancelled local sim order ${orderId}`)
+      try {
+        await cancelSharedOrder(orderId)
+        setActionStatus(`Cancelled order ${orderId}`)
+      } catch {
+        cancelSimOrderLive(orderId)
+        setActionStatus(`Cancelled local fallback order ${orderId}`)
+      }
       return
     }
     setActionStatus(`Cancel requested for ${orderId}`)
@@ -8463,6 +8956,14 @@ function AcmePositionsOrdersWindow() {
       const response = await fetch('/api/acme/orders/cancel-all', { method: 'POST' })
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       const payload = await response.json()
+      if (payload.state) {
+        useStore.getState().setSimTradingState({
+          simOrders: payload.state.simOrders,
+          simPositions: payload.state.simPositions,
+          fills: payload.state.fills,
+          simMessages: payload.state.simMessages,
+        })
+      }
       await refresh()
       const backendCount = Number(payload.count ?? 0)
       const totalCount = localCount + backendCount
@@ -8647,373 +9148,6 @@ function AcmeIncomingWindow({ kind }: { kind: WorkspaceWindowKind }) {
   )
 }
 
-function TradingViewChartWindow({
-  provider,
-  symbol,
-  onSelect,
-}: {
-  provider: ProviderKey
-  symbol: string
-  onSelect: (provider: ProviderKey, symbol: string) => void
-}) {
-  const activeAsset = useStore(s => s.activeAsset)
-  const options = useProductOptions()
-  const selectedOption = options.find(option => option.provider === provider && option.symbol === symbol)
-  const asset = selectedOption?.asset ?? activeAsset
-
-  return (
-    <div className="flex h-full flex-col bg-surface">
-      <div className="flex flex-wrap items-center gap-2 border-b border-surface-border bg-surface-panel px-2 py-1">
-        <div className="min-w-[280px] flex-1">
-          <ProductSelector provider={provider} symbol={symbol} onSelect={onSelect} compact />
-        </div>
-        <span className="rounded border border-accent/30 bg-accent/10 px-2 py-1 font-mono text-[10px] font-bold text-accent">
-          {asset} OHLCV
-        </span>
-        <span className="text-[10px] text-muted">Original Arbitek lightweight chart</span>
-      </div>
-      <div className="min-h-0 flex-1">
-        <Chart asset={asset} />
-      </div>
-    </div>
-  )
-}
-
-function TradingViewMultiChartWindow({
-  provider,
-  symbol,
-  onSelect,
-}: {
-  provider: ProviderKey
-  symbol: string
-  onSelect: (provider: ProviderKey, symbol: string) => void
-}) {
-  const activeAsset = useStore(s => s.activeAsset)
-  const options = useProductOptions()
-  const selectedOption = options.find(option => option.provider === provider && option.symbol === symbol)
-  const asset = selectedOption?.asset ?? activeAsset
-  const [panels, setPanels] = useState<2 | 3 | 4 | 5>(4)
-
-  return (
-    <div className="flex h-full flex-col bg-surface">
-      <div className="flex flex-wrap items-center gap-2 border-b border-surface-border bg-surface-panel px-2 py-1">
-        <div className="min-w-[280px] flex-1">
-          <ProductSelector provider={provider} symbol={symbol} onSelect={onSelect} compact />
-        </div>
-        <select
-          className="input-field w-24 py-1 text-[10px]"
-          value={panels}
-          onChange={event => setPanels(Number(event.target.value) as 2 | 3 | 4 | 5)}
-          title="Chart panels"
-        >
-          <option value={2}>2 panels</option>
-          <option value={3}>3 panels</option>
-          <option value={4}>4 panels</option>
-          <option value={5}>5 panels</option>
-        </select>
-        <span className="rounded border border-accent/30 bg-accent/10 px-2 py-1 font-mono text-[10px] font-bold text-accent">
-          {asset} synchronized
-        </span>
-      </div>
-      <div className="min-h-0 flex-1">
-        <MultiChart asset={asset} panels={panels} />
-      </div>
-    </div>
-  )
-}
-
-function PredictionMarketChartWindow({
-  provider,
-  symbol,
-  onSelect,
-  onClone,
-}: {
-  provider: ProviderKey
-  symbol: string
-  onSelect: (provider: ProviderKey, symbol: string) => void
-  onClone: () => void
-}) {
-  const options = useProductOptions()
-  const markets = useStore(s => s.markets)
-  const probHistory = useStore(s => s.probHistory)
-  const polyTicks = useStore(s => s.polyTicks)
-  const selectedOption = options.find(option => option.provider === provider && option.symbol === symbol)
-  const market = selectedOption?.marketKey ? markets.find(item => item.key === selectedOption.marketKey) : undefined
-  const history = selectedOption?.marketKey ? (probHistory[selectedOption.marketKey] ?? []) : []
-  const ticks = selectedOption?.marketKey ? (polyTicks[selectedOption.marketKey] ?? []) : []
-  const chartData = useMemo(
-    () => buildWorkspacePredictionData(selectedOption, market, history, ticks),
-    [history, market, selectedOption, ticks],
-  )
-  const latestYes = chartData.at(-1)?.yesPrice ?? selectedOption?.yes ?? market?.up_pct ?? 50
-  const latestNo = 100 - latestYes
-  const lastTick = ticks.at(-1)
-
-  return (
-    <div className="flex h-full flex-col bg-surface">
-      <div className="flex flex-wrap items-center gap-2 border-b border-surface-border bg-surface-panel px-2 py-1">
-        <div className="min-w-[280px] flex-1">
-          <ProductSelector provider={provider} symbol={symbol} onSelect={onSelect} compact />
-        </div>
-        <button className="btn-accent flex items-center gap-1 px-2 py-1 text-[10px]" onClick={onClone} title="Clone this prediction chart">
-          <Copy size={12} /> Clone Chart
-        </button>
-        <span className="rounded border border-up/30 bg-up/10 px-2 py-1 font-mono text-[10px] font-bold text-up">
-          LIVE {chartData.length} pts
-        </span>
-      </div>
-      <div className="border-b border-surface-border bg-[#08101b] px-3 py-2">
-        <div className="truncate text-[11px] font-black uppercase tracking-wide text-slate-100">
-          {selectedOption?.subtitle ?? selectedOption?.label ?? symbol}
-        </div>
-        <div className="mt-1 flex flex-wrap items-center gap-2 font-mono text-[10px]">
-          <span className="rounded border border-blue-500/30 bg-blue-500/10 px-2 py-1 text-blue-300">YES {latestYes.toFixed(1)}%</span>
-          <span className="rounded border border-red-500/30 bg-red-500/10 px-2 py-1 text-red-300">NO {latestNo.toFixed(1)}%</span>
-          <span className="text-muted">
-            {lastTick ? `last tick ${fmtChartTime(lastTick.timestamp)} ${lastTick.size}x @ ${lastTick.price}c` : 'waiting for live tick'}
-          </span>
-        </div>
-      </div>
-      <div className="min-h-0 flex-1 p-2">
-        <PredictionChart data={chartData} height="100%" />
-      </div>
-    </div>
-  )
-}
-
-function PtbChartWindow({
-  provider,
-  symbol,
-  onSelect,
-  onClone,
-}: {
-  provider: ProviderKey
-  symbol: string
-  onSelect: (provider: ProviderKey, symbol: string) => void
-  onClone: () => void
-}) {
-  const [studies, setStudies] = useState<Record<StudyKey, boolean>>({
-    price: true,
-    ptb: true,
-    probability: true,
-    truth: true,
-    greeks: false,
-    tape: false,
-  })
-  const activeAsset = useStore(s => s.activeAsset)
-  const options = useProductOptions()
-  const selectedOption = options.find(option => option.provider === provider && option.symbol === symbol)
-  const [chartAssets, setChartAssets] = useState<Asset[]>([activeAsset])
-
-  useEffect(() => {
-    setChartAssets(current => current.length ? current : [activeAsset])
-  }, [activeAsset])
-
-  const addChartProduct = () => {
-    if (!selectedOption?.asset) return
-    setChartAssets(current => current.includes(selectedOption.asset!) ? current : [...current, selectedOption.asset!].slice(-4))
-  }
-
-  return (
-    <div className="flex h-full flex-col bg-surface">
-      <div className="flex flex-wrap items-center gap-2 border-b border-surface-border bg-surface-panel px-2 py-1">
-        <div className="min-w-[260px] flex-1">
-          <ProductSelector provider={provider} symbol={symbol} onSelect={onSelect} compact />
-        </div>
-        <button
-          className="btn-neutral flex items-center gap-1 px-2 py-1 text-[10px]"
-          onClick={addChartProduct}
-          disabled={!selectedOption?.asset}
-          title="Add selected product as another chart pane"
-        >
-          <Plus size={12} /> Add Pane
-        </button>
-        <button className="btn-accent flex items-center gap-1 px-2 py-1 text-[10px]" onClick={onClone}>
-          <Copy size={12} /> Clone Chart
-        </button>
-        <div className="flex flex-wrap gap-1">
-          {chartAssets.map(asset => (
-            <button
-              key={asset}
-              className="rounded border border-accent/30 bg-accent/10 px-2 py-1 text-[10px] font-bold text-accent"
-              onClick={() => setChartAssets(current => current.length === 1 ? current : current.filter(item => item !== asset))}
-              title="Remove pane"
-            >
-              {asset}
-            </button>
-          ))}
-          {STUDIES.map(study => (
-            <button
-              key={study.key}
-              className={cx(
-                'rounded border px-2 py-1 text-[10px] font-bold uppercase',
-                studies[study.key] ? 'border-accent/50 bg-accent/15 text-accent' : 'border-surface-border bg-surface-card text-muted',
-              )}
-              onClick={() => setStudies(current => ({ ...current, [study.key]: !current[study.key] }))}
-            >
-              {study.label}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_auto]">
-        <div className={cx('min-h-0 gap-1 overflow-hidden', chartAssets.length > 1 && 'grid grid-cols-2')}>
-          {studies.price && chartAssets.length === 1 ? (
-            <PolyPriceChart />
-          ) : (
-            chartAssets.map(asset => (
-              <div key={asset} className="min-h-[220px] min-w-0 border border-surface-border/50">
-                <Chart asset={asset} />
-              </div>
-            ))
-          )}
-        </div>
-        {studies.tape && (
-          <div className="h-40 overflow-hidden border-t border-surface-border bg-surface-panel">
-            <TimeAndSales popped={false} onPopout={() => undefined} onDock={() => undefined} />
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function PtbRunwayWindow({
-  provider,
-  symbol,
-  onSelect,
-  onClone,
-}: {
-  provider: ProviderKey
-  symbol: string
-  onSelect: (provider: ProviderKey, symbol: string) => void
-  onClone: () => void
-}) {
-  const options = useProductOptions()
-  const selectedOption = options.find(option => option.provider === provider && option.symbol === symbol)
-  const product: PtbRunwayProduct | undefined = selectedOption
-    ? {
-        provider: selectedOption.provider,
-        symbol: selectedOption.symbol,
-        label: selectedOption.label,
-        subtitle: selectedOption.subtitle,
-        marketKey: selectedOption.marketKey,
-        asset: selectedOption.asset,
-        yes: selectedOption.yes,
-        no: selectedOption.no,
-        truthYes: selectedOption.truthYes,
-        truthNo: selectedOption.truthNo,
-        spot: selectedOption.spot,
-        priceToBeat: selectedOption.priceToBeat,
-        expiryTs: selectedOption.expiryTs,
-      }
-    : undefined
-
-  return (
-    <PtbRunwayChart
-      product={product}
-      controls={
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="min-w-[280px] flex-1">
-            <ProductSelector provider={provider} symbol={symbol} onSelect={onSelect} compact />
-          </div>
-          <button className="btn-accent flex items-center gap-1 px-2 py-1 text-[10px]" onClick={onClone} title="Clone this PTB runway study">
-            <Copy size={12} /> Clone Study
-          </button>
-          <span className="rounded border border-surface-border bg-surface-card px-2 py-1 font-mono text-[10px] text-muted">
-            {selectedOption?.asset ?? selectedOption?.symbol ?? 'select product'}
-          </span>
-        </div>
-      }
-    />
-  )
-}
-
-export function CryptoTerminalWindow({
-  provider,
-  symbol,
-  onSelect,
-}: {
-  provider: ProviderKey
-  symbol: string
-  onSelect: (provider: ProviderKey, symbol: string) => void
-}) {
-  const activeAsset = useStore(s => s.activeAsset)
-  const options = useProductOptions()
-  const selectedOption = options.find(option => option.provider === provider && option.symbol === symbol)
-  const [chartAssets, setChartAssets] = useState<Asset[]>([activeAsset])
-
-  const addChartProduct = () => {
-    if (!selectedOption?.asset) return
-    setChartAssets(current => current.includes(selectedOption.asset!) ? current : [...current, selectedOption.asset!].slice(-4))
-  }
-
-  return (
-    <div className="flex h-full flex-col bg-surface">
-      <div className="flex flex-wrap items-center gap-2 border-b border-surface-border bg-surface-panel p-2">
-        <div className="min-w-[280px] flex-1">
-          <ProductSelector provider={provider} symbol={symbol} onSelect={onSelect} compact />
-        </div>
-        <button className="btn-accent flex items-center gap-1 px-2 py-1 text-[10px]" onClick={addChartProduct} disabled={!selectedOption?.asset}>
-          <Plus size={12} /> Add Pane
-        </button>
-        <div className="flex flex-wrap gap-1">
-          {chartAssets.map(asset => (
-            <button
-              key={asset}
-              className="rounded border border-surface-border bg-surface-card px-2 py-1 text-[10px] font-bold text-slate-200"
-              onClick={() => setChartAssets(current => current.length === 1 ? current : current.filter(item => item !== asset))}
-              title="Remove pane"
-            >
-              {asset}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_190px]">
-        <div className={cx('min-h-0 gap-1 overflow-hidden', chartAssets.length > 1 && 'grid grid-cols-2')}>
-          {chartAssets.map(asset => (
-            <div key={asset} className="min-h-[220px] min-w-0 border border-surface-border/50">
-              <Chart asset={asset} />
-            </div>
-          ))}
-        </div>
-        <div className="min-h-0 border-l border-surface-border"><PositionMonitor /></div>
-      </div>
-    </div>
-  )
-}
-
-export function SportsTerminalWindow() {
-  const options = useProductOptions().filter(option => option.provider === 'kalshi' || option.provider === 'forecasttrader')
-  const sports = options.filter(option => /sport|game|team|nba|nfl|mlb|nhl|soccer/i.test(option.subtitle))
-  const list = sports.length > 0 ? sports : options.slice(0, 12)
-  return (
-    <div className="h-full overflow-y-auto bg-surface p-3">
-      <div className="mb-3 flex items-center gap-2">
-        <Activity size={16} className="text-accent" />
-        <div className="text-[10px] text-muted">Sports markets use the same event/product abstraction as Kalshi and IBKR.</div>
-      </div>
-      <div className="space-y-2">
-        {list.map(option => (
-          <div key={`${option.provider}-${option.symbol}`} className="rounded border border-surface-border bg-surface-card p-2">
-            <div className="flex items-center justify-between gap-2">
-              <span className="truncate text-xs font-bold text-slate-100">{option.subtitle}</span>
-              <span className="font-mono text-[10px]" style={{ color: PROVIDER_COLORS[option.provider] }}>{providerLabel(option.provider)}</span>
-            </div>
-            <div className="mt-1 grid grid-cols-3 font-mono text-[10px]">
-              <span className="text-up">YES {fmtProb(option.yes)}</span>
-              <span className="text-down">NO {fmtProb(option.no)}</span>
-              <span className="text-right text-muted">{fmtMoney(option.volume)}</span>
-            </div>
-          </div>
-        ))}
-        {list.length === 0 && <div className="rounded border border-surface-border bg-surface-card p-4 text-center text-muted">No sports/event products loaded yet.</div>}
-      </div>
-    </div>
-  )
-}
-
 function renderWindowBody(
   item: WorkspaceWindow,
   props: {
@@ -9028,7 +9162,6 @@ function renderWindowBody(
     setAlerts: React.Dispatch<React.SetStateAction<AlertRule[]>>
     cloneChart: () => void
     cloneRunway: () => void
-    openPredictionChart: (provider: ProviderKey, symbol: string) => void
     updateWindowChartSettings: (id: string, settings: AcmeChartSettings) => void
     updateWindowDepthLadderSettings: (id: string, settings: DepthLadderSettings) => void
     saveDepthLadderDefaultForWindow: (id: string, settings: DepthLadderSettings) => void
@@ -9041,7 +9174,7 @@ function renderWindowBody(
     props.selectProduct(nextProvider, nextSymbol)
   }
 
-  if (item.kind === 'productLibrary') return null
+  if (isRemovedWindowKind(item.kind)) return null
   if (item.kind === 'marketData') return <MarketDataWindow rows={props.marketRows} setRows={props.setMarketRows} />
   if (item.kind === 'depthLadder') return (
     <NormalDepthLadderWindow
@@ -9054,7 +9187,6 @@ function renderWindowBody(
       onSaveDefault={settings => props.saveDepthLadderDefaultForWindow(item.id, settings)}
     />
   )
-  if (item.kind === 'ladder') return null
   if (item.kind === 'depthTrader') return <AcmeDepthTraderWindow symbol={symbol} onSelect={selectForWindow} operatorName={props.operatorName} />
   if (item.kind === 'depthTraderEsNq') return <AcmeDepthTraderWindow symbol="ES_NQ" onSelect={selectForWindow} operatorName={props.operatorName} />
   if (item.kind === 'depthTraderYmEs') return <AcmeDepthTraderWindow symbol="YM_ES" onSelect={selectForWindow} operatorName={props.operatorName} />
@@ -9066,30 +9198,12 @@ function renderWindowBody(
   if (item.kind === 'alerts') return <AlertsWindow alerts={props.alerts} setAlerts={props.setAlerts} />
   if (item.kind === 'algoBuilder') return <AlgoBuilderWindow provider={provider} symbol={symbol} operatorName={props.operatorName} onSelect={selectForWindow} />
   if (item.kind === 'algoManager') return <AlgoManagerWindow />
-  if (item.kind === 'theoQuoter') return null
-  if (item.kind === 'greeks') return <GreeksWindow />
-  if (item.kind === 'cryptoTerminal') return null
-  if (item.kind === 'eventTerminal') return null
-  if (item.kind === 'sportsTerminal') return null
   if (item.kind === 'charts') return <AcmeSingleChartWindow provider={provider} symbol={symbol} onSelect={selectForWindow} settings={item.chartSettings} onSettingsChange={settings => props.updateWindowChartSettings(item.id, settings)} />
-  if (item.kind === 'acmeTwoPanelChart') return <AcmePlotlyPanelWindow panels={2} />
-  if (item.kind === 'acmeThreePanelChart') return <AcmePlotlyPanelWindow panels={3} />
-  if (item.kind === 'singlePanelChart') return <TradingViewChartWindow provider={provider} symbol={symbol} onSelect={selectForWindow} />
-  if (item.kind === 'tradingViewChart') return <TradingViewChartWindow provider={provider} symbol={symbol} onSelect={selectForWindow} />
-  if (item.kind === 'tradingViewMultiChart') return <TradingViewMultiChartWindow provider={provider} symbol={symbol} onSelect={selectForWindow} />
-  if (item.kind === 'predictionChart') return <PredictionMarketChartWindow provider={provider} symbol={symbol} onSelect={selectForWindow} onClone={() => props.openPredictionChart(provider, symbol)} />
-  if (item.kind === 'ptbChart') return <PtbChartWindow provider={provider} symbol={symbol} onSelect={selectForWindow} onClone={props.cloneChart} />
-  if (item.kind === 'ptbOpportunity') return <PtbOpportunityVisual />
-  if (item.kind === 'ptbRunway') return <PtbRunwayWindow provider={provider} symbol={symbol} onSelect={selectForWindow} onClone={props.cloneRunway} />
   if (item.kind === 'liquidityMap') return <LiquidityMapWindow />
-  if (item.kind === 'knowledge') return <KnowledgeWindow />
   if (item.kind === 'relativeSpreadCharts') return <AcmeRelativeSpreadChartsWindow />
   if (item.kind === 'goose') return <AcmeGooseWindow />
   if (item.kind === 'liveSpreadSignals') return <AcmeLiveSpreadSignalsWindow />
   if (item.kind === 'relativeSpreadVisuals') return <AcmeRelativeSpreadVisualsWindow />
-  if (item.kind === 'spreadEsNq') return <AcmeSpreadGuideWindow symbol="ES_NQ" />
-  if (item.kind === 'spreadYmEs') return <AcmeSpreadGuideWindow symbol="YM_ES" />
-  if (item.kind === 'spreadRtyEs') return <AcmeSpreadGuideWindow symbol="RTY_ES" />
   if (item.kind === 'streamingNews') return <AcmeStreamingNewsWindow />
   if (item.kind === 'tradeAnalytics') return <AcmeTradeAnalyticsWindow />
   if (item.kind === 'auditTrail') return <AcmeAuditTrailWindow />
@@ -9105,8 +9219,8 @@ function renderWindowBody(
     || item.kind === 'moneyManagement'
     || item.kind === 'riskChecklist'
     || item.kind === 'sourceNotes'
-    || item.kind === 'modelResearchGovernance'
   ) return <AcmeContentWindow kind={item.kind} />
+  if (item.kind === 'modelResearchGovernance') return <AcmeModelResearchGovernanceWindow />
   if (ACME_PANEL_DETAILS[item.kind]) return <AcmeIncomingWindow kind={item.kind} />
   return <ServiceMapWindow />
 }
@@ -9169,9 +9283,7 @@ export function WorkspaceDesktop() {
       const latestTedSByDate = latestRecovered
         .filter(item => workspaceKey(item.operator, item.name) === workspaceKey(DEFAULT_OPERATOR, 'Ted S'))
         .sort((a, b) => b.updatedAt - a.updatedAt)[0]
-      const latestTedS = needsDesktopFirstLaunchSeed()
-        ? recoveredTedSDefault ?? latestTedSByDate
-        : latestTedSByDate
+      const latestTedS = latestTedSByDate ?? recoveredTedSDefault
 
       setSaved(current => {
         const base = latestTedS
@@ -9186,15 +9298,12 @@ export function WorkspaceDesktop() {
       const activeKey = workspaceKey(operatorName.trim() || DEFAULT_OPERATOR, workspaceName.trim() || '')
       const activeUpdatedAt = Number(initialWorkspace?.updatedAt || 0)
       const shouldActivateTedS =
-        needsDesktopFirstLaunchSeed()
-        || activeKey === workspaceKey(DEFAULT_OPERATOR, 'Ted')
+        activeKey === workspaceKey(DEFAULT_OPERATOR, 'Ted')
         || activeKey === workspaceKey(DEFAULT_OPERATOR, 'Cerious CME Desk')
         || latestTedS.updatedAt > activeUpdatedAt
       if (!shouldActivateTedS) return
 
-      const activated = needsDesktopFirstLaunchSeed()
-        ? collapseWorkspaceWindows({ ...latestTedS, updatedAt: Date.now() })
-        : { ...latestTedS, updatedAt: Date.now() }
+      const activated = { ...latestTedS, updatedAt: Date.now() }
       setOperatorName(activated.operator)
       setWorkspaceName(activated.name)
       setWindows(activated.windows)
@@ -9287,10 +9396,26 @@ export function WorkspaceDesktop() {
     workspacePanRef.current = workspacePan
   }, [workspacePan])
 
+  const getWorkspaceViewportRect = () => {
+    const rect = mainRef.current?.getBoundingClientRect()
+    if (!rect) return null
+    const top = rect.top + WORKSPACE_HEADER_HEIGHT
+    const bottom = rect.bottom - WORKSPACE_FOOTER_HEIGHT
+    const height = Math.max(1, bottom - top)
+    return {
+      left: rect.left,
+      right: rect.right,
+      top,
+      bottom,
+      width: rect.width,
+      height,
+    }
+  }
+
   const clampWorkspacePan = (x: number, y: number) => {
     const bounds = workspaceBoundsRef.current
     const viewport = viewportSizeRef.current
-    const rect = mainRef.current?.getBoundingClientRect()
+    const rect = getWorkspaceViewportRect()
     const viewWidth = rect?.width ?? viewport.width
     const viewHeight = rect?.height ?? viewport.height
     const maxX = Math.max(0, bounds.width - viewWidth)
@@ -9342,6 +9467,7 @@ export function WorkspaceDesktop() {
     }
 
     const rect = main.getBoundingClientRect()
+    const viewportRect = getWorkspaceViewportRect() ?? rect
     const edge = WORKSPACE_EDGE_PAN_ZONE
     const maxSpeed = 72
     const minSpeed = 6
@@ -9351,18 +9477,18 @@ export function WorkspaceDesktop() {
       const t = clamp(depth / edge, 0, 1)
       return minSpeed + (t * t * maxSpeed)
     }
-    const rightDepth = pointer.x >= rect.right
+    const rightDepth = pointer.x >= viewportRect.right
       ? edge
-      : Math.max(0, pointer.x - (rect.right - edge))
-    const leftDepth = pointer.x <= rect.left
+      : Math.max(0, pointer.x - (viewportRect.right - edge))
+    const leftDepth = pointer.x <= viewportRect.left
       ? edge
-      : Math.max(0, (rect.left + edge) - pointer.x)
-    const bottomDepth = pointer.y >= rect.bottom
+      : Math.max(0, (viewportRect.left + edge) - pointer.x)
+    const bottomDepth = pointer.y >= viewportRect.bottom
       ? edge
-      : Math.max(0, pointer.y - (rect.bottom - edge))
-    const topDepth = pointer.y <= rect.top
+      : Math.max(0, pointer.y - (viewportRect.bottom - edge))
+    const topDepth = pointer.y <= viewportRect.top
       ? edge
-      : Math.max(0, (rect.top + edge) - pointer.y)
+      : Math.max(0, (viewportRect.top + edge) - pointer.y)
 
     if (rightDepth > 0) {
       dx = speedFromDepth(rightDepth)
@@ -9393,7 +9519,7 @@ export function WorkspaceDesktop() {
 
   const handleWorkspacePointerMove = (event: ReactPointerEvent<HTMLElement>) => {
     if (event.buttons !== 0) return
-    const rect = mainRef.current?.getBoundingClientRect()
+    const rect = getWorkspaceViewportRect()
     if (!rect) {
       stopWorkspaceEdgePan()
       return
@@ -9412,7 +9538,7 @@ export function WorkspaceDesktop() {
   }
 
   const handleWindowDragPointerMove = (event: PointerEvent) => {
-    const rect = mainRef.current?.getBoundingClientRect()
+    const rect = getWorkspaceViewportRect()
     const edge = WORKSPACE_EDGE_PAN_ZONE
     if (
       rect
@@ -9479,25 +9605,6 @@ export function WorkspaceDesktop() {
     })
   }
 
-  const popOutWindow = (id: string) => {
-    const source = windows.find(item => item.id === id)
-    if (!source) return
-    const floatingWindow: WorkspaceWindow = {
-      ...source,
-      poppedOut: true,
-      floatingBounds: source.floatingBounds ?? {
-        x: Math.max(0, Math.round(source.x)),
-        y: Math.max(0, Math.round(source.y)),
-        w: Math.max(320, Math.round(source.w)),
-        h: Math.max(240, Math.round(source.h)),
-      },
-    }
-    setWindows(current => current.map(item => item.id === id ? floatingWindow : item))
-    persistWorkspaceWindowPatch(id, { poppedOut: true, floatingBounds: floatingWindow.floatingBounds })
-    const opened = openWorkspaceFloatingWindow(floatingWindow)
-    setSaveStatus(opened ? 'Window floated' : 'Popup blocked')
-  }
-
   const addWindow = (
     kind: WorkspaceWindowKind,
     template?: WorkspaceTemplate,
@@ -9542,7 +9649,6 @@ export function WorkspaceDesktop() {
     persistWorkspaceSnapshot(next, merged, true, 'manual save default')
     setOperatorName(next.operator)
     setWorkspaceName(next.name)
-    if (isDesktopClientLaunch()) window.localStorage.setItem(DESKTOP_FIRST_LAUNCH_KEY, '1')
     setSaveStatus('Saved local')
     const serverSaved = await saveWorkspaceServerSnapshot(next, 'manual save default')
     setSaveStatus(serverSaved ? 'Saved local + server' : 'Saved local; server pending')
@@ -9608,12 +9714,8 @@ export function WorkspaceDesktop() {
     setSaveStatus('DOM default saved')
   }
 
-  const cloneChart = () => addWindow('ptbChart')
-  const cloneRunway = () => addWindow('ptbRunway')
-  const openPredictionChart = (provider: ProviderKey, symbol: string) => {
-    selectProduct(provider, symbol)
-    addWindow('predictionChart', undefined, provider, symbol)
-  }
+  const cloneChart = () => undefined
+  const cloneRunway = () => undefined
 
   return (
     <div className="h-screen overflow-hidden bg-[#05070b] text-slate-200">
@@ -9673,13 +9775,13 @@ export function WorkspaceDesktop() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <a
-            href={DESKTOP_CLIENT_DOWNLOAD_URL}
-            className="flex items-center gap-1 rounded border border-blue-400/35 bg-blue-500/10 px-2 py-1 font-mono text-[11px] font-bold uppercase text-blue-100 hover:border-blue-300 hover:bg-blue-500/20"
-            title="Download Cerious Systems Win64 thin client"
+          <button
+            className="flex cursor-not-allowed items-center gap-1 rounded border border-surface-border bg-surface-card px-2 py-1 font-mono text-[11px] font-bold uppercase text-muted"
+            disabled
+            title="Native desktop client installer will be enabled after the cloud workflow is deterministic."
           >
-            <Download size={13} /> Win64 Client
-          </a>
+            <Download size={13} /> Desktop Client
+          </button>
         </div>
       </header>
 
@@ -9704,9 +9806,7 @@ export function WorkspaceDesktop() {
           }}
         >
           <div className="absolute inset-0 opacity-[0.12]" style={{ backgroundImage: 'linear-gradient(#1f2937 1px, transparent 1px), linear-gradient(90deg, #1f2937 1px, transparent 1px)', backgroundSize: '32px 32px' }} />
-          {windows.map(item => {
-            const floatedInDesktop = isDesktopClientLaunch() && item.poppedOut
-            return (
+          {windows.map(item => (
               <WorkspaceWindowFrame
                 key={item.id}
                 item={item}
@@ -9715,20 +9815,13 @@ export function WorkspaceDesktop() {
                 onMove={moveWindow}
                 onResize={resizeWindow}
                 onToggleCollapse={() => toggleCollapse(item.id)}
-                onPopout={() => popOutWindow(item.id)}
                 onClone={() => cloneWindow(item.id)}
                 onClose={() => closeWindow(item.id)}
                 getWorkspacePan={() => workspacePanRef.current}
                 onDragPointerMove={handleWindowDragPointerMove}
                 onDragPointerEnd={stopWorkspaceEdgePan}
               >
-                {floatedInDesktop ? (
-                  <div className="flex h-full flex-col items-center justify-center gap-3 bg-[#05070b] p-4 text-center">
-                    <ExternalLink size={28} className="text-accent" />
-                    <div className="font-mono text-xs uppercase tracking-wide text-slate-200">Floating window</div>
-                    <button className="btn-accent px-3 py-2 text-xs" onClick={() => popOutWindow(item.id)}>Focus / Reopen</button>
-                  </div>
-                ) : renderWindowBody(item, {
+                {renderWindowBody(item, {
                   marketRows,
                   setMarketRows,
                   selectedProvider,
@@ -9740,14 +9833,12 @@ export function WorkspaceDesktop() {
                   setAlerts,
                   cloneChart,
                   cloneRunway,
-                  openPredictionChart,
                   updateWindowChartSettings,
                   updateWindowDepthLadderSettings,
                   saveDepthLadderDefaultForWindow,
                 })}
               </WorkspaceWindowFrame>
-            )
-          })}
+          ))}
         </div>
       </main>
 
@@ -9760,243 +9851,6 @@ export function WorkspaceDesktop() {
         </div>
         <div />
       </footer>
-    </div>
-  )
-}
-
-export function WorkspacePopoutWindow({ windowId }: { windowId: string }) {
-  useMarketBootstrap()
-  const initialWorkspace = useMemo(loadActiveWorkspace, [])
-  const initialWindow = initialWorkspace?.windows.find(item => item.id === windowId)
-  const [workspace, setWorkspace] = useState<SavedWorkspace | null>(initialWorkspace)
-  const [item, setItem] = useState<WorkspaceWindow | null>(initialWindow ?? null)
-  const [marketRows, setMarketRows] = useState<MarketRowConfig[]>(() => initialWorkspace?.rows ?? [])
-  const [alerts, setAlerts] = useState<AlertRule[]>(() => initialWorkspace?.alerts ?? [])
-  const [selectedProvider, setSelectedProvider] = useState<ProviderKey>(normalizeProviderKey(initialWorkspace?.selectedProvider))
-  const [selectedSymbol, setSelectedSymbol] = useState(initialWorkspace?.selectedSymbol ?? initialWindow?.symbol ?? 'ES')
-  const setProvider = useStore(s => s.setMarketProvider)
-  const title = item?.kind === 'depthLadder' && item.symbol ? `${WINDOW_LABELS.depthLadder} - ${item.symbol}` : item?.title ?? 'Floating Window'
-
-  const patchWindow = (patch: Partial<WorkspaceWindow>) => {
-    setItem(current => current ? { ...current, ...patch } : current)
-    const next = persistWorkspaceWindowPatch(windowId, patch)
-    if (next) setWorkspace(next)
-  }
-
-  useEffect(() => {
-    const syncBounds = () => patchWindow({ poppedOut: true, floatingBounds: currentFloatingBounds() })
-    syncBounds()
-    const id = window.setInterval(syncBounds, 2500)
-    window.addEventListener('beforeunload', syncBounds)
-    return () => {
-      window.clearInterval(id)
-      window.removeEventListener('beforeunload', syncBounds)
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [windowId])
-
-  if (!item) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-[#05070b] p-6 text-slate-200">
-        <div className="border border-surface-border bg-surface-card p-5 font-mono text-xs">
-          Floating window not found in the active workspace.
-        </div>
-      </div>
-    )
-  }
-
-  const selectProduct = (provider: ProviderKey, symbol: string) => {
-    const nextProvider = normalizeProviderKey(provider)
-    setProvider(nextProvider)
-    setSelectedProvider(nextProvider)
-    setSelectedSymbol(symbol)
-  }
-
-  const selectWindowProduct = (_id: string, provider: ProviderKey, symbol: string) => {
-    const nextProvider = normalizeProviderKey(provider)
-    patchWindow({ provider: nextProvider, symbol })
-  }
-
-  const updateWindowChartSettings = (_id: string, chartSettings: AcmeChartSettings) => patchWindow({ chartSettings })
-  const updateWindowDepthLadderSettings = (_id: string, depthLadderSettings: DepthLadderSettings) => patchWindow({ depthLadderSettings: normalizeDepthLadderSettings(depthLadderSettings) })
-  const saveDepthLadderDefaultForWindow = (_id: string, depthLadderSettings: DepthLadderSettings) => {
-    const normalized = saveDepthLadderDefaultSettings(depthLadderSettings)
-    patchWindow({ depthLadderSettings: normalized })
-  }
-  const dockWindow = () => {
-    patchWindow({ poppedOut: false, floatingBounds: currentFloatingBounds() })
-    window.close()
-  }
-
-  return (
-    <div className="flex h-screen flex-col overflow-hidden bg-[#05070b] text-slate-200">
-      <header className="flex h-10 shrink-0 items-center justify-between border-b border-blue-500/60 bg-[#080c14] px-2">
-        <div className="flex min-w-0 items-center gap-2">
-          <img src={ceriousLogo} alt="Cerious Systems" className="h-6 w-6 rounded border border-surface-border object-cover" />
-          <span className="truncate font-mono text-[11px] font-bold uppercase tracking-wide text-white">{title}</span>
-          <span className="font-mono text-[10px] text-muted">{item.provider?.toUpperCase() ?? selectedProvider.toUpperCase()} {item.symbol ?? selectedSymbol}</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <button className="btn-neutral px-2 py-1 text-[10px]" onClick={() => patchWindow({ poppedOut: true, floatingBounds: currentFloatingBounds() })}>Save Frame</button>
-          <button className="btn-neutral px-2 py-1 text-[10px]" onClick={dockWindow}>Dock</button>
-          <button className="btn-neutral px-2 py-1 text-[10px]" onClick={() => window.close()}>Close</button>
-        </div>
-      </header>
-      <div className="min-h-0 flex-1 overflow-hidden">
-        {renderWindowBody(item, {
-          marketRows,
-          setMarketRows,
-          selectedProvider,
-          selectedSymbol,
-          operatorName: workspace?.operator ?? DEFAULT_OPERATOR,
-          selectProduct,
-          selectWindowProduct,
-          alerts,
-          setAlerts,
-          cloneChart: () => undefined,
-          cloneRunway: () => undefined,
-          openPredictionChart: () => undefined,
-          updateWindowChartSettings,
-          updateWindowDepthLadderSettings,
-          saveDepthLadderDefaultForWindow,
-        })}
-      </div>
-    </div>
-  )
-}
-
-export function DesktopToolbar() {
-  useMarketBootstrap()
-  const initialWorkspace = useMemo(loadActiveWorkspace, [])
-  const [workspace, setWorkspace] = useState<SavedWorkspace | null>(initialWorkspace)
-  const [workspaces, setWorkspaces] = useState<SavedWorkspace[]>(() => loadSavedWorkspaces())
-  const [status, setStatus] = useState('')
-
-  useEffect(() => {
-    let cancelled = false
-    const loadServerDefault = async () => {
-      const serverWorkspaces = await fetchServerSavedWorkspaces()
-      if (cancelled || !serverWorkspaces.length) return
-      const merged = serverWorkspaces.reduce((list, item) => upsertSavedWorkspace(list, item), loadSavedWorkspaces())
-      setWorkspaces(merged)
-      const active = loadActiveWorkspace()
-      const latest = serverWorkspaces
-        .filter(item => workspaceKey(item.operator, item.name) === workspaceKey(DEFAULT_OPERATOR, 'Ted S'))
-        .sort((a, b) => b.updatedAt - a.updatedAt)[0] ?? serverWorkspaces[0]
-      if (!active || latest.updatedAt > active.updatedAt) {
-        persistWorkspaceSnapshot(latest, merged, true, 'desktop toolbar server default')
-        setWorkspace(latest)
-      } else {
-        setWorkspace(active)
-      }
-    }
-    loadServerDefault()
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  const activeWorkspace = workspace ?? loadActiveWorkspace()
-  const activeKey = activeWorkspace ? workspaceKey(activeWorkspace.operator, activeWorkspace.name) : ''
-
-  const loadWorkspace = (key: string) => {
-    const next = workspaces.find(item => workspaceKey(item.operator, item.name) === key)
-    if (!next) return
-    persistWorkspaceSnapshot(next, workspaces, true, 'desktop toolbar load')
-    setWorkspace(next)
-    setStatus(`Loaded ${next.name}`)
-  }
-
-  const openOne = (windowItem: WorkspaceWindow) => {
-    const floatingWindow: WorkspaceWindow = {
-      ...windowItem,
-      poppedOut: true,
-      floatingBounds: windowItem.floatingBounds ?? {
-        x: Math.max(0, Math.round(windowItem.x)),
-        y: Math.max(0, Math.round(windowItem.y)),
-        w: Math.max(360, Math.round(windowItem.w)),
-        h: Math.max(260, Math.round(windowItem.h)),
-      },
-    }
-    persistWorkspaceWindowPatch(windowItem.id, { poppedOut: true, floatingBounds: floatingWindow.floatingBounds })
-    openWorkspaceFloatingWindow(floatingWindow)
-  }
-
-  const openFloatingWorkspace = () => {
-    if (!activeWorkspace) return
-    const floatingWindows = activeWorkspace.windows.map((item, index) => {
-      const withBounds = item.floatingBounds
-        ? item
-        : { ...item, floatingBounds: { x: 80 + index * 24, y: 70 + index * 22, w: Math.max(360, item.w), h: Math.max(260, item.h) } }
-      return {
-        ...withBounds,
-        poppedOut: true,
-        collapsed: false,
-      }
-    })
-    let opened = 0
-    floatingWindows.forEach(item => {
-      if (openWorkspaceFloatingWindow(item)) opened += 1
-    })
-    const nextWorkspace: SavedWorkspace = {
-      ...activeWorkspace,
-      windows: activeWorkspace.windows.map(item => floatingWindows.find(floating => floating.id === item.id) ?? item),
-      updatedAt: Date.now(),
-    }
-    const merged = upsertSavedWorkspace(workspaces, nextWorkspace)
-    persistWorkspaceSnapshot(nextWorkspace, merged, true, 'desktop toolbar open floating workspace')
-    setWorkspaces(merged)
-    setWorkspace(nextWorkspace)
-    setStatus(opened === floatingWindows.length ? `Opened ${opened} windows` : `Opened ${opened}/${floatingWindows.length}; allow popups`)
-  }
-
-  const saveWorkspace = async () => {
-    const latest = loadActiveWorkspace()
-    if (!latest) return
-    setWorkspace(latest)
-    const ok = await saveWorkspaceServerSnapshot(latest, 'desktop toolbar save')
-    setStatus(ok ? 'Saved local + server' : 'Saved local; server pending')
-  }
-
-  const openCanvas = () => {
-    window.open(`${window.location.origin}${window.location.pathname}?cerious_client=desktop`, 'cerious-canvas', 'popup=yes,width=1280,height=900,left=80,top=60,resizable=yes')
-  }
-
-  return (
-    <div className="flex h-screen flex-col overflow-hidden bg-[#05070b] text-slate-100">
-      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-blue-500/60 bg-[#080c14] px-3">
-        <img src={ceriousLogo} alt="Cerious Systems" className="h-8 w-8 rounded border border-surface-border object-cover" />
-        <div className="mr-2 min-w-0">
-          <div className="font-mono text-[11px] font-black uppercase tracking-wide text-white">Cerious Desktop</div>
-          <div className="font-mono text-[9px] text-muted">Floating workspace launcher</div>
-        </div>
-        <select className="input-field min-w-[180px] py-1 text-[11px]" value={activeKey} onChange={event => loadWorkspace(event.target.value)}>
-          <option value="">Load workspace...</option>
-          {workspaces.map(item => <option key={workspaceKey(item.operator, item.name)} value={workspaceKey(item.operator, item.name)}>{item.name}</option>)}
-        </select>
-        <button className="btn-accent px-3 py-2 text-[11px]" onClick={openFloatingWorkspace}>Open Floating Workspace</button>
-        <button className="btn-neutral px-3 py-2 text-[11px]" onClick={saveWorkspace}>Save</button>
-        <button className="btn-neutral px-3 py-2 text-[11px]" onClick={openCanvas}>Open Canvas</button>
-        <span className="ml-auto font-mono text-[10px] text-accent">{status}</span>
-      </header>
-      <main className="min-h-0 flex-1 overflow-auto p-3">
-        {!activeWorkspace ? (
-          <div className="border border-surface-border bg-surface-card p-4 font-mono text-xs text-muted">No workspace loaded.</div>
-        ) : (
-          <div className="grid gap-2">
-            {activeWorkspace.windows.map(item => (
-              <div key={item.id} className="grid grid-cols-[1fr_auto_auto] items-center gap-2 border border-surface-border bg-[#0b111c] px-3 py-2">
-                <div className="min-w-0">
-                  <div className="truncate font-mono text-[11px] font-bold uppercase text-white">{item.kind === 'depthLadder' && item.symbol ? `${WINDOW_LABELS.depthLadder} - ${item.symbol}` : item.title}</div>
-                  <div className="font-mono text-[10px] text-muted">{item.provider?.toUpperCase() ?? 'CME'} {item.symbol ?? ''} {item.poppedOut ? 'FLOATING' : item.collapsed ? 'MINIMIZED' : 'CANVAS'}</div>
-                </div>
-                <button className="btn-accent px-3 py-1 text-[10px]" onClick={() => openOne(item)}>Open</button>
-                <button className="btn-neutral px-3 py-1 text-[10px]" onClick={() => persistWorkspaceWindowPatch(item.id, { poppedOut: false })}>Dock</button>
-              </div>
-            ))}
-          </div>
-        )}
-      </main>
     </div>
   )
 }

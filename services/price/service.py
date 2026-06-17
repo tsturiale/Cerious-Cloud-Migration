@@ -6,6 +6,7 @@ import contextlib
 from services.common.bus import market_bus
 from services.common.config import settings
 from services.price.cme_adapter import CmeAdapter
+from services.price.native_databento_adapter import NativeDatabentoAdapter
 from services.price.t4_adapter import T4Adapter
 
 
@@ -15,9 +16,11 @@ class PriceService:
         self._provider = settings.price_provider
         self._adapter = self._build_adapter()
 
-    def _build_adapter(self) -> CmeAdapter | T4Adapter:
+    def _build_adapter(self) -> CmeAdapter | T4Adapter | NativeDatabentoAdapter:
         if self._provider == "t4":
             return T4Adapter()
+        if self._provider in {"databento_cpp", "cpp_databento", "native_databento"}:
+            return NativeDatabentoAdapter()
         return CmeAdapter()
 
     def status(self) -> dict:

@@ -24,4 +24,4 @@ Desktop-client first launch can minimize windows one time as an order-safety mea
 
 ## Dependency Rule
 
-Runtime code should not depend on old Arbitek, QuantSwarmTerminal, dated Codex worktrees, or desktop crypto-data folders. If a local file dependency is needed, put it under `data` or `.tools` in `Cerious local`, or use an explicit environment variable documented in `.env`.
+Runtime code should not depend on old external worktrees, dated Codex worktrees, or desktop data folders. If a local file dependency is needed, put it under `data` or `.tools` in `Cerious local`, or use an explicit environment variable documented in `.env`.

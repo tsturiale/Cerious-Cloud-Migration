@@ -1,6 +1,6 @@
 # Cerious Systems
 
-Clean rebuild of the Acme/Arbitek trading terminal architecture.
+Clean rebuild of the Cerious trading terminal architecture.
 
 This root preserves the existing terminal workflow and trading IP while starting a new service layout:
 
@@ -8,16 +8,14 @@ This root preserves the existing terminal workflow and trading IP while starting
 - `services/gateway` - FastAPI terminal gateway on port `8000`.
 - `services/price` - CME-only market data ingress boundary.
 - `services/order`, `services/fill`, `services/sim_exchange`, `services/alert`, `services/algo_engine` - service seams for the rebuild.
-- `shared`, `algos`, `legacy-domain` - copied trading logic, model definitions, and domain code from the stable Arbitek/Acme build.
+- `data/algo-definitions`, `data/product-definitions`, `data/workspace-store` - active Cerious definitions and workspace state.
 - `assets/workspaces` - copied Acme workspace definitions.
 
 The current local build exposes the same browser-facing contracts as the legacy terminal:
 
 - UI: `http://127.0.0.1:5173`
 - Gateway: `http://127.0.0.1:8000`
-- WebSocket: `/ws/{asset}?provider=polymarket`
-
-The provider key remains `polymarket` internally only to preserve frontend compatibility. In Cerious, that surface is labeled and served as CME.
+- WebSocket: `/ws/{asset}?provider=cme`
 
 ## Local Run
 

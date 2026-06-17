@@ -2,8 +2,9 @@ import { useEffect, useRef } from 'react'
 import { useStore } from '../store'
 import type { Asset, ExecutionPosition, ExecutionRisk, WsMsg } from '../types'
 
-const WS_BASE = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`
-const WS_FALLBACK_BASE = `${location.protocol === 'https:' ? 'wss' : 'ws'}://127.0.0.1:8000/ws`
+const DEFAULT_WS_BASE = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`
+const CONFIGURED_WS_BASE = (import.meta.env.VITE_CERIOUS_WS_BASE as string | undefined)?.trim()
+const WS_BASE = CONFIGURED_WS_BASE || DEFAULT_WS_BASE
 
 export function useWebSocket(asset: Asset) {
   const wsRef = useRef<WebSocket | null>(null)
@@ -13,12 +14,12 @@ export function useWebSocket(asset: Asset) {
           pushSignal, setPositions, setMetrics, setCopyStatus,
           setMarkets, loadSnapshot, setConnected, setSettlements,
           setPolyBook, pushPolyTick, pushPolyFill,
-          setExecutionPositions, setExecutionRisk } = useStore.getState()
+          setExecutionPositions, setExecutionRisk, setSimTradingState } = useStore.getState()
 
   useEffect(() => {
     let alive = true
     let endpointIndex = 0
-    const endpoints = [WS_BASE, WS_FALLBACK_BASE]
+    const endpoints = [WS_BASE]
 
     function connect() {
       if (!alive) return
@@ -63,6 +64,9 @@ export function useWebSocket(asset: Asset) {
               break
             case 'fill':
               pushPolyFill(m.market_key, m.data)
+              break
+            case 'order_snapshot':
+              setSimTradingState(m.data)
               break
             case 'execution_event':
               if (Array.isArray(m.data?.positions)) {

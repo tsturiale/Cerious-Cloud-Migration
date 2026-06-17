@@ -14,7 +14,7 @@ export default defineConfig({
     ['json', { outputFile: 'playwright-results.json' }],
   ],
   use: {
-    baseURL: 'http://127.0.0.1:5173',
+    baseURL: process.env.CERIOUS_E2E_BASE_URL ?? 'http://127.0.0.1:5173',
     headless: true,           // headless = faster, no GPU overhead
     viewport: { width: 1600, height: 900 },
     screenshot: 'only-on-failure',

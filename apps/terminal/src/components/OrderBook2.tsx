@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+﻿import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '../store'
 import type { PolyBook, PolyBookLevel, PolyTradeTick } from '../types'
 
-/* MANUAL DOM HARDENING (best practices applied — same as EventTerminal + SystemPage):
+/* Manual DOM hardening:
    - All orderIntent creation and DOM clicks that lead to trades MUST validate Settings.manualMaxOrders / exposure / daily limits
    - Final submission routes exclusively through POST /api/execution/entry (RiskGate + ExecutionAgent.place_entry)
    - dry_run=True is default; any live path requires explicit confirmation + env flag

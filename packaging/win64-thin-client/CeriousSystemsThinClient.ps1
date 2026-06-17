@@ -9,7 +9,6 @@ function Resolve-CeriousRoot {
   $candidates = @(
     $env:CERIOUS_SYSTEMS_ROOT,
     (Join-Path $packageParent "Cerious local"),
-    "C:\Users\tstur\Documents\Codex\Cerious Systems\Cerious local",
     (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\..") -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Path -First 1)
   ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
 
@@ -47,8 +46,7 @@ if ($InstallShortcut) {
 Start-Process -FilePath "powershell.exe" -WorkingDirectory $root -ArgumentList @(
   "-NoProfile",
   "-ExecutionPolicy", "Bypass",
-  "-File", "`"$launcher`"",
-  "-DesktopClient"
+  "-File", "`"$launcher`""
 ) -WindowStyle Hidden
 
-Write-Host "Cerious Systems desktop client launch requested."
+Write-Host "Cerious Systems cloud/canvas launch requested."

@@ -2,7 +2,7 @@
 
 export type Direction = 'UP' | 'DOWN'
 export type Regime = 'low' | 'medium' | 'high' | string
-export type ModelName = 'kc_reversion' | 'flow_toxicity' | 'low_vol_accum' | 'high_vol_momentum' | 'tri_engine' | 'v3_titanium' | 'rubber_band' | 'theta_sniper' | 'v18' | 'v20_analyt' | 'v20_mc' | 'v20_hybrid' | 'noesis_v3'
+export type ModelName = 'kc_reversion' | 'flow_toxicity' | 'low_vol_accum' | 'high_vol_momentum' | 'tri_engine' | 'v3_titanium' | 'rubber_band'
 export type OrderStatus = 'pending' | 'open' | 'filled' | 'cancelled' | 'rejected'
 export type Asset = 'ES' | 'NQ' | 'YM' | 'RTY' | 'CL' | 'GC' | 'ZM' | 'ZS' | 'ES_NQ' | 'YM_ES' | 'RTY_ES' | 'BTC' | 'ETH' | 'SOL' | 'XRP' | 'HYPE' | 'BNB' | 'DOGE' | 'EVENT'
 export type TimeFrame = '20sec' | '5min' | '15min' | '1h' | '4h' | 'event'
@@ -433,6 +433,7 @@ export type WsMsg =
   | { type: 'poly_book';   market_key: string; data: PolyBook }
   | { type: 'poly_tick';   market_key: string; data: PolyTradeTick }
   | { type: 'fill';        market_key: string; data: PolyTradeTick }
+  | { type: 'order_snapshot'; data: { simOrders?: SimOrder[]; simPositions?: SimPosition[]; fills?: Record<string, PolyTradeTick[]>; simMessages?: string[] } }
   | { type: 'execution_event'; data: { positions?: ExecutionPosition[]; risk?: ExecutionRisk } }
 
 export const MODEL_LABELS: Record<ModelName, string> = {
@@ -443,12 +444,6 @@ export const MODEL_LABELS: Record<ModelName, string> = {
   tri_engine: 'Tri-Engine',
   v3_titanium: 'V3 Titanium',
   rubber_band: 'Rubber Band',
-  theta_sniper: 'Theta Sniper',
-  v18: 'V18 Gaussian',
-  v20_analyt: 'V20 Merton Analyt',
-  v20_mc: 'V20 Merton MC',
-  v20_hybrid: 'V20 Hybrid Binomial',
-  noesis_v3: 'Production Noesis v3',
 }
 
 export const MODEL_COLORS: Record<ModelName, string> = {
@@ -459,18 +454,12 @@ export const MODEL_COLORS: Record<ModelName, string> = {
   tri_engine: '#ef4444',
   v3_titanium: '#8b5cf6',
   rubber_band: '#00d4a4',
-  theta_sniper: '#10b981',
-  v18: '#f43f5e',
-  v20_analyt: '#06b6d4',
-  v20_mc: '#3b82f6',
-  v20_hybrid: '#ec4899',
-  noesis_v3: '#00d4a4',
 }
 
 export const CANONICAL_MODEL_NAMES = [
-  'noesis_v3',
-  'v18',
-  'v20_hybrid',
+  'rubber_band',
+  'kc_reversion',
+  'flow_toxicity',
 ] as const satisfies readonly ModelName[]
 
 /** Maps legacy / alternate model name strings to their canonical ModelName. */
@@ -478,20 +467,10 @@ const MODEL_ALIASES: Record<string, ModelName> = {
   titanium:        'v3_titanium',
   v3titanium:      'v3_titanium',
   'v3-titanium':   'v3_titanium',
-  theta:           'theta_sniper',
-  thetasniper:     'theta_sniper',
-  'theta-sniper':  'theta_sniper',
   tri_engine_v2:   'tri_engine',
   v5_titanium:     'v3_titanium',
   rubberband:      'rubber_band',
   'rubber-band':   'rubber_band',
-  v18:             'v18',
-  v20_analyt:      'v20_analyt',
-  v20_mc:          'v20_mc',
-  v20_hybrid:      'v20_hybrid',
-  noesis_v3:       'noesis_v3',
-  noesis:          'noesis_v3',
-  noesisv3:        'noesis_v3',
 }
 
 export function normalizeModel(raw: string): ModelName {

@@ -11,8 +11,12 @@ $BackendErr = Join-Path $Root "cerious-backend.err.log"
 $FrontendOut = Join-Path $Root "cerious-frontend.out.log"
 $FrontendErr = Join-Path $Root "cerious-frontend.err.log"
 $LauncherLog = Join-Path $Root "cerious-launcher.log"
-$BackendUrl = "http://127.0.0.1:8000"
-$FrontendDevUrl = "http://127.0.0.1:5173"
+$BackendHost = if ($env:CERIOUS_BACKEND_HOST) { $env:CERIOUS_BACKEND_HOST } else { "127.0.0.1" }
+$BackendPort = if ($env:CERIOUS_BACKEND_PORT) { [int]$env:CERIOUS_BACKEND_PORT } else { 8000 }
+$FrontendHost = if ($env:CERIOUS_FRONTEND_HOST) { $env:CERIOUS_FRONTEND_HOST } else { "127.0.0.1" }
+$FrontendPort = if ($env:CERIOUS_FRONTEND_PORT) { [int]$env:CERIOUS_FRONTEND_PORT } else { 5173 }
+$BackendUrl = "http://$($BackendHost):$($BackendPort)"
+$FrontendDevUrl = "http://$($FrontendHost):$($FrontendPort)"
 $RequiredContractVersion = 10
 
 function Write-LauncherLog {
@@ -37,10 +41,13 @@ function Import-DotEnv {
 }
 
 function Test-LocalPort {
-  param([int]$Port)
+  param(
+    [string]$HostName,
+    [int]$Port
+  )
   $client = New-Object System.Net.Sockets.TcpClient
   try {
-    $attempt = $client.BeginConnect("127.0.0.1", $Port, $null, $null)
+    $attempt = $client.BeginConnect($HostName, $Port, $null, $null)
     if (!$attempt.AsyncWaitHandle.WaitOne(250, $false)) { return $false }
     $client.EndConnect($attempt)
     return $true
@@ -75,7 +82,7 @@ function Test-BackendContract {
 }
 
 function Test-BackendOwnedByThisRoot {
-  $proc = Get-PortProcess -Port 8000
+  $proc = Get-PortProcess -Port $BackendPort
   if (!$proc) { return $false }
   $cmd = [string]$proc.CommandLine
   return ($cmd -and $cmd.Contains($Root))
@@ -107,7 +114,7 @@ function Wait-HttpOk {
 
 function Get-PortProcess {
   param([int]$Port)
-  $conn = Get-NetTCPConnection -LocalAddress 127.0.0.1 -LocalPort $Port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
+  $conn = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
   if (!$conn) { return $null }
   return Get-CimInstance Win32_Process -Filter "ProcessId=$($conn.OwningProcess)" -ErrorAction SilentlyContinue
 }
@@ -149,25 +156,25 @@ function Start-Backend {
 
   if ((Test-BackendHealth) -and (Test-BackendContract)) {
     if (Test-BackendOwnedByThisRoot) {
-      Write-LauncherLog "Backend health and contract OK on 127.0.0.1:8000"
+      Write-LauncherLog "Backend health and contract OK on $BackendUrl"
       return
     }
     Write-LauncherLog "Cerious backend is healthy but running from another root; restarting from $Root"
-    if (!(Stop-StaleCeriousPortProcess -Port 8000)) {
-      throw "Port 8000 is a Cerious backend from another root but could not be stopped."
+    if (!(Stop-StaleCeriousPortProcess -Port $BackendPort)) {
+      throw "Port $BackendPort is a Cerious backend from another root but could not be stopped."
     }
   }
 
-  if (Test-LocalPort -Port 8000) {
-    if (!(Stop-StaleCeriousPortProcess -Port 8000)) {
-      throw "Port 8000 is listening but is not the Cerious backend. Cannot launch deterministically."
+  if (Test-LocalPort -HostName $BackendHost -Port $BackendPort) {
+    if (!(Stop-StaleCeriousPortProcess -Port $BackendPort)) {
+      throw "Port $BackendPort is listening but is not the Cerious backend. Cannot launch deterministically."
     }
   }
 
-  Write-LauncherLog "Starting backend on 127.0.0.1:8000"
+  Write-LauncherLog "Starting backend on $BackendHost`:$BackendPort"
   Start-Process `
     -FilePath $python `
-    -ArgumentList @("-m", "uvicorn", "services.gateway.main:app", "--host", "127.0.0.1", "--port", "8000") `
+    -ArgumentList @("-m", "uvicorn", "services.gateway.main:app", "--host", $BackendHost, "--port", "$BackendPort") `
     -WorkingDirectory $Root `
     -WindowStyle Hidden `
     -RedirectStandardOutput $BackendOut `
@@ -176,7 +183,7 @@ function Start-Backend {
   if (!(Wait-BackendHealth -Seconds 75)) {
     throw "Backend did not pass /api/health within startup window."
   }
-  Write-LauncherLog "Backend health and contract OK on 127.0.0.1:8000"
+  Write-LauncherLog "Backend health and contract OK on $BackendUrl"
 }
 
 function Start-FrontendDevIfRequested {
@@ -184,17 +191,17 @@ function Start-FrontendDevIfRequested {
   $npm = Find-Npm
   $nodeDir = Split-Path -Parent $npm
   $env:PATH = "$nodeDir;$env:PATH"
-  if (!(Test-LocalPort -Port 5173)) {
-    Write-LauncherLog "Starting frontend dev server on 127.0.0.1:5173"
+  if (!(Test-LocalPort -HostName $FrontendHost -Port $FrontendPort)) {
+    Write-LauncherLog "Starting frontend dev server on $FrontendHost`:$FrontendPort"
     Start-Process `
       -FilePath $npm `
-      -ArgumentList @("run", "dev", "--", "--host", "127.0.0.1") `
+      -ArgumentList @("run", "dev", "--", "--host", $FrontendHost, "--port", "$FrontendPort") `
       -WorkingDirectory $TerminalDir `
       -WindowStyle Hidden `
       -RedirectStandardOutput $FrontendOut `
       -RedirectStandardError $FrontendErr
   } else {
-    Write-LauncherLog "Frontend dev server already listening on 127.0.0.1:5173"
+    Write-LauncherLog "Frontend dev server already listening on $FrontendDevUrl"
   }
   if (!(Wait-HttpOk -Uri $FrontendDevUrl -Seconds 45)) {
     throw "Frontend dev server did not serve HTTP within startup window."
@@ -218,14 +225,10 @@ function Invoke-SystemWarmup {
 function Open-Terminal {
   param([string]$BaseUrl)
   $launchId = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
-  $desktopFlag = ""
-  if ($DesktopClient) { $desktopFlag = "&cerious_client=desktop&desktop_toolbar=1" }
-  $url = "$BaseUrl/?cerious_launch=$launchId$desktopFlag"
-  $chrome = "C:\Program Files\Google\Chrome\Application\chrome.exe"
-  if (Test-Path -LiteralPath $chrome) {
-    Start-Process -FilePath $chrome -ArgumentList @("--new-window", "--app=$url")
-    return
+  if ($DesktopClient) {
+    Write-LauncherLog "DesktopClient flag received; native desktop workflow is not launched by the web/canvas starter."
   }
+  $url = "$BaseUrl/?cerious_launch=$launchId&cerious_view=canvas"
   Start-Process $url
 }
 

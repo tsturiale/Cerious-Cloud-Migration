@@ -4,7 +4,7 @@
  * X-axis: fixed window from period open (left) → expiry_ts (right).
  * Y-axis: dynamic, centered on live price.
  * Shows the full market session at a glance — where price is relative
- * to the PTB strike, how much time remains, and current momentum.
+ * to the event reference, how much time remains, and current momentum.
  */
 
 import { useRef, useEffect, useCallback, useMemo, useState } from 'react'
@@ -69,7 +69,7 @@ export function PolyPriceChart() {
   const periodStart = expiryMs > 0 ? expiryMs - tfDurMs : 0
 
   // ── Settlement / strike price ──────────────────────────────────────────────
-  // Priority 1: backend-provided PTB (authoritative strike for the market period).
+  // Priority 1: backend-provided event reference.
   // Priority 2: open of bars inside the active market period (fallback estimate).
   // Priority 3: backend start_price, then settlement resolution_price.
   const settlementPrice = useMemo(() => {
@@ -311,7 +311,7 @@ export function PolyPriceChart() {
       ctx.beginPath(); ctx.moveTo(nowX, PT); ctx.lineTo(nowX, PT + pH); ctx.stroke()
     }
 
-    // ── Settlement / PTB line — glowing ─────────────────────────────────────
+    // Settlement / event-reference line.
     if (settlementPrice != null) {
       const sp = settlementPrice
       const sy = yOf(sp)
@@ -338,14 +338,14 @@ export function PolyPriceChart() {
       ctx.shadowColor = 'transparent'
       ctx.globalAlpha = 1
 
-      // Label: "PTB $xxx,xxx" tight against the glow line
+      // Reference label tight against the glow line.
       ctx.shadowColor = SETTLE_COL
       ctx.shadowBlur  = 8
       ctx.fillStyle   = SETTLE_CORE
       ctx.font        = `bold 9px ${FONT}`
       ctx.textAlign   = 'left'
-      const ptbLabel  = `PTB $${sp.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 })}`
-      ctx.fillText(ptbLabel, PL + 4, sy - 4)
+      const referenceLabel  = `REF $${sp.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 })}`
+      ctx.fillText(referenceLabel, PL + 4, sy - 4)
       ctx.shadowBlur  = 0
       ctx.shadowColor = 'transparent'
     }
@@ -422,11 +422,11 @@ export function PolyPriceChart() {
   const lastY  = bufRef.current.length > 0 ? bufRef.current[bufRef.current.length - 1].y : 0
   const isLive = (Date.now() - lastSampleTsRef.current) < 3000 && lastSampleTsRef.current > 0
 
-  const ptb      = settlementPrice
-  const delta    = (ptb && lastY) ? lastY - ptb : 0
-  const deltaPct = (ptb && lastY) ? (delta / ptb) * 100 : 0
-  const abovePtb = delta >= 0
-  const ptbCol   = abovePtb ? '#00d4a4' : '#ff4757'
+  const referencePrice = settlementPrice
+  const delta    = (referencePrice && lastY) ? lastY - referencePrice : 0
+  const deltaPct = (referencePrice && lastY) ? (delta / referencePrice) * 100 : 0
+  const aboveReference = delta >= 0
+  const referenceColor = aboveReference ? '#00d4a4' : '#ff4757'
 
   // Time remaining for header
   const msLeft   = expiryMs > 0 ? expiryMs - Date.now() : null
@@ -448,22 +448,22 @@ export function PolyPriceChart() {
         >
           {activeMarket?.resolution_price
             ? `$${activeMarket.resolution_price.toLocaleString()} or above`
-            : ptb
-              ? `PTB $${ptb.toLocaleString()}`
+            : referencePrice
+              ? `REF $${referencePrice.toLocaleString()}`
               : `${activeAsset} · Live`}
         </span>
 
-        {ptb != null && lastY > 0 && (
+        {referencePrice != null && lastY > 0 && (
           <span
             className="text-xs font-mono font-bold px-1.5 py-0.5 rounded tabular-nums"
-            style={{ background: `${ptbCol}18`, color: ptbCol, border: `1px solid ${ptbCol}44` }}
+            style={{ background: `${referenceColor}18`, color: referenceColor, border: `1px solid ${referenceColor}44` }}
           >
-            {abovePtb ? '▲' : '▼'} {abovePtb ? '+' : ''}{delta.toFixed(2)} pts
+            {aboveReference ? '▲' : '▼'} {aboveReference ? '+' : ''}{delta.toFixed(2)} pts
           </span>
         )}
 
-        {ptb != null && lastY > 0 && (
-          <span className="text-2xs font-mono font-semibold tabular-nums" style={{ color: `${ptbCol}cc` }}>
+        {referencePrice != null && lastY > 0 && (
+          <span className="text-2xs font-mono font-semibold tabular-nums" style={{ color: `${referenceColor}cc` }}>
             ({deltaPct >= 0 ? '+' : ''}{deltaPct.toFixed(3)}%)
           </span>
         )}
@@ -481,7 +481,7 @@ export function PolyPriceChart() {
         )}
       </div>
 
-      {/* Canvas fills the section — PTB line is rendered in canvas with glow */}
+      {/* Canvas fills the section; the reference line is rendered in canvas with glow. */}
       <div className="flex-1 relative">
         <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
       </div>

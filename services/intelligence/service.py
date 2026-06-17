@@ -93,6 +93,92 @@ SPREAD_CONFIGS = [
     },
 ]
 
+CROSS_SPREAD_PLAYBOOK_ROWS = [
+    {
+        "signalCombination": "RTY/ES up + ES/NQ up",
+        "interpretation": "Small caps outperform, Nasdaq underperforms. Broadening / domestic cyclicals.",
+        "expression": "Long RTY / short NQ",
+        "risk": "Watch rates and credit. This can reverse violently on hawkish shocks.",
+    },
+    {
+        "signalCombination": "RTY/ES down + ES/NQ down",
+        "interpretation": "Small caps lag, Nasdaq leads. Narrow mega-cap growth regime.",
+        "expression": "Long NQ / short RTY",
+        "risk": "Momentum can persist. Avoid premature fades.",
+    },
+    {
+        "signalCombination": "YM/ES up + RTY/ES up",
+        "interpretation": "Value, cyclicals, and small caps all improving.",
+        "expression": "Long YM and RTY basket / short ES",
+        "risk": "Confirm with market breadth and regional banks.",
+    },
+    {
+        "signalCombination": "YM/ES up + RTY/ES down",
+        "interpretation": "Dow/value outperforms, but small-cap credit beta is still suspect.",
+        "expression": "Long YM / short RTY",
+        "risk": "Often defensive value, not true risk-on.",
+    },
+    {
+        "signalCombination": "ES/NQ down + YM/ES down",
+        "interpretation": "Nasdaq and S&P growth leadership over Dow value.",
+        "expression": "Long NQ / short YM",
+        "risk": "Size carefully around earnings concentration in mega-cap tech.",
+    },
+]
+
+CROSS_SPREAD_PRODUCT_ROWS = [
+    {
+        "spread": "ES_NQ",
+        "label": "ES / NQ",
+        "tag": "Momentum-sensitive",
+        "formula": "Spread = ES - 0.2667 * NQ",
+        "buy": "Long ES / short NQ. This is a fade of Nasdaq outperformance or a broadening trade.",
+        "sell": "Short ES / long NQ. This is a mega-cap tech leadership trade.",
+        "nuance": "ES/NQ mean reversion is less reliable when AI, semiconductors, or mega-cap quality are leading with genuine earnings momentum.",
+    },
+    {
+        "spread": "YM_ES",
+        "label": "YM / ES",
+        "tag": "Calmer leadership spread",
+        "formula": "Spread = YM - 6.6667 * ES",
+        "buy": "Long YM / short ES. You want Dow value, industrials, financials, or defensive cyclicals to outperform.",
+        "sell": "Short YM / long ES. You want S&P mega-cap and growth weight to outperform the Dow.",
+        "nuance": "YM is price-weighted and only 30 stocks, so single-stock Dow composition matters more than in ES.",
+    },
+    {
+        "spread": "RTY_ES",
+        "label": "RTY / ES",
+        "tag": "Credit and rates sensitive",
+        "formula": "Spread = RTY - 0.4265 * ES",
+        "buy": "Long RTY / short ES. You want small caps, domestic cyclicals, regional banks, and breadth to improve.",
+        "sell": "Short RTY / long ES. You want large-cap quality, mega-cap tech, or balance-sheet strength to dominate.",
+        "nuance": "RTY can remain cheap for structural reasons when rates are high or credit spreads widen.",
+    },
+]
+
+CROSS_SPREAD_RTY_ES_TRADE_PLAN = [
+    {
+        "title": "Long RTY / Short ES",
+        "body": "Use when the spread is below fair value by at least 1.5 ATR and small-cap risk appetite is improving. Ideal confirmations: falling yields, tightening high-yield spreads, KRE/regional bank strength, RTY outperforming ES, and expanding market breadth.",
+    },
+    {
+        "title": "Short RTY / Long ES",
+        "body": "Use when the spread is above fair value by at least 1.5 ATR or when macro confirms that large-cap quality should dominate: higher yields, wider credit spreads, weak banks, poor breadth, or renewed mega-cap leadership.",
+    },
+    {
+        "title": "Position Construction",
+        "body": "Start with 7 RTY / -3 ES. If rolling beta materially diverges from the static notional ratio, adjust the display coefficient and/or trade ratio. Keep the trade ratio, displayed synthetic formula, and risk system in sync.",
+    },
+]
+
+CROSS_SPREAD_RISK_CHECK_ROWS = [
+    {"risk": "Tail beta mismatch", "control": "Measure dollar delta by leg and rebalance when index levels move materially."},
+    {"risk": "Hidden ES exposure", "control": "When combining spreads, net all ES legs before sizing."},
+    {"risk": "Volatility regime shift", "control": "Use ATR percentile to reduce size above the 80th percentile."},
+    {"risk": "Macro invalidation", "control": "Stop buying small-cap weakness if rates and credit both deteriorate."},
+    {"risk": "Execution slippage", "control": "Use legging settings conservatively around data releases and cash open."},
+]
+
 
 def _bars(symbol: str) -> list[dict[str, Any]]:
     return list(market_bus.bars.get(symbol, []))
@@ -1075,6 +1161,10 @@ def opportunity_map_state() -> dict[str, Any]:
         "fetchedAt": _iso_now(),
         "regime": metrics,
         "rows": sorted(rows, key=lambda row: row["score"], reverse=True),
+        "playbookRows": CROSS_SPREAD_PLAYBOOK_ROWS,
+        "productRows": CROSS_SPREAD_PRODUCT_ROWS,
+        "tradePlanRows": CROSS_SPREAD_RTY_ES_TRADE_PLAN,
+        "riskChecklistRows": CROSS_SPREAD_RISK_CHECK_ROWS,
     }
 
 
@@ -1282,10 +1372,11 @@ CONTENT: dict[str, dict[str, Any]] = {
     "atrZScoreEngine": {
         "service": "signal.atr-zscore",
         "rows": [
-            ["Spread Series", "Prefer synchronized spread bars; fall back to matched leg OHLC bars.", "Creates spread-native ATR and study values."],
+            ["Spread Series", "Prefer synchronized intraday spread bars rolled into daily OHLC; fall back to matched daily OHLC bars for the displayed synthetic formula.", "Creates spread-native ATR and raw study values."],
             ["30D Baseline", "Compare the last traded synthetic spread against the 30-session mean.", "Keeps live spread signals slow and meaningful."],
-            ["ATR", "Use Acme's 3-session / 30-session blended true-range ATR as the primary volatility unit.", "Volatility unit for raw technical read."],
-            ["Z-Score", "(Last traded spread - 30D mean) / blended ATR plus order-flow pressure.", "Cross-spread ranking and trigger pressure."],
+            ["ATR", "Average the last 3-session ATR and 30-session ATR. The theoretical market applies half of this ATR to each side of VWAP.", "Volatility unit for the raw technical read."],
+            ["Session VWAP", "Use synchronized intraday prices and volume when available; fall back to time-weighted average when volume is missing.", "Raw midpoint reference for discretionary interpretation."],
+            ["Z-Score", "(Spread - Mean) / ATR plus an intraday VWAP z-score using ATR/2.", "Cross-spread ranking and intraday trigger pressure."],
             ["ATR Percentile", "Current ATR vs one-year ATR distribution.", "Size down when volatility is unusually elevated."],
         ],
     },
@@ -1295,8 +1386,12 @@ CONTENT: dict[str, dict[str, Any]] = {
             {"title": "Base entry", "body": "Enter at +/-1.5 ATR only when macro regime, GOOSE direction, and live spread signal agree. If only two of three agree, cut the first clip in half."},
             {"title": "Stress rule", "body": "If ATR percentile is above 80, cut size by 50%, widen bands to +/-2 ATR, and require live z-score to stop worsening before entry."},
             {"title": "No-trade rule", "body": "Do not buy RTY/ES just because it is statistically cheap if credit spreads are widening, rates are rising, and regional banks are weak."},
-            {"title": "Layering rule", "body": "Use three clips: 40% at trigger, 30% at an additional 0.35 ATR extension, 30% only after stabilization."},
+            {"title": "Timing rule", "body": "Avoid initiating new layered positions in the first 3-5 minutes after major data releases. Let the synthetic spread print a first reaction, a pullback, and then a second attempt before committing."},
+            {"title": "Confirmation rule", "body": "For mean reversion, require price to re-enter from beyond the band. Example: buy only after the spread trades below -1.5 ATR and then recovers back above -1.4 ATR."},
+            {"title": "Layering rule", "body": "Use three clips: 40% at trigger, 30% at an additional 0.35 ATR extension, 30% only after stabilization. Never add simply because the trade is losing."},
+            {"title": "Profit rule", "body": "Take 1/3 off at the rolling mean, another 1/3 at +0.5 ATR in your favor, and trail the final 1/3 with a 0.5 ATR giveback or a GOOSE regime flip."},
             {"title": "Invalidation rule", "body": "Exit if live z-score extends 0.75 ATR beyond your final layer without reversal, or macro score flips against the trade by two factors."},
+            {"title": "Time-of-day note", "body": "Maintain time-of-day ATR bands for intraday execution. Cash open, Fed/CPI/jobs windows, and closing imbalance windows should not use the same thresholds as midday liquidity."},
         ],
     },
     "orderLayeringTechniques": {
@@ -1314,10 +1409,10 @@ CONTENT: dict[str, dict[str, Any]] = {
         "rows": [
             ["Risk unit", "Define 1R as the dollar loss from entry to invalidation on the full layered position."],
             ["Daily loss stop", "Stop new entries after -2R realized or two failed attempts in the same spread."],
-            ["Correlation cap", "Do not hold multiple spread trades with the same hidden ES exposure unless planned."],
-            ["Size cap", "Size from the thinner leg. RTY and YM liquidity are often the bottleneck."],
-            ["Regime cap", "GOOSE Low permits one starter clip; Medium permits two; High permits full layering."],
-            ["Event cap", "Before CPI, FOMC, NFP, or major mega-cap earnings, flatten or reduce to gap-tolerant size."],
+            ["Correlation cap", "Do not hold multiple spread trades that leave the same hidden ES exposure unless the net ES leg is intentional."],
+            ["Size cap", "Size from the thinner leg. For RTY/ES, RTY liquidity is usually the bottleneck; for YM/ES, watch YM liquidity."],
+            ["Regime cap", "If GOOSE confidence is Low, max size is one starter clip. Medium permits two clips. High permits full layering."],
+            ["Event cap", "Before CPI, FOMC, NFP, or major megacap earnings, either flatten or reduce to a size you can hold through a gap."],
         ],
     },
     "riskChecklist": {
@@ -1333,20 +1428,31 @@ CONTENT: dict[str, dict[str, Any]] = {
     "sourceNotes": {
         "service": "knowledge.notes",
         "sections": [
-            {"title": "Daily ATR source", "body": "ATR is calculated from OHLC bars. Databento/CME/Stooq/Yahoo were Acme fallbacks; Cerious now prioritizes CME ingress and local normalized bars."},
-            {"title": "Live cockpit source", "body": "Cerious uses Databento/CME normalized live trades and book data, then derives synthetic spread display from underlying leg marks."},
-            {"title": "GOOSE source", "body": "Combines futures history, macro regime inputs, spread z-scores, volume context, public headline pressure, and source breadth."},
+            {"title": "Daily ATR source", "body": "ATR is calculated from OHLC bars. Acme provider order was CME EOD/OHLC adapter first, configured Stooq daily futures CSV second, and public Yahoo daily futures bars as the no-key fallback. Cerious prioritizes CME ingress and local normalized bars."},
+            {"title": "Live cockpit source", "body": "Acme attempted configured Databento GLBX.MDP3 live trades for outright last price, MBP-10 L2 books by product symbol for the Depth Ladder, optional MBO L3 reconstruction when enabled, and OHLCV-1m for live candle collection. Synthetic last/book display is calculated from underlying leg bid/ask depth like an Autospreader view."},
+            {"title": "Live platform scaffold", "body": "Acme exposed sequenced event envelopes for platform, market-depth, news, analysis, data-status, orders, fills, algos, and heartbeat; snapshot endpoints remained polling fallbacks. Cerious keeps that boundary as gateway fanout plus service snapshots."},
+            {"title": "GOOSE source", "body": "Combines refreshed futures history, macro regime inputs, spread z-scores, volume context, delayed live quote layer, public ETF factor proxies, CFTC positioning, and available public market headline feeds."},
+            {"title": "Contract spec anchors", "body": "CME contract pages anchor ES, NQ, RTY, and YM contract specification checks for tick size, tick value, and multiplier assumptions."},
+            {"title": "Macro regime source", "body": "Acme fetched free daily chart history for VIX, rates, HYG, KRE, RSP, SPY, ES, and RTY proxies, then scored volatility, rates, credit, regional banks, breadth, and small-cap leadership."},
             {"title": "Disclaimer", "body": "This is a risk-management framework and decision-support system, not financial advice."},
         ],
     },
     "modelResearchGovernance": {
         "service": "knowledge.governance",
+        "sections": [
+            {"title": "Objective process record", "body": "Quantitative signal development, review, monitoring, and variant control. This process is intentionally strategy-neutral so it can support partner, investor, regulator, and internal model-review conversations."},
+            {"title": "Registry defaults", "body": "Model: ACME-FactorStack-Monitor. Version: v0.1. Horizon: Intraday / 1-week. Owner / reviewer: Research."},
+            {"title": "Research objective", "body": "Combine independent market, macro, positioning, news, and liquidity signals into a bounded decision-support score with explainable attribution."},
+            {"title": "Variant notes", "body": "Baseline factor stack: trend/relative strength, volatility, rates/credit, CFTC positioning, news pressure, and liquidity checks."},
+            {"title": "Review criteria", "body": "Promote only after data-quality checks, walk-forward validation, turnover/slippage review, adverse-regime review, and live-monitoring notes."},
+        ],
         "rows": [
-            ["Research hypothesis", "State economic rationale before scoring.", "Named hypothesis, horizon, eligible markets, failure modes."],
-            ["Data intake", "Separate raw collection, normalization, scoring, and display.", "Provider, cadence, timestamp, transformation notes."],
-            ["Feature design", "Prefer independent factor families.", "Lookback, directionality, cap/winsorization, correlation review."],
-            ["Scoring", "Convert features into bounded scores with documented weights.", "Weights, contribution, confidence tier, threshold table."],
-            ["Decision policy", "Distinguish observation, watch, action, sizing, invalidation, and review horizon.", "Day plan, week plan, trigger, stop, downgrade rule."],
+            ["Research hypothesis", "State the economic rationale before scoring. A model should explain why an observable variable may forecast risk, return, liquidity, or execution quality.", "Named hypothesis, target horizon, eligible markets, expected failure modes."],
+            ["Data intake", "Separate raw collection, normalization, scoring, and decision display. Vendor, public, and internal feeds must be source-labeled and timestamped.", "Provider, refresh cadence, timestamp, transformation notes, missing-data policy."],
+            ["Feature design", "Prefer independent factor families over duplicate measures. Current families: trend/momentum, relative strength, volatility, credit/rates, positioning, breadth, news pressure, and liquidity.", "Feature list, lookback, directionality, cap/winsorization rule, correlation review."],
+            ["Scoring", "Convert each feature into bounded scores, combine with documented weights, and expose both composite score and factor-level attribution.", "Weights, factor contribution, confidence tier, score version, threshold table."],
+            ["Decision policy", "Advice must distinguish observation, watch, action, sizing, invalidation, and review horizon. Execution remains separate from signal generation.", "Day plan, week plan, trigger, stop/invalidation, confidence downgrade rule."],
+            ["Validation", "Backtest and forward-monitor separately. Require out-of-sample checks, turnover/slippage assumptions, stale-data tests, and adverse-regime review.", "Backtest window, holdout window, hit rate, drawdown, turnover, slippage, exceptions."],
             ["Governance", "Every variant gets name, owner, version, changelog, activation date, and deprecation rule.", "Registry entry, approval status, reviewer notes."],
         ],
     },

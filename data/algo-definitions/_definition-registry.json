@@ -1,7 +1,7 @@
 {
   "version": "acme.algo-definition-registry.v1",
-  "storage": "C:\\Users\\tstur\\Documents\\Codex\\RVEX\\acme\\data\\algo-definitions",
-  "archiveDirectory": "C:\\Users\\tstur\\Documents\\Codex\\RVEX\\acme\\data\\algo-definitions\\_deleted",
+  "storage": "data/algo-definitions",
+  "archiveDirectory": "data/algo-definitions/_deleted",
   "updatedAt": "2026-06-10T15:18:18.572Z",
   "definitions": {
     "mean-reversion": {

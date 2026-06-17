@@ -207,6 +207,9 @@ class MarketBus:
         for queue in stale:
             self.unsubscribe(queue)
 
+    async def publish_event(self, message: dict[str, Any]) -> None:
+        await self._fanout(message)
+
     def markets(self) -> list[dict[str, Any]]:
         outright = [cme_market(asset, self.quotes.get(asset)) for asset in CME_INSTRUMENTS]
         synthetic = [synthetic_market(symbol, self.quotes.get(symbol)) for symbol in SYNTHETIC_SPREADS]

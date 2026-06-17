@@ -436,8 +436,7 @@ export function Chart({ asset }: Props) {
     }
 
     // ── Binary market price lines ─────────────────────────────────────────
-    // STRIKE/PTB should use authoritative market PTB when available.
-    // Fallbacks preserve old behavior when PTB is missing.
+    // Legacy binary/event-market reference line.
     let strike: number | null = null
     if (activeMarket?.price_to_beat && activeMarket.price_to_beat > 0) {
       strike = activeMarket.price_to_beat
@@ -478,7 +477,7 @@ export function Chart({ asset }: Props) {
         strikeLineRef.current = candleRef.current.createPriceLine({
           price: strike,
           color: '#22d3ee', lineWidth: 1, lineStyle: LineStyle.Dashed,
-          axisLabelVisible: true, title: 'PTB',
+          axisLabelVisible: true, title: 'REF',
         })
       } else {
         strikeLineRef.current.applyOptions({ price: strike })

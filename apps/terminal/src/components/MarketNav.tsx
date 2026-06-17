@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { useStore } from '../store'
 import type { Asset, TimeFrame, MarketInfo, KalshiMarket, IbkrMarket } from '../types'
 import { TIMEFRAME_LABELS } from '../types'
@@ -105,13 +105,12 @@ function MarketCard({ market }: { market: MarketInfo }) {
   // Live spot price from Dome/Binance (updated every 5 s via CryptoPriceStrip)
   const spotPrice = cryptoPrices[market.asset]?.price ?? 0
 
-  // Price-to-beat: prefer authoritative price_to_beat, fallback to start_price
-  const ptbRaw = market.price_to_beat ?? market.start_price
-  const ptb = typeof ptbRaw === 'number' && ptbRaw > 0 ? ptbRaw : null
+  const referenceRaw = market.price_to_beat ?? market.start_price
+  const referencePrice = typeof referenceRaw === 'number' && referenceRaw > 0 ? referenceRaw : null
 
-  const isAbovePtb = ptb != null && spotPrice > 0 ? spotPrice >= ptb : null
-  const delta      = ptb != null && spotPrice > 0 ? spotPrice - ptb : null
-  const deltaPct   = ptb != null && spotPrice > 0 ? ((spotPrice - ptb) / ptb) * 100 : null
+  const isAboveReference = referencePrice != null && spotPrice > 0 ? spotPrice >= referencePrice : null
+  const delta      = referencePrice != null && spotPrice > 0 ? spotPrice - referencePrice : null
+  const deltaPct   = referencePrice != null && spotPrice > 0 ? ((spotPrice - referencePrice) / referencePrice) * 100 : null
 
   return (
     <div className="space-y-0.5">
@@ -157,7 +156,7 @@ function MarketCard({ market }: { market: MarketInfo }) {
           </div>
         </div>
 
-        {/* Row 2: Spot price + PTB */}
+        {/* Row 2: spot price + event reference */}
         <div className="flex items-center justify-between gap-1 mt-1">
           {/* Spot price */}
           <div className="flex flex-col items-start">
@@ -167,36 +166,36 @@ function MarketCard({ market }: { market: MarketInfo }) {
             </span>
           </div>
 
-          {/* PTB with above/below indicator */}
-          {ptb != null ? (
+          {/* Event reference with above/below indicator */}
+          {referencePrice != null ? (
             <div className="flex flex-col items-end">
-              <span className="text-[8px] font-mono text-cyan-400/60 leading-none">PTB</span>
+              <span className="text-[8px] font-mono text-cyan-400/60 leading-none">REF</span>
               <span className="text-[11px] font-semibold font-mono tabular-nums text-cyan-400">
-                ${fmtPrice(ptb)}
+                ${fmtPrice(referencePrice)}
               </span>
             </div>
           ) : (
-            <span className="text-[9px] font-mono text-muted/30 italic">no PTB</span>
+            <span className="text-[9px] font-mono text-muted/30 italic">no ref</span>
           )}
 
-          {/* Delta badge — above/below PTB */}
-          {isAbovePtb != null && delta != null && deltaPct != null && (
+          {/* Delta badge: above/below reference */}
+          {isAboveReference != null && delta != null && deltaPct != null && (
             <div
               className="flex flex-col items-center px-1 py-0.5 rounded"
               style={{
-                background: isAbovePtb ? 'rgba(0,212,164,0.12)' : 'rgba(255,71,87,0.12)',
-                border: `1px solid ${isAbovePtb ? 'rgba(0,212,164,0.3)' : 'rgba(255,71,87,0.3)'}`,
+                background: isAboveReference ? 'rgba(0,212,164,0.12)' : 'rgba(255,71,87,0.12)',
+                border: `1px solid ${isAboveReference ? 'rgba(0,212,164,0.3)' : 'rgba(255,71,87,0.3)'}`,
               }}
             >
               <span
                 className="text-[9px] font-bold font-mono leading-none"
-                style={{ color: isAbovePtb ? '#00d4a4' : '#ff4757' }}
+                style={{ color: isAboveReference ? '#00d4a4' : '#ff4757' }}
               >
-                {isAbovePtb ? '▲' : '▼'}
+                {isAboveReference ? '▲' : '▼'}
               </span>
               <span
                 className="text-[8px] font-mono tabular-nums leading-none"
-                style={{ color: isAbovePtb ? '#00d4a4cc' : '#ff4757cc' }}
+                style={{ color: isAboveReference ? '#00d4a4cc' : '#ff4757cc' }}
               >
                 {Math.abs(deltaPct).toFixed(2)}%
               </span>
@@ -670,7 +669,7 @@ function TruthEngineFooter() {
             </span>
           </div>
 
-          {/* Greeks grid: Γ Θ ν Λ Ch */}
+          {/* Risk factor grid */}
           <div className="grid grid-cols-5 gap-0.5">
             {([
               { sym: 'Γ',  val: gamma },
