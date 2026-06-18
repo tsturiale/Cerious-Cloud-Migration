@@ -36,6 +36,7 @@ export type WorkspaceWindowKind =
   | 'riskChecklist'
   | 'sourceNotes'
   | 'modelResearchGovernance'
+  | 'fixMonitor'
 
 export type WorkspaceTemplate = 'cme'
 
@@ -95,6 +96,12 @@ export const SERVICE_BLUEPRINT = [
     label: 'Alert Service',
     role: 'Evaluates price, fill, position, study, and risk thresholds without coupling the workspace to a specific venue.',
     dependsOn: ['price service', 'study engine', 'workspace state'],
+  },
+  {
+    key: 'fix-engine',
+    label: 'FIX Engine Service',
+    role: 'Manages the FIX 4.4 session, constructs/parses FIX messages, and routes orders to the TT FIX gateway.',
+    dependsOn: ['order service', 'price service', 'session state'],
   },
 ]
 

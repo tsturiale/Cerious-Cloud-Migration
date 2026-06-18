@@ -6,7 +6,8 @@ The current production-safe rule is simple: native services may be added beside 
 
 ## Folders
 
-- `price-feed-cpp`: Databento C++ feed handler scaffold.
+- `price-feed-cpp`: Databento C++ feed handler — live CME MBP-1 and historical OHLCV.
+- `fix-engine-cpp`: FIX 4.4 order sending daemon — standalone C++ service with embedded REST API, Aeron IPC, and sim/loopback mode.
 
 ## Contract Rule
 

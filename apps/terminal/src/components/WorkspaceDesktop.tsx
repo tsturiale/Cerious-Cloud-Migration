@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type PointerEvent as ReactPointerEvent, type ReactNode, type SetStateAction, type WheelEvent as ReactWheelEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type PointerEvent as ReactPointerEvent, type ReactNode, type SetStateAction, type WheelEvent as ReactWheelEvent } from 'react'
 import {
   AlertTriangle,
   ChevronDown,
@@ -20,6 +20,7 @@ import {
 import { useStore } from '../store'
 import type { Asset, Bar, PolyBook, PolyTradeTick, SimOrder, SimPosition, WsMsg } from '../types'
 import { OrderBook2 } from './OrderBook2'
+import { FixMonitor } from './FixMonitor'
 import { fetchBars } from '../utils/bars'
 import ceriousLogo from '../assets/branding/cerious-logo.png'
 import {
@@ -437,6 +438,7 @@ const WINDOW_LABELS: Record<WorkspaceWindowKind, string> = {
   riskChecklist: 'Risk Checklist',
   sourceNotes: 'Source Notes',
   modelResearchGovernance: 'Model Research & Governance',
+  fixMonitor: 'FIX Monitor',
 }
 
 const WIDGET_MENU: Array<{ group: string; kinds: WorkspaceWindowKind[] }> = [
@@ -444,7 +446,7 @@ const WIDGET_MENU: Array<{ group: string; kinds: WorkspaceWindowKind[] }> = [
   { group: 'Acme Spreads', kinds: ['spreadConfigurations', 'relativeSpreadCharts', 'relativeSpreadVisuals', 'liveSpreadSignals'] },
   { group: 'Acme Intelligence', kinds: ['goose', 'macroRegimeSummary', 'streamingNews', 'tradeAnalytics', 'atrZScoreEngine', 'crossSpreadOpportunityMap'] },
   { group: 'Acme Risk & Research', kinds: ['notionalCalculator', 'executionRules', 'orderLayeringTechniques', 'moneyManagement', 'riskChecklist', 'sourceNotes', 'modelResearchGovernance'] },
-  { group: 'Trading', kinds: ['order', 'alerts', 'liquidityMap'] },
+  { group: 'Trading', kinds: ['order', 'alerts', 'liquidityMap', 'fixMonitor'] },
   { group: 'Algos', kinds: ['algoBuilder', 'algoManager'] },
   { group: 'Charts', kinds: ['charts'] },
   { group: 'System', kinds: ['liveApiArchitecture', 'serviceMap'] },
@@ -9221,6 +9223,7 @@ function renderWindowBody(
     || item.kind === 'sourceNotes'
   ) return <AcmeContentWindow kind={item.kind} />
   if (item.kind === 'modelResearchGovernance') return <AcmeModelResearchGovernanceWindow />
+  if (item.kind === 'fixMonitor') return <FixMonitor />
   if (ACME_PANEL_DETAILS[item.kind]) return <AcmeIncomingWindow kind={item.kind} />
   return <ServiceMapWindow />
 }

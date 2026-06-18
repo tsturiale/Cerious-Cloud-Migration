@@ -39,6 +39,7 @@ from services.intelligence.service import (
 from services.order.service import cancel_all_orders, cancel_order, order_state_snapshot, place_order, positions_orders_state
 from services.price.service import price_service
 from services.studies.service import studies_service
+from services.fix_engine.service import fix_engine
 
 
 app = FastAPI(title=settings.app_name)
@@ -447,6 +448,7 @@ async def startup() -> None:
 
 @app.on_event("shutdown")
 async def shutdown() -> None:
+    await fix_engine.stop()  # closes the HTTP client only
     await price_service.stop()
 
 
@@ -516,6 +518,26 @@ async def auth_session(token: str = "") -> dict[str, Any]:
 @app.post("/api/auth/logout")
 async def auth_logout() -> dict[str, Any]:
     return {"ok": True}
+
+
+@app.post("/api/auth/auto")
+async def auth_auto() -> dict[str, Any]:
+    """Auto-login using .env credentials — local dev only.
+
+    The frontend calls this when a stored session is invalid.  Instead of
+    forcing a manual re-login, we mint a fresh token from the server-side
+    credentials so the user never gets locked out after a backend restart.
+    """
+    if not settings.portal_password:
+        raise HTTPException(status_code=503, detail="portal credential is not configured")
+    username = settings.portal_username or "local"
+    session_token, expires_at = _make_session_token(username)
+    return {
+        "ok": True,
+        "username": username,
+        "sessionToken": session_token,
+        "expiresAt": expires_at,
+    }
 
 
 @app.get("/api/workspaces/saved")
@@ -1197,6 +1219,50 @@ async def order_stub(payload: dict[str, Any]) -> dict[str, Any]:
     result["dry_run"] = settings.dry_run
     result["state"] = await publish_order_snapshot()
     return result
+
+
+# ---------------------------------------------------------------------------
+# FIX Engine endpoints — UI proxy to C++ daemon (all FIX logic is in C++)
+# ---------------------------------------------------------------------------
+
+@app.get("/api/fix/status")
+async def fix_status() -> dict[str, Any]:
+    return await fix_engine.status()
+
+
+@app.get("/api/fix/journal")
+async def fix_journal(
+    limit: int = 200,
+    direction: str | None = None,
+    msgType: str | None = None,
+    errorsOnly: bool = False,
+) -> dict[str, Any]:
+    return await fix_engine.journal(
+        limit=limit,
+        direction=direction,
+        msg_type=msgType,
+        errors_only=errorsOnly,
+    )
+
+
+@app.post("/api/fix/send")
+async def fix_send(payload: dict[str, Any]) -> dict[str, Any]:
+    return await fix_engine.send_new_order(payload)
+
+
+@app.post("/api/fix/cancel")
+async def fix_cancel(payload: dict[str, Any]) -> dict[str, Any]:
+    return await fix_engine.send_cancel(payload)
+
+
+@app.post("/api/fix/replace")
+async def fix_replace(payload: dict[str, Any]) -> dict[str, Any]:
+    return await fix_engine.send_cancel_replace(payload)
+
+
+@app.get("/api/fix/stats")
+async def fix_stats() -> dict[str, Any]:
+    return await fix_engine.stats()
 
 
 @app.post("/api/execution/entry")

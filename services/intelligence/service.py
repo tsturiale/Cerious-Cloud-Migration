@@ -348,7 +348,11 @@ def _bar_is_forming(row: dict[str, Any] | None, interval: str) -> bool:
 
 
 def _lr_peg_bars(symbol: str) -> list[dict[str, Any]]:
-    rows = studies_service.cached_bars(symbol, LR_PEG_INTERVAL, LR_PEG_BACKFILL_LIMIT, include_forming=False)
+    # Use bars() (not cached_bars) so the algo peg gets the same historical
+    # backfill as the chart's LR27.  cached_bars() silently returns [] on a
+    # cold cache, causing the regression to be computed from only a handful
+    # of live rolling bars — which is why orders land at the wrong price.
+    rows = studies_service.bars(symbol, LR_PEG_INTERVAL, LR_PEG_BACKFILL_LIMIT, include_forming=False)
     return _completed_interval_bars(rows, LR_PEG_INTERVAL)[-LR_PEG_BACKFILL_LIMIT:]
 
 

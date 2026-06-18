@@ -145,12 +145,55 @@ export function PortalGate({ children }: { children: ReactNode }) {
     let cancelled = false
     const validate = async () => {
       try {
-        const response = await fetch(`/api/auth/session?token=${encodeURIComponent(existing.sessionToken)}`, { cache: 'no-store' })
-        if (!response.ok) throw new Error('expired')
+        // Try validating stored session, with retry on network errors
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            const response = await fetch(`/api/auth/session?token=${encodeURIComponent(existing.sessionToken)}`, { cache: 'no-store' })
+            if (response.ok) {
+              if (cancelled) return
+              setWorkspaceSessionToken(existing.sessionToken)
+              setSession(existing)
+              return
+            }
+            if (response.status === 401) {
+              // Token genuinely expired — try auto-login before giving up
+              break
+            }
+            // Other error (503, etc) — backend might be starting, retry
+            await new Promise(r => setTimeout(r, 2000))
+            continue
+          } catch {
+            // Network error — backend is probably restarting, retry
+            if (attempt < 2) {
+              await new Promise(r => setTimeout(r, 2000))
+              continue
+            }
+            break
+          }
+        }
+
+        // Session invalid or backend unreachable — try auto-login
+        // (uses portal credentials from .env so you never get locked out locally)
         if (cancelled) return
-        setWorkspaceSessionToken(existing.sessionToken)
-        setSession(existing)
-      } catch {
+        try {
+          const autoResp = await fetch('/api/auth/auto', { method: 'POST', cache: 'no-store' })
+          if (autoResp.ok) {
+            const payload = await autoResp.json()
+            if (payload.sessionToken) {
+              const autoSession: PortalSession = {
+                username: String(payload.username || 'local'),
+                sessionToken: String(payload.sessionToken),
+                expiresAt: Number(payload.expiresAt || 0) || undefined,
+              }
+              if (cancelled) return
+              storePortalSession(autoSession)
+              setWorkspaceSessionToken(autoSession.sessionToken)
+              setSession(autoSession)
+              return
+            }
+          }
+        } catch { /* auto-login not available */ }
+
         if (cancelled) return
         storePortalSession(null)
         setWorkspaceSessionToken(null)

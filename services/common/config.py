@@ -57,6 +57,17 @@ class Settings:
     portal_password: str = os.getenv("CERIOUS_PORTAL_PASSWORD", "").strip()
     auth_secret: str = os.getenv("CERIOUS_AUTH_SECRET", "cerious-local-dev-secret").strip()
     dry_run: bool = os.getenv("CERIOUS_DRY_RUN", "1") != "0"
+    # FIX Engine (C++ daemon)
+    fix_sender_comp_id: str = os.getenv("FIX_SENDER_COMP_ID", "CERIOUS").strip()
+    fix_target_comp_id: str = os.getenv("FIX_TARGET_COMP_ID", "TT_SIM").strip()
+    fix_target_host: str = os.getenv("FIX_TARGET_HOST", "").strip()
+    fix_target_port: int = int(os.getenv("FIX_TARGET_PORT", "0"))
+    fix_heartbeat_interval: int = int(os.getenv("FIX_HEARTBEAT_INTERVAL", "30"))
+    fix_version: str = os.getenv("FIX_VERSION", "FIX.4.4").strip()
+    fix_account: str = os.getenv("FIX_ACCOUNT", "").strip()
+    fix_password: str = os.getenv("FIX_PASSWORD", "").strip()
+    fix_http_host: str = os.getenv("FIX_HTTP_HOST", "127.0.0.1").strip()
+    fix_http_port: int = int(os.getenv("FIX_HTTP_PORT", "8010"))
 
 
 settings = Settings()
