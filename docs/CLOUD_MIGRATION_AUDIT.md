@@ -63,19 +63,6 @@ Databento CME settings are environment-driven through:
 - `CERIOUS_CME_SCHEMA`
 - `CERIOUS_CME_SYMBOLS`
 
-T4 SIM settings are environment-driven through:
-
-- `T4_AUTH_MODE`
-- `T4_API_KEY`
-- `T4_WS_URL`
-- `T4_API_URL`
-- `T4_FIRM`
-- `T4_USERNAME`
-- `T4_APP_LICENSE`
-- `T4_CONTRACTS`
-- `T4_MARKETS`
-- `T4_MARKET_IDS`
-
 Do not hard-code exchange-specific price math or product definitions in UI widgets. Product definitions, tick size, multipliers, book state, last trade, top of book, positions, fills, and PnL must come from service-layer subscriptions or documented package-local data files.
 
 ## Desktop Client

@@ -1,2 +1,0 @@
-"""CME-only price service."""
-

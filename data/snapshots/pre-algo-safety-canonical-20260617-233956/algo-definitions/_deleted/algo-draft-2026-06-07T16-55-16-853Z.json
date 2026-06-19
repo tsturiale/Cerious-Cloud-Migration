@@ -1,0 +1,84 @@
+{
+  "id": "algo-draft",
+  "name": "Algo Draft",
+  "templateId": "mean-reversion-v2",
+  "status": "draft",
+  "version": "2.0",
+  "createdAt": "2026-06-06T21:47:16.144Z",
+  "updatedAt": "2026-06-06T21:47:55.941Z",
+  "engineContract": {
+    "version": "acme.algo-definition.v1",
+    "executionHome": "server-near-exchange",
+    "orderRouting": "disabled-until-deployed",
+    "marketDataSource": "server-subscription",
+    "savedBy": "acme-trader-ui"
+  },
+  "instruments": [
+    "Sol"
+  ],
+  "signalRules": [
+    {
+      "id": "rule-1",
+      "field": "marketCanTradeTarget",
+      "operator": "=",
+      "value": true,
+      "action": "releaseSniperEntry",
+      "enabled": true
+    }
+  ],
+  "risk": {
+    "maxPosition": 1,
+    "maxLossAtr": 0.75,
+    "clipSchedule": "40/30/30",
+    "requireMarketOpen": true
+  },
+  "midpointPeg": {
+    "enabled": false,
+    "source": "30m-vwap",
+    "label": "Peg VWAP for midpoint",
+    "previousClose": false
+  },
+  "entryPeg": {
+    "source": "recursive-least-squares",
+    "period": 27,
+    "standardDeviations": 2,
+    "pegSellSideToPlus2": true,
+    "pegBuySideToMinus2": true
+  },
+  "layerPlan": {
+    "ticksOffMidpoint": 0,
+    "buyTicksOffMidpoint": 0,
+    "sellTicksOffMidpoint": 0,
+    "layerCount": 2,
+    "layerSpacingTicks": 2,
+    "maxLayers": 5,
+    "applySymmetrically": true,
+    "workBuySide": true,
+    "workSellSide": true
+  },
+  "syntheticOrderManager": {
+    "enabled": true,
+    "containerizedOrders": true,
+    "entryTechnique": "sniper-market-if-target-price-achievable",
+    "holdUntilTriggered": true,
+    "releaseDestination": "exchange-gateway"
+  },
+  "exitPolicy": {
+    "attachOnEntryFill": true,
+    "oco": true,
+    "coverTicksFromFill": 6,
+    "profitTicksFromEntry": 6,
+    "stopTicksFromEntry": 0,
+    "stopType": "market",
+    "coverLimitPlacement": "above-bid-or-below-offer"
+  },
+  "orderPolicy": {
+    "mode": "synthetic-sniper",
+    "orderType": "synthetic-held-market-release",
+    "priceReference": "27-rls-regression-bands",
+    "doNotCrossInside": true,
+    "doNotCrossSelf": true,
+    "liveOrderEntryEnabled": false
+  },
+  "notes": ""
+}

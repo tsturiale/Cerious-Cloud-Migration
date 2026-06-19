@@ -12,6 +12,7 @@ import type { PolyBook, PolyBookLevel, PolyTradeTick } from '../types'
 
 const POLL_MS = 1000
 const SETTINGS_KEY = 'book2.dom.settings.v1'
+const WORKSPACE_SESSION_TOKEN_KEY = 'cerious.workspace.sessionToken.v1'
 const EMPTY_FILLS: PolyTradeTick[] = []
 const CONTRACT_SIZES = [1, 5, 10, 25, 50, 100]
 const ACCOUNT_VIEWS = ['account', 'position', 'fills'] as const
@@ -32,6 +33,16 @@ const SYSTEM_PRICE_COLUMN = {
   activeBg: '#e5e7eb',
   activeText: '#111827',
 } as const
+
+function ceriousSessionHeaders(init?: HeadersInit): Headers {
+  const headers = new Headers(init)
+  const token = window.localStorage.getItem(WORKSPACE_SESSION_TOKEN_KEY) || ''
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`)
+    headers.set('X-Cerious-Session', token)
+  }
+  return headers
+}
 
 type ScaleMode = 'dynamic' | 'static'
 type SideView = 'both' | 'yes' | 'no'
@@ -283,7 +294,7 @@ export function OrderBook2({
     try {
       const res = await fetch('/api/execution/entry', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: ceriousSessionHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(payload)
       })
       if (res.ok) {
@@ -355,7 +366,7 @@ export function OrderBook2({
     try {
       const res = await fetch('/api/execution/entry', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: ceriousSessionHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(payload),
       })
       setWorkingOrders(current => current.map(order => (

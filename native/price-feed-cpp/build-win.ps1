@@ -8,26 +8,42 @@ $Project = Join-Path $Root "native\price-feed-cpp"
 $Build = Join-Path $Project "build"
 $Vcpkg = Join-Path $Root ".tools\vcpkg"
 $Toolchain = Join-Path $Vcpkg "scripts\buildsystems\vcpkg.cmake"
-$CMake = if ($env:CMAKE_EXE) { $env:CMAKE_EXE } else { "cmake" }
+$CMake = if ($env:CMAKE_EXE) { $env:CMAKE_EXE } else { "" }
 $VsDevCmd = $env:VSDEVCMD_PATH
+$VsInstallPath = $null
 
 if ($VsDevCmd -and !(Test-Path -LiteralPath $VsDevCmd)) {
   throw "VSDEVCMD_PATH points to a missing file: $VsDevCmd"
 }
 if (!$VsDevCmd) {
+  $preferred = "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat"
+  if (Test-Path -LiteralPath $preferred) {
+    $VsDevCmd = $preferred
+    $VsInstallPath = "C:\Program Files\Microsoft Visual Studio\18\Community"
+  }
+}
+if (!$VsDevCmd) {
   $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
   if (Test-Path -LiteralPath $vswhere) {
-    $installPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+    $installPath = & $vswhere -latest -version "[18.0,19.0)" -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+    if (!$installPath) {
+      $installPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+    }
     if ($installPath) {
       $candidate = Join-Path $installPath "Common7\Tools\VsDevCmd.bat"
       if (Test-Path -LiteralPath $candidate) {
         $VsDevCmd = $candidate
+        $VsInstallPath = $installPath
       }
     }
   }
 }
 if (!$VsDevCmd) {
   throw "Visual Studio C++ build environment was not found. Install Visual Studio C++ tools or set VSDEVCMD_PATH."
+}
+if (!$CMake) {
+  $vsCMake = if ($VsInstallPath) { Join-Path $VsInstallPath "Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" } else { "" }
+  $CMake = if ($vsCMake -and (Test-Path -LiteralPath $vsCMake)) { $vsCMake } else { "cmake" }
 }
 if (!(Test-Path $Vcpkg)) {
   git clone https://github.com/microsoft/vcpkg.git $Vcpkg
@@ -39,6 +55,17 @@ if (!(Test-Path (Join-Path $Vcpkg "vcpkg.exe"))) {
 
 $cmdFile = Join-Path $Build "build-win.cmd"
 New-Item -ItemType Directory -Force -Path $Build | Out-Null
+$cache = Join-Path $Build "CMakeCache.txt"
+if (Test-Path -LiteralPath $cache) {
+  $cacheText = Get-Content -Raw -Path $cache
+  if ($cacheText -match "C:/BuildTools|C:\\BuildTools") {
+    Remove-Item -LiteralPath $cache -Force
+    $cmakeFiles = Join-Path $Build "CMakeFiles"
+    if (Test-Path -LiteralPath $cmakeFiles) {
+      Remove-Item -LiteralPath $cmakeFiles -Recurse -Force
+    }
+  }
+}
 @"
 @echo off
 call "$VsDevCmd" -arch=x64 -host_arch=x64

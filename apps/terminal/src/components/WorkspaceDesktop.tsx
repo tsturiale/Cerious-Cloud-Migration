@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type PointerEvent as ReactPointerEvent, type ReactNode, type SetStateAction, type WheelEvent as ReactWheelEvent } from 'react'
 import {
+  createChart,
+  ColorType,
+  CrosshairMode,
+  LineStyle,
+  CandlestickSeries,
+  LineSeries,
+  HistogramSeries,
+} from 'lightweight-charts'
+import {
   AlertTriangle,
   ChevronDown,
   ChevronUp,
@@ -9,7 +18,10 @@ import {
   Download,
   Folder,
   FolderOpen,
+  Lock,
+  LogOut,
   Plus,
+  Power,
   Save,
   Search,
   Server,
@@ -45,6 +57,7 @@ import {
   type WorkspaceTemplate,
   type WorkspaceWindowKind,
 } from '../services/workspaceServices'
+import { ceriousWsBase, isCeriousDesktopRuntime } from '../platform/transport'
 
 type WorkspaceWindow = {
   id: string
@@ -73,6 +86,8 @@ type MarketRowConfig = {
   provider: ProviderKey
   symbol: string
 }
+
+const EMPTY_TRADE_TICKS: PolyTradeTick[] = []
 
 type MarketDataColumnKey =
   | 'exchange'
@@ -124,9 +139,17 @@ type AlertSound = 'system-chime' | 'system-bell' | 'system-alarm'
 type AlertDeliveryChannel = 'audio' | 'desktop' | 'sms'
 type AlertDeliveryResult = { channel: AlertDeliveryChannel; ok: boolean; message: string }
 type AlertDeliveryStatus = { ok: boolean; message: string; at: number }
+type SmsAlertStatus = {
+  ok?: boolean
+  ready?: boolean
+  configured?: boolean
+  dryRun?: boolean
+  provider?: string | null
+  transports?: string[]
+  error?: string
+}
 type AlgoTemplate = 'mean-reversion-v2' | 'scale-in'
 type AlgoStatus = 'draft' | 'held' | 'quoting' | 'paused'
-type QuoteModel = 'study-peg' | 'market-mid'
 type DepthColumnKey = 'orders' | 'bid' | 'price' | 'ask'
 type DepthLadderDensity = 'small' | 'medium' | 'large'
 
@@ -143,6 +166,8 @@ type DepthLadderSettings = {
 type CmeDepthLevel = {
   price: number
   size: number
+  count?: number
+  ct?: number
   level?: number
 }
 
@@ -156,6 +181,8 @@ type CmeBook = {
   bestAsk?: number
   bidSize?: number
   askSize?: number
+  bidCount?: number
+  askCount?: number
   mid?: number
   ltp?: number
   ltpSize?: number
@@ -193,12 +220,8 @@ type AlgoDefinition = {
   symbol: string
   marketKey?: string
   instruments?: string[]
-  outcome: 'yes' | 'no'
   side: 'bid' | 'offer' | 'both'
   orderType: 'limit' | 'market'
-  quoteModel: QuoteModel
-  quoteWidth: number
-  edgeThreshold: number
   clipSize: number
   maxPosition: number
   signalRules?: AlgoSignalRule[]
@@ -321,11 +344,21 @@ type SavedWorkspace = {
   windows: WorkspaceWindow[]
   rows: MarketRowConfig[]
   alerts?: AlertRule[]
+  algoLibrary?: AlgoDefinition[]
+  algoManager?: AlgoManagerWorkspaceState
   selectedProvider?: ProviderKey
   selectedSymbol?: string
   updatedAt: number
   recoveredFrom?: string
   serverFile?: string
+}
+
+type AlgoManagerWorkspaceState = {
+  stagedAlgoIds: string[]
+  selectedDeployIds: string[]
+  statusFilter?: AlgoStatus | 'all'
+  deployStatus?: string
+  updatedAt?: number
 }
 
 type FloatingWindowBounds = {
@@ -377,12 +410,14 @@ const WORKSPACE_BACKUPS_KEY = 'cerious.workspace.backups.v1'
 const WORKSPACE_SESSION_TOKEN_KEY = 'cerious.workspace.sessionToken.v1'
 const TED_S_DEFAULT_RECOVERY_FILE = 'leveldb-07-ted-s.json'
 const ALGO_LIBRARY_KEY = 'cerious.algo.library.v1'
+const ALGO_MANAGER_STATE_KEY = 'cerious.algo.manager.state.v1'
 const DEPTH_LADDER_LAYOUT_KEY = 'cerious.depth-ladder.layout.v1'
 const TRADE_ANALYTICS_IMPORT_KEY = 'cerious.trade-analytics.import.v1'
 const MODEL_VARIANT_KEY = 'cerious.model.variant.v1'
 const MODEL_VARIANT_LIBRARY_KEY = 'cerious.model.variant.library.v1'
 const LEGACY_ACME_MODEL_VARIANT_KEY = 'acmeTraderModelVariantRegistryV1'
 const ALGO_LIBRARY_EVENT = 'cerious-algo-library'
+const ALGO_MANAGER_STATE_EVENT = 'cerious-algo-manager-state'
 const DEFAULT_OPERATOR = 'Operator 1'
 const MAX_WORKSPACE_BACKUPS = 12
 const TRADE_ANALYTICS_ACCOUNT_SIZE = 500_000
@@ -442,10 +477,10 @@ const WINDOW_LABELS: Record<WorkspaceWindowKind, string> = {
 }
 
 const WIDGET_MENU: Array<{ group: string; kinds: WorkspaceWindowKind[] }> = [
-  { group: 'Acme Core', kinds: ['marketData', 'depthLadder', 'positionsOrders', 'fills', 'auditTrail'] },
-  { group: 'Acme Spreads', kinds: ['spreadConfigurations', 'relativeSpreadCharts', 'relativeSpreadVisuals', 'liveSpreadSignals'] },
-  { group: 'Acme Intelligence', kinds: ['goose', 'macroRegimeSummary', 'streamingNews', 'tradeAnalytics', 'atrZScoreEngine', 'crossSpreadOpportunityMap'] },
-  { group: 'Acme Risk & Research', kinds: ['notionalCalculator', 'executionRules', 'orderLayeringTechniques', 'moneyManagement', 'riskChecklist', 'sourceNotes', 'modelResearchGovernance'] },
+  { group: 'Cerious Core', kinds: ['marketData', 'depthLadder', 'positionsOrders', 'fills', 'auditTrail'] },
+  { group: 'Cerious Spreads', kinds: ['spreadConfigurations', 'relativeSpreadCharts', 'relativeSpreadVisuals', 'liveSpreadSignals'] },
+  { group: 'Cerious Intelligence', kinds: ['goose', 'macroRegimeSummary', 'streamingNews', 'tradeAnalytics', 'atrZScoreEngine', 'crossSpreadOpportunityMap'] },
+  { group: 'Cerious Risk & Research', kinds: ['notionalCalculator', 'executionRules', 'orderLayeringTechniques', 'moneyManagement', 'riskChecklist', 'sourceNotes', 'modelResearchGovernance'] },
   { group: 'Trading', kinds: ['order', 'alerts', 'liquidityMap', 'fixMonitor'] },
   { group: 'Algos', kinds: ['algoBuilder', 'algoManager'] },
   { group: 'Charts', kinds: ['charts'] },
@@ -481,7 +516,6 @@ const PROVIDER_COLORS: Record<ProviderKey, string> = {
   cme: '#00d4a4',
   polymarket: '#00d4a4',
   kalshi: '#7dd3fc',
-  coinbase: '#f59e0b',
   hyperliquid: '#a78bfa',
   forecasttrader: '#f472b6',
 }
@@ -721,11 +755,62 @@ function saveDepthLadderDefaultSettings(settings: DepthLadderSettings): DepthLad
   return normalized
 }
 
+function normalizeStringIdList(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return [...new Set(value.map(item => String(item || '').trim()).filter(Boolean))]
+}
+
+function normalizeAlgoStatusFilter(value: unknown): AlgoStatus | 'all' {
+  const raw = String(value || 'all')
+  return raw === 'held' || raw === 'quoting' || raw === 'paused' || raw === 'draft' ? raw : 'all'
+}
+
+function normalizeAlgoManagerWorkspaceState(raw: unknown): AlgoManagerWorkspaceState {
+  const row = raw && typeof raw === 'object' ? raw as Partial<AlgoManagerWorkspaceState> : {}
+  const stagedAlgoIds = normalizeStringIdList(row.stagedAlgoIds)
+  const selectedDeployIds = normalizeStringIdList(row.selectedDeployIds).filter(id => stagedAlgoIds.includes(id))
+  return {
+    stagedAlgoIds,
+    selectedDeployIds,
+    statusFilter: normalizeAlgoStatusFilter(row.statusFilter),
+    deployStatus: '',
+    updatedAt: Number(row.updatedAt || Date.now()),
+  }
+}
+
+function loadAlgoManagerWorkspaceState(): AlgoManagerWorkspaceState {
+  try {
+    return normalizeAlgoManagerWorkspaceState(JSON.parse(window.localStorage.getItem(ALGO_MANAGER_STATE_KEY) || '{}'))
+  } catch {
+    return normalizeAlgoManagerWorkspaceState(null)
+  }
+}
+
+function saveAlgoManagerWorkspaceState(next: AlgoManagerWorkspaceState, notify = false): AlgoManagerWorkspaceState {
+  const normalized = normalizeAlgoManagerWorkspaceState({ ...next, updatedAt: next.updatedAt ?? Date.now() })
+  window.localStorage.setItem(ALGO_MANAGER_STATE_KEY, JSON.stringify(normalized))
+  if (notify) window.dispatchEvent(new CustomEvent(ALGO_MANAGER_STATE_EVENT, { detail: normalized }))
+  return normalized
+}
+
+function normalizeAlgoLibrarySnapshot(raw: unknown): AlgoDefinition[] | undefined {
+  if (!Array.isArray(raw)) return undefined
+  return sortAlgoDefinitions(raw
+    .map(item => normalizeStoredAlgoDefinition(item as Partial<AlgoDefinition> | Record<string, unknown>))
+    .filter((item): item is AlgoDefinition => !!item))
+}
+
+function applyWorkspaceAlgoSnapshot(workspace: SavedWorkspace): void {
+  // Algo definitions are owned by the file-backed algo service. Workspace snapshots
+  // only restore manager row selection so a saved layout cannot re-arm live statuses.
+  if (workspace.algoManager) saveAlgoManagerWorkspaceState(workspace.algoManager, true)
+}
+
 function normalizeWorkspace(raw: Partial<SavedWorkspace> | null | undefined): SavedWorkspace | null {
   if (!raw || !Array.isArray(raw.windows)) return null
   const windows = ensureFuturesDepthLadderWindow(ensureLegacyChartWindows(raw.windows.filter(item => !isRemovedWindowKind(item.kind)))).map(item => ({
     ...item,
-    provider: normalizeProviderKey(item.provider),
+    provider: normalizeProviderKey(item.provider as ProviderKey | undefined),
     ...(item.kind === 'depthLadder' && item.depthLadderSettings
       ? { depthLadderSettings: normalizeDepthLadderSettings(item.depthLadderSettings) }
       : {}),
@@ -740,6 +825,8 @@ function normalizeWorkspace(raw: Partial<SavedWorkspace> | null | undefined): Sa
     alerts: Array.isArray(raw.alerts)
       ? raw.alerts.map(normalizeAlertRule).filter((item): item is AlertRule => !!item)
       : [],
+    algoLibrary: normalizeAlgoLibrarySnapshot(raw.algoLibrary),
+    algoManager: raw.algoManager ? normalizeAlgoManagerWorkspaceState(raw.algoManager) : undefined,
     selectedProvider: normalizeProviderKey(raw.selectedProvider),
     selectedSymbol: raw.selectedSymbol,
     updatedAt: Number(raw.updatedAt || Date.now()),
@@ -847,9 +934,26 @@ function workspaceSessionToken(): string {
   return window.localStorage.getItem(WORKSPACE_SESSION_TOKEN_KEY) || ''
 }
 
+function ceriousSessionHeaders(init?: HeadersInit): Headers {
+  const headers = new Headers(init)
+  const token = workspaceSessionToken()
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`)
+    headers.set('X-Cerious-Session', token)
+  }
+  return headers
+}
+
+function ceriousFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+  return fetch(input, {
+    ...init,
+    headers: ceriousSessionHeaders(init.headers),
+  })
+}
+
 async function saveWorkspaceServerSnapshot(next: SavedWorkspace, reason: string): Promise<boolean> {
   try {
-    const response = await fetch('/api/workspaces/save', {
+    const response = await ceriousFetch('/api/workspaces/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -866,7 +970,7 @@ async function saveWorkspaceServerSnapshot(next: SavedWorkspace, reason: string)
 
 async function fetchRecoveredWorkspaces(): Promise<SavedWorkspace[]> {
   try {
-    const response = await fetch('/api/workspaces/recovered', { cache: 'no-store' })
+    const response = await ceriousFetch('/api/workspaces/recovered', { cache: 'no-store' })
     if (!response.ok) return []
     const payload = await response.json() as RecoveredWorkspacesPayload
     if (!Array.isArray(payload.workspaces)) return []
@@ -882,7 +986,7 @@ async function fetchServerSavedWorkspaces(): Promise<SavedWorkspace[]> {
   try {
     const token = workspaceSessionToken()
     const suffix = token ? `?token=${encodeURIComponent(token)}` : ''
-    const response = await fetch(`/api/workspaces/saved${suffix}`, { cache: 'no-store' })
+    const response = await ceriousFetch(`/api/workspaces/saved${suffix}`, { cache: 'no-store' })
     if (!response.ok) return []
     const payload = await response.json() as RecoveredWorkspacesPayload
     if (!Array.isArray(payload.workspaces)) return []
@@ -897,11 +1001,6 @@ async function fetchServerSavedWorkspaces(): Promise<SavedWorkspace[]> {
 function algoTemplateLabel(template: AlgoTemplate): string {
   if (template === 'mean-reversion-v2') return 'Mean Reversion v2'
   return 'Scale In'
-}
-
-function quoteModelLabel(model: QuoteModel): string {
-  if (model === 'study-peg') return 'Study Peg'
-  return 'Market Mid'
 }
 
 function defaultAcmeMeanReversionFields(symbol: string) {
@@ -982,13 +1081,9 @@ function defaultAlgo(option: ProductOption | undefined, operator: string): AlgoD
     provider: option?.provider ?? 'cme',
     symbol,
     marketKey: option?.marketKey,
-    outcome: 'yes',
     side: 'both',
     orderType: 'limit',
-    quoteModel: 'market-mid',
-    quoteWidth: 2,
-    edgeThreshold: acmeDefaults.entryPeg.standardDeviations,
-    clipSize: acmeDefaults.risk.maxPosition,
+    clipSize: 1,
     maxPosition: acmeDefaults.risk.maxPosition,
     operator,
     status: 'held',
@@ -1027,11 +1122,12 @@ function mergeObject<T extends object>(defaults: T, value: unknown): T {
 }
 
 function normalizeAcmeFields(item: Partial<AlgoDefinition> | Record<string, unknown>, symbol: string) {
-  const defaults = defaultAcmeMeanReversionFields(symbol)
+  const productKey = normalizeProductKey(symbol) || 'ES_NQ'
+  const defaults = defaultAcmeMeanReversionFields(productKey)
   return {
     templateId: String(item.templateId ?? item.acmeTemplateId ?? defaults.templateId),
     version: String(item.version ?? item.acmeVersion ?? defaults.version),
-    instruments: Array.isArray(item.instruments) ? item.instruments.map(String) : [symbol],
+    instruments: [productKey],
     signalRules: asSignalRules(item.signalRules),
     risk: mergeObject(defaults.risk, item.risk),
     midpointPeg: mergeObject(defaults.midpointPeg, item.midpointPeg),
@@ -1047,32 +1143,8 @@ function normalizeAcmeFields(item: Partial<AlgoDefinition> | Record<string, unkn
 function loadAlgoLibrary(): AlgoDefinition[] {
   try {
     const raw = window.localStorage.getItem(ALGO_LIBRARY_KEY)
-    const parsed = raw ? JSON.parse(raw) as Partial<AlgoDefinition>[] : []
-    if (!Array.isArray(parsed)) return []
-    return parsed
-      .filter(item => item.id && item.name)
-      .map(item => {
-        const symbol = algoMarketCandidates(item)[0] || 'ES_NQ'
-        return {
-          ...item,
-          template: asTemplate(item.template ?? item.templateId),
-          provider: normalizeProviderKey(item.provider),
-          symbol,
-          marketKey: symbol,
-          outcome: item.outcome ?? 'yes',
-          side: item.side ?? 'both',
-          orderType: item.orderType ?? 'limit',
-          quoteModel: item.quoteModel ?? 'study-peg',
-          quoteWidth: Number(item.quoteWidth ?? 2),
-          edgeThreshold: Number(item.edgeThreshold ?? 1),
-          clipSize: Number(item.clipSize ?? 5),
-          maxPosition: Number(item.maxPosition ?? 25),
-          operator: item.operator ?? DEFAULT_OPERATOR,
-          status: item.status ?? 'held',
-          updatedAt: Number(item.updatedAt ?? Date.now()),
-          ...normalizeAcmeFields(item, symbol),
-        } as AlgoDefinition
-      })
+    const parsed = raw ? JSON.parse(raw) : []
+    return normalizeAlgoLibrarySnapshot(parsed) ?? []
   } catch {
     return []
   }
@@ -1086,10 +1158,14 @@ function acmeDefinitionToAlgo(item: Record<string, unknown>): AlgoDefinition | n
   const risk = item.risk && typeof item.risk === 'object' ? item.risk as Record<string, unknown> : {}
   const layerPlan = item.layerPlan && typeof item.layerPlan === 'object' ? item.layerPlan as Record<string, unknown> : {}
   const templateId = String(item.templateId ?? 'mean-reversion-v2')
-  const symbol = instruments[0] ?? 'ES_NQ'
+  const symbol = normalizeProductKey(item.marketKey ?? item.symbol) || normalizeProductKey(instruments[0]) || 'ES_NQ'
   const acmeFields = normalizeAcmeFields(item, symbol)
   const statusRaw = String(item.status ?? 'held')
-  const status = statusRaw === 'draft' || statusRaw === 'paused' || statusRaw === 'quoting' || statusRaw === 'held' ? statusRaw : 'held'
+  const status = statusRaw === 'draft' || statusRaw === 'paused' ? statusRaw : 'held'
+  const rawClipSize = Number(item.clipSize ?? item.contractsPerOrder ?? item.orderSize ?? risk.clipSize ?? risk.contractsPerOrder ?? 1)
+  const rawMaxPosition = Number(item.maxPosition ?? risk.maxPosition ?? rawClipSize)
+  const clipSize = Number.isFinite(rawClipSize) && rawClipSize > 0 ? rawClipSize : 1
+  const maxPosition = Number.isFinite(rawMaxPosition) && rawMaxPosition > 0 ? rawMaxPosition : clipSize
   return {
     id,
     name,
@@ -1098,26 +1174,89 @@ function acmeDefinitionToAlgo(item: Record<string, unknown>): AlgoDefinition | n
     provider: 'cme',
     symbol,
     marketKey: symbol,
-    outcome: 'yes',
     side: layerPlan.workSellSide === false ? 'bid' : layerPlan.workBuySide === false ? 'offer' : 'both',
     orderType: 'limit',
-    quoteModel: 'market-mid',
-    quoteWidth: Number(layerPlan.layerSpacingTicks ?? 2),
-    edgeThreshold: Number((item.entryPeg as Record<string, unknown> | undefined)?.standardDeviations ?? 1.5),
-    clipSize: Number(layerPlan.layerCount ?? 1),
-    maxPosition: Number(risk.maxPosition ?? 1),
-    operator: 'Acme Trader',
+    clipSize,
+    maxPosition,
+    operator: 'Cerious Trader',
     status,
-    updatedAt: Date.parse(String(item.updatedAt ?? item.createdAt ?? '')) || Date.now(),
+    updatedAt: Date.parse(String(item.updatedAt ?? item.createdAt ?? '')) || 0,
     acmeTemplateId: templateId,
     acmeVersion: String(item.version ?? ''),
     acmeRaw: item,
   }
 }
 
+function normalizeStoredAlgoDefinition(item: Partial<AlgoDefinition> | Record<string, unknown> | null | undefined): AlgoDefinition | null {
+  if (!item || typeof item !== 'object') return null
+  const id = String(item.id ?? '').trim()
+  const name = String(item.name ?? id).trim()
+  if (!id || !name) return null
+  const symbol = algoMarketCandidates(item)[0] || 'ES_NQ'
+  const acmeFields = normalizeAcmeFields(item, symbol)
+  const risk = acmeFields.risk
+  const statusRaw = String(item.status ?? 'held')
+  const status: AlgoStatus = statusRaw === 'draft' || statusRaw === 'paused' || statusRaw === 'quoting' || statusRaw === 'held' ? statusRaw : 'held'
+  const sideRaw = String(item.side ?? 'both')
+  const side: AlgoDefinition['side'] = sideRaw === 'bid' || sideRaw === 'offer' || sideRaw === 'both' ? sideRaw : 'both'
+  const orderTypeRaw = String(item.orderType ?? 'limit')
+  const orderType: AlgoDefinition['orderType'] = orderTypeRaw === 'market' ? 'market' : 'limit'
+  const riskRecord = risk as Record<string, unknown>
+  const clipSize = Math.max(1, Number(item.clipSize ?? riskRecord.clipSize ?? riskRecord.contractsPerOrder ?? 1) || 1)
+  const maxPosition = Math.max(1, Number(item.maxPosition ?? risk.maxPosition ?? clipSize) || clipSize)
+  return {
+    ...acmeFields,
+    id,
+    name,
+    template: asTemplate(item.template ?? item.templateId),
+    provider: normalizeProviderKey(item.provider as ProviderKey | undefined),
+    symbol,
+    marketKey: String(item.marketKey ?? symbol),
+    side,
+    orderType,
+    clipSize,
+    maxPosition,
+    operator: String(item.operator ?? DEFAULT_OPERATOR),
+    status,
+    updatedAt: Number(item.updatedAt ?? Date.now()),
+  } as AlgoDefinition
+}
+
+function sortAlgoDefinitions(list: AlgoDefinition[]): AlgoDefinition[] {
+  return [...list].sort((a, b) => {
+    const sourceRank = Number(!a.acmeRaw) - Number(!b.acmeRaw)
+    if (sourceRank !== 0) return sourceRank
+    const symbolRank = normalizeProductKey(a.symbol).localeCompare(normalizeProductKey(b.symbol))
+    if (symbolRank !== 0) return symbolRank
+    const nameRank = a.name.localeCompare(b.name)
+    if (nameRank !== 0) return nameRank
+    return b.updatedAt - a.updatedAt
+  })
+}
+
+function algoDefinitionForStorage(algo: AlgoDefinition): AlgoDefinition {
+  return {
+    ...algo,
+    status: algo.status === 'quoting' ? 'held' : algo.status,
+  } as AlgoDefinition
+}
+
 function publishAlgoLibrary(next: AlgoDefinition[]) {
-  window.localStorage.setItem(ALGO_LIBRARY_KEY, JSON.stringify(next))
+  window.localStorage.setItem(ALGO_LIBRARY_KEY, JSON.stringify(next.map(algoDefinitionForStorage)))
   window.dispatchEvent(new CustomEvent(ALGO_LIBRARY_EVENT, { detail: next }))
+}
+
+async function saveAlgoDefinitionServer(definition: AlgoDefinition): Promise<boolean> {
+  try {
+    const response = await ceriousFetch('/api/algo-definitions/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ definition }),
+    })
+    return response.ok
+  } catch {
+    return false
+  }
 }
 
 function useAlgoLibrary() {
@@ -1127,7 +1266,7 @@ function useAlgoLibrary() {
     let cancelled = false
     const loadAcmeDefinitions = async () => {
       try {
-        const response = await fetch('/api/algo-manager/state')
+        const response = await ceriousFetch('/api/algo-manager/state')
         if (!response.ok) return
         const payload = await response.json()
         const definitions = Array.isArray(payload.definitions) ? payload.definitions : []
@@ -1135,13 +1274,10 @@ function useAlgoLibrary() {
           .map((definition: Record<string, unknown>) => acmeDefinitionToAlgo(definition))
           .filter(Boolean) as AlgoDefinition[]
         if (cancelled || !mapped.length) return
-        setAlgos(current => {
-          const merged = [
-            ...mapped,
-            ...current.filter(item => !mapped.some(remote => remote.id === item.id)),
-          ].sort((a, b) => b.updatedAt - a.updatedAt)
-          publishAlgoLibrary(merged)
-          return merged
+        setAlgos(() => {
+          const next = sortAlgoDefinitions(mapped)
+          publishAlgoLibrary(next)
+          return next
         })
       } catch {
         // Local staged algos remain usable if the service is down.
@@ -1154,7 +1290,10 @@ function useAlgoLibrary() {
   }, [])
 
   useEffect(() => {
-    const sync = () => setAlgos(loadAlgoLibrary())
+    const sync = (event: Event) => {
+      const detail = (event as CustomEvent<AlgoDefinition[]>).detail
+      setAlgos(Array.isArray(detail) ? sortAlgoDefinitions(detail) : loadAlgoLibrary())
+    }
     window.addEventListener(ALGO_LIBRARY_EVENT, sync)
     window.addEventListener('storage', sync)
     return () => {
@@ -1165,7 +1304,7 @@ function useAlgoLibrary() {
 
   const commit = (updater: (current: AlgoDefinition[]) => AlgoDefinition[]) => {
     setAlgos(current => {
-      const next = updater(current).sort((a, b) => b.updatedAt - a.updatedAt)
+      const next = sortAlgoDefinitions(updater(current))
       publishAlgoLibrary(next)
       return next
     })
@@ -1181,24 +1320,6 @@ function useAlgoLibrary() {
       item.id === id ? { ...item, ...patch, updatedAt: Date.now() } : item
     ))),
     removeAlgo: (id: string) => commit(current => current.filter(item => item.id !== id)),
-  }
-}
-
-function computeAlgoQuote(option: ProductOption | undefined, model: QuoteModel, quoteWidth: number) {
-  const market = option?.priceToBeat ?? option?.spot ?? option?.yes ?? 50
-  const rawPrice = market < 0 || market > 100 || option?.timeframe === '20sec' || option?.timeframe === 'synthetic'
-  const truth = option?.truthYes ?? market
-  const minPrice = rawPrice ? -Number.MAX_SAFE_INTEGER : 0
-  const maxPrice = rawPrice ? Number.MAX_SAFE_INTEGER : 100
-  const fair = model === 'study-peg' ? truth : market
-  const half = quoteWidth / 2
-  return {
-    fair,
-    bid: clamp(fair - half, minPrice, maxPrice),
-    ask: clamp(fair + half, minPrice, maxPrice),
-    edge: truth - market,
-    market,
-    truth,
   }
 }
 
@@ -1280,6 +1401,20 @@ type AcmeMacroState = {
   read: string
 }
 
+type AcmeSpreadConfig = {
+  symbol: string
+  label: string
+  meaning: string
+  legA: string
+  legB: string
+  ttRatio: string
+  displayFormula: string
+  syntheticTickValue: number
+  leftMultiplier: number
+  rightMultiplier: number
+  ratio: number
+}
+
 type AcmeIntelligence = {
   goose?: {
     strategy: string
@@ -1296,6 +1431,7 @@ type AcmeIntelligence = {
     spreads: AcmeSpreadStat[]
     strongest?: AcmeSpreadStat
   }
+  spreadConfigs?: AcmeSpreadConfig[]
   macroRegime?: AcmeMacroState
   liveSpreadSignals?: Array<Pick<AcmeSpreadStat, 'key' | 'label' | 'spread' | 'lastTraded' | 'mean' | 'longTermMean' | 'lookbackMean' | 'lookbackDays' | 'priorSettle' | 'moveFromMean' | 'movePctOfAtr' | 'z' | 'atr' | 'atr3' | 'atr20' | 'atr30' | 'blendedAtr' | 'halfAtr' | 'vwapBasis' | 'dayZ' | 'signalThreshold' | 'bias' | 'orderFlowScore' | 'updateCadence' | 'rvInterval' | 'rvBars' | 'rvUpdatedAt' | 'publishedAt' | 'publishReason' | 'lr27Mean' | 'lr27Upper2' | 'lr27Lower2' | 'lr27Sigma' | 'lr27Slope' | 'lr27Interval' | 'lr27Period' | 'lr27Bars' | 'lr27UpdatedAt' | 'lr27IsForming' | 'lr27Source' | 'signal' | 'theoreticalBid' | 'theoreticalAsk' | 'volume' | 'live'>>
 }
@@ -1313,6 +1449,30 @@ type AcmeChartStudy = {
   lowerDeviation?: number
   atrMultiplier?: number
   bins?: number
+}
+
+const DEFAULT_REGRESSION_CHART_STUDY: AcmeChartStudy = {
+  id: 'regch-default-27',
+  type: 'regression-channel',
+  lookback: 27,
+  upperDeviation: 2,
+  lowerDeviation: 2,
+}
+
+function defaultAcmeChartStudies(): AcmeChartStudy[] {
+  return [{ ...DEFAULT_REGRESSION_CHART_STUDY }]
+}
+
+function isDefaultRegressionChartStudy(study: AcmeChartStudy) {
+  return study.type === 'regression-channel'
+    && Math.floor(study.lookback || 0) === 27
+    && Number(study.upperDeviation ?? 2) === 2
+    && Number(study.lowerDeviation ?? 2) === 2
+}
+
+function initialAcmeChartStudies(settings?: AcmeChartSettings): AcmeChartStudy[] {
+  const configured = settings?.studies?.filter(study => study && study.type) ?? []
+  return configured.length ? configured : defaultAcmeChartStudies()
 }
 
 type AcmeChartSettings = {
@@ -1368,6 +1528,10 @@ type AcmePositionsOrdersState = {
   fetchedAt: string
   fillsJournalUpdatedAt?: string
   runtimeUpdatedAt?: string
+  simOrders?: SimOrder[]
+  simPositions?: SimPosition[]
+  fills?: Record<string, PolyTradeTick[]>
+  simMessages?: string[]
   positions: AcmePositionRow[]
   orders: AcmeOrderRow[]
   summary: {
@@ -1961,56 +2125,6 @@ function useAcmeIntelligence(intervalMs = 60000): AcmeIntelligence | null {
   return data
 }
 
-type AcmeLr27State = {
-  symbol: string
-  label?: string
-  interval: string
-  period: number
-  bars: number
-  updatedAt: number
-  isForming?: boolean
-  mean: number
-  upper2: number
-  lower2: number
-  sigma: number
-  slope: number
-  lastTraded?: number
-  live?: boolean
-  source?: string
-}
-
-async function fetchFreshLr27(symbol: string): Promise<AcmeLr27State> {
-  const response = await fetch(`/api/acme/lr27/${encodeURIComponent(symbol)}?fresh=true&nonce=${Date.now()}`, { cache: 'no-store' })
-  if (!response.ok) {
-    let detail = `HTTP ${response.status}`
-    try {
-      const payload = await response.json() as { detail?: string }
-      if (payload.detail) detail = payload.detail
-    } catch {
-      // Use HTTP fallback.
-    }
-    throw new Error(`LR27 refresh failed for ${symbol}: ${detail}`)
-  }
-  return await response.json() as AcmeLr27State
-}
-
-async function publishAlgoGuardAuditEvent(algo: AlgoDefinition, marketKey: string, reason: string): Promise<void> {
-  try {
-    await fetch('/api/algo-manager/guard-event', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        algoId: algo.id,
-        algoName: algo.name,
-        symbol: marketKey,
-        reason,
-      }),
-    })
-  } catch {
-    // Local pause still protects the order path if audit publishing is down.
-  }
-}
-
 async function submitSharedOrder(order: Partial<SimOrder> & {
   marketKey: string
   side: 'bid' | 'offer'
@@ -2019,7 +2133,7 @@ async function submitSharedOrder(order: Partial<SimOrder> & {
   operator: string
   source: 'manual' | 'algo'
 }): Promise<SimOrder | undefined> {
-  const response = await fetch('/api/order', {
+  const response = await ceriousFetch('/api/order', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(order),
@@ -2040,7 +2154,7 @@ async function submitSharedOrder(order: Partial<SimOrder> & {
 }
 
 async function cancelSharedOrder(orderId: string): Promise<void> {
-  const response = await fetch(`/api/acme/orders/${encodeURIComponent(orderId)}/cancel`, { method: 'POST' })
+  const response = await ceriousFetch(`/api/acme/orders/${encodeURIComponent(orderId)}/cancel`, { method: 'POST' })
   const payload = await response.json().catch(() => ({}))
   if (!response.ok || !payload.ok) {
     throw new Error(String(payload.detail || payload.message || `Cancel rejected HTTP ${response.status}`))
@@ -2061,9 +2175,18 @@ function useAcmePositionsOrders() {
 
   const pull = async () => {
     try {
-      const response = await fetch('/api/acme/positions-orders', { cache: 'no-store' })
+      const response = await ceriousFetch('/api/acme/positions-orders', { cache: 'no-store' })
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      setData(await response.json())
+      const payload = await response.json() as AcmePositionsOrdersState
+      setData(payload)
+      if (payload.simOrders || payload.simPositions || payload.fills || payload.simMessages) {
+        useStore.getState().setSimTradingState({
+          simOrders: payload.simOrders,
+          simPositions: payload.simPositions,
+          fills: payload.fills,
+          simMessages: payload.simMessages,
+        })
+      }
       setError('')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Positions refresh failed')
@@ -2085,47 +2208,6 @@ function useAcmePositionsOrders() {
   }, [])
 
   return { data, error, refresh: pull }
-}
-
-function useAcmeBars(symbol: string, timeframe: AcmeChartTimeframe) {
-  const [bars, setBars] = useState<Bar[]>([])
-  const [error, setError] = useState('')
-
-  useEffect(() => {
-    let cancelled = false
-    let timeoutId = 0
-
-    const pull = async () => {
-      const key = symbol || 'ES_NQ'
-      let nextDelay = 15_000
-      try {
-        const nextBars = await fetchBars(key, timeframe, 1200, 60_000)
-        if (!cancelled) {
-          if (nextBars.length) {
-            setBars(nextBars)
-            setError('')
-          } else {
-            nextDelay = 7_500
-            setError('')
-          }
-        }
-      } catch (err) {
-        nextDelay = 7_500
-        const message = err instanceof Error ? err.message : 'Chart bars unavailable'
-        const transient = /timed out|abort/i.test(message)
-        if (!cancelled) setError(transient ? '' : message)
-      } finally {
-        if (!cancelled) timeoutId = window.setTimeout(pull, nextDelay)
-      }
-    }
-    pull()
-    return () => {
-      cancelled = true
-      if (timeoutId) window.clearTimeout(timeoutId)
-    }
-  }, [symbol, timeframe])
-
-  return { bars, error }
 }
 
 function useMarketBootstrap() {
@@ -2154,10 +2236,135 @@ function useMarketBootstrap() {
   }, [setMarkets])
 }
 
+type MarketDataStatusPayload = {
+  ok?: boolean
+  provider?: string
+  dataset?: string
+  schema?: string
+  status?: string
+  detail?: string
+  running?: boolean
+  connected?: boolean
+  subscribed?: boolean
+  heartbeatOk?: boolean
+  priceReady?: boolean
+  subscriptionAcks?: number
+  mappings?: number
+  definitions?: number
+  records?: number
+  lastStatusMs?: number
+  lastHeartbeatMs?: number
+  lastRecordMs?: number
+  error?: string
+  bookSymbols?: string[]
+}
+
+type ExecutionStatusPayload = {
+  ok?: boolean
+  destination?: string
+  exchange?: string
+  required?: boolean
+  healthy?: boolean
+  stateOwner?: string
+}
+
+type CeriousReadiness = {
+  gatewayOk: boolean
+  marketData: MarketDataStatusPayload | null
+  execution: ExecutionStatusPayload | null
+  connected: boolean
+  priceReady: boolean
+  executionReady: boolean
+  detail: string
+  checkedAt: number
+}
+
+const EMPTY_READINESS: CeriousReadiness = {
+  gatewayOk: false,
+  marketData: null,
+  execution: null,
+  connected: false,
+  priceReady: false,
+  executionReady: false,
+  detail: 'Checking services',
+  checkedAt: 0,
+}
+
+function useCeriousServiceReadiness(): CeriousReadiness {
+  const setConnected = useStore(s => s.setConnected)
+  const [readiness, setReadiness] = useState<CeriousReadiness>(EMPTY_READINESS)
+
+  useEffect(() => {
+    let cancelled = false
+    const readJson = async <T,>(path: string): Promise<T | null> => {
+      const response = await ceriousFetch(path, { cache: 'no-store' })
+      if (!response.ok) return null
+      return response.json() as Promise<T>
+    }
+    const pull = async () => {
+      let gatewayOk = false
+      let marketData: MarketDataStatusPayload | null = null
+      let execution: ExecutionStatusPayload | null = null
+      try {
+        const [healthResult, marketResult, executionResult] = await Promise.allSettled([
+          readJson<Record<string, unknown>>('/api/health'),
+          readJson<MarketDataStatusPayload>('/api/market-data/status'),
+          readJson<ExecutionStatusPayload>('/api/execution/status'),
+        ])
+        gatewayOk = healthResult.status === 'fulfilled' && Boolean(healthResult.value?.ok)
+        marketData = marketResult.status === 'fulfilled' ? marketResult.value : null
+        execution = executionResult.status === 'fulfilled' ? executionResult.value : null
+      } catch {
+        gatewayOk = false
+      }
+      if (cancelled) return
+      const mdConnected = Boolean(marketData?.connected)
+      const executionReady = Boolean(execution?.healthy)
+      const priceReady = Boolean(marketData?.priceReady)
+      const detail = !gatewayOk
+        ? 'Gateway down'
+        : !mdConnected
+          ? marketData?.error || marketData?.detail || 'Market data connecting'
+          : !priceReady
+            ? 'Market data connected; waiting for first book'
+            : !executionReady
+              ? 'Execution service connecting'
+              : 'Services ready'
+      const next = {
+        gatewayOk,
+        marketData,
+        execution,
+        connected: gatewayOk && mdConnected && executionReady,
+        priceReady,
+        executionReady,
+        detail,
+        checkedAt: Date.now(),
+      }
+      setConnected(next.connected)
+      setReadiness(next)
+    }
+    pull()
+    const id = window.setInterval(pull, 2000)
+    return () => {
+      cancelled = true
+      window.clearInterval(id)
+    }
+  }, [setConnected])
+
+  return readiness
+}
+
 function useProductOptions(): ProductOption[] {
   const markets = useStore(s => s.markets)
 
   return useMemo(() => {
+    const serverAssetOrder = Array.from(new Set(markets.map(market => market.asset).filter(Boolean))) as Asset[]
+    const assetRank = (asset?: Asset) => {
+      const serverRank = serverAssetOrder.indexOf(asset as Asset)
+      if (serverRank >= 0) return serverRank
+      const fallbackRank = CME_PRODUCT_ASSETS.indexOf(asset ?? 'EVENT')
+      return fallbackRank >= 0 ? serverAssetOrder.length + fallbackRank : Number.MAX_SAFE_INTEGER
+    }
     return markets.map(market => ({
       provider: 'cme' as const,
       symbol: market.key,
@@ -2181,8 +2388,8 @@ function useProductOptions(): ProductOption[] {
       multiplier: market.multiplier,
     }))
       .sort((a, b) => {
-        const assetRank = CME_PRODUCT_ASSETS.indexOf(a.asset ?? 'EVENT') - CME_PRODUCT_ASSETS.indexOf(b.asset ?? 'EVENT')
-        if (assetRank !== 0) return assetRank
+        const rank = assetRank(a.asset) - assetRank(b.asset)
+        if (rank !== 0) return rank
         return a.symbol.localeCompare(b.symbol)
       })
   }, [markets])
@@ -2190,11 +2397,18 @@ function useProductOptions(): ProductOption[] {
 
 function mappedLiquidityProducts(options: ProductOption[], cryptoPrices: ReturnType<typeof useStore.getState>['cryptoPrices']): ProductOption[] {
   void cryptoPrices
+  const serverAssetOrder = Array.from(new Set(options.map(option => option.asset).filter(Boolean))) as Asset[]
+  const assetRank = (asset?: Asset) => {
+    const serverRank = serverAssetOrder.indexOf(asset as Asset)
+    if (serverRank >= 0) return serverRank
+    const fallbackRank = CME_PRODUCT_ASSETS.indexOf(asset ?? 'EVENT')
+    return fallbackRank >= 0 ? serverAssetOrder.length + fallbackRank : Number.MAX_SAFE_INTEGER
+  }
   return [...options].sort((a, b) => {
     const providerRank = PROVIDERS.findIndex(provider => provider.key === a.provider) - PROVIDERS.findIndex(provider => provider.key === b.provider)
     if (providerRank !== 0) return providerRank
-    const assetRank = CME_PRODUCT_ASSETS.indexOf(a.asset ?? 'EVENT') - CME_PRODUCT_ASSETS.indexOf(b.asset ?? 'EVENT')
-    if (assetRank !== 0) return assetRank
+    const rank = assetRank(a.asset) - assetRank(b.asset)
+    if (rank !== 0) return rank
     return a.symbol.localeCompare(b.symbol)
   })
 }
@@ -2402,16 +2616,16 @@ function WorkspaceWindowFrame({
     { direction: 'se', className: 'bottom-0 right-0 h-4 w-4 cursor-nwse-resize' },
     { direction: 'sw', className: 'bottom-0 left-0 h-4 w-4 cursor-nesw-resize' },
   ]
-  const frameBorderColor = active ? '#3b82f6' : '#334155'
+  const frameBorderColor = active ? '#6ea8ff' : '#4b5563'
   const frameShadow = active
-    ? '0 0 0 1px rgba(147, 197, 253, .35), 0 18px 42px rgba(0, 0, 0, .62)'
-    : '0 0 0 1px rgba(148, 163, 184, .22), 0 14px 34px rgba(0, 0, 0, .56)'
+    ? '0 0 0 1px rgba(110, 168, 255, .36), 0 12px 30px rgba(0, 0, 0, .48)'
+    : '0 0 0 1px rgba(156, 163, 175, .18), 0 10px 22px rgba(0, 0, 0, .42)'
 
   return (
     <section
       data-window-frame="true"
       className={cx(
-        'absolute overflow-hidden rounded border-2 backdrop-blur',
+        'absolute overflow-hidden rounded-sm border-2',
       )}
       style={{
         left: item.x,
@@ -2421,18 +2635,18 @@ function WorkspaceWindowFrame({
         zIndex: item.z,
         borderColor: frameBorderColor,
         boxShadow: frameShadow,
-        background: 'linear-gradient(180deg, rgba(17,22,31,0.96), rgba(6,8,13,0.98))',
+        background: '#11151b',
       }}
       onPointerDown={onActivate}
     >
       <div
-        className="flex h-[34px] cursor-move select-none items-center justify-between border-b bg-surface-panel/95 px-2"
+        className="flex h-[34px] cursor-move select-none items-center justify-between border-b bg-surface-panel px-2"
         style={{ borderColor: frameBorderColor }}
         onPointerDown={startDrag}
       >
         <div className="flex min-w-0 items-center gap-2">
-          <span className={cx('h-2 w-2 rounded-full', active ? 'bg-accent' : 'bg-muted/50')} />
-          <span className="truncate text-[11px] font-bold uppercase tracking-wide text-white">{displayTitle}</span>
+          <span className={cx('h-2 w-2 rounded-full', active ? 'bg-accent' : 'bg-muted/60')} />
+          <span className="truncate text-[11px] font-bold uppercase tracking-normal text-white">{displayTitle}</span>
         </div>
         <div className="flex items-center gap-1">
           <button className="btn-neutral rounded p-1" title="Clone window" onClick={onClone}>
@@ -2549,8 +2763,8 @@ function cmeBookToPolyCompat(cmeBook: CmeBook): PolyBook {
     market_key: cmeBook.symbol,
     question: `${cmeBook.symbol} CME depth`,
     up_token_id: cmeBook.symbol,
-    bids: (cmeBook.bids ?? []).map(level => ({ price: level.price, size: level.size })),
-    asks: (cmeBook.asks ?? []).map(level => ({ price: level.price, size: level.size })),
+    bids: (cmeBook.bids ?? []).map(level => ({ price: level.price, size: level.size, count: level.count ?? level.ct })),
+    asks: (cmeBook.asks ?? []).map(level => ({ price: level.price, size: level.size, count: level.count ?? level.ct })),
     best_bid: cmeBook.bestBid ?? cmeBook.bids?.[0]?.price ?? null,
     best_ask: cmeBook.bestAsk ?? cmeBook.asks?.[0]?.price ?? null,
     mid: cmeBook.mid ?? 0,
@@ -2593,7 +2807,7 @@ function useCmeMarketDataSubscriptions(symbols: string[]) {
     const sockets: WebSocket[] = []
     const timers: number[] = []
     const store = () => useStore.getState()
-    const wsBase = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`
+    const wsBase = ceriousWsBase()
 
     const ingestBook = (target: string, book: CmeBook) => {
       if (!alive || book.symbol?.toUpperCase() !== target) return
@@ -2624,7 +2838,10 @@ function useCmeMarketDataSubscriptions(symbols: string[]) {
         })
         .catch(() => undefined)
 
-      const ws = new WebSocket(`${wsBase}/${encodeURIComponent(target)}?provider=cme`)
+      const wsParams = new URLSearchParams({ provider: 'cme' })
+      const token = workspaceSessionToken()
+      if (token) wsParams.set('token', token)
+      const ws = new WebSocket(`${wsBase}/${encodeURIComponent(target)}?${wsParams.toString()}`)
       ws.onmessage = event => {
         try {
           const payload = JSON.parse(event.data)
@@ -2738,18 +2955,31 @@ async function notifyDesktop(title: string, body: string): Promise<AlertDelivery
 async function sendSmsAlert(phone: string | undefined, message: string): Promise<AlertDeliveryResult> {
   if (!phone?.trim()) return { channel: 'sms', ok: false, message: 'Text phone missing' }
   try {
-    const response = await fetch('/api/alerts/sms', {
+    const response = await ceriousFetch('/api/alerts/sms', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ to: phone.trim(), message }),
     })
-    const payload = await response.json().catch(() => ({})) as { ok?: boolean; configured?: boolean; error?: string; provider?: string }
+    const payload = await response.json().catch(() => ({})) as { ok?: boolean; configured?: boolean; dryRun?: boolean; error?: string; provider?: string; message?: string; carrierStatus?: string }
     if (response.ok && payload.ok !== false) {
-      return { channel: 'sms', ok: true, message: `Text sent${payload.provider ? ` via ${payload.provider}` : ''}` }
+      const provider = payload.provider ? ` via ${payload.provider}` : ''
+      const carrier = payload.carrierStatus ? ` / ${payload.carrierStatus}` : ''
+      const verb = payload.dryRun ? 'dry-run accepted' : 'accepted'
+      return { channel: 'sms', ok: true, message: `Text ${verb}${provider}${carrier}` }
     }
     return { channel: 'sms', ok: false, message: payload.error ?? `Text failed (${response.status})` }
   } catch (error) {
     return { channel: 'sms', ok: false, message: error instanceof Error ? error.message : 'Text transport failed' }
+  }
+}
+
+async function fetchSmsAlertStatus(): Promise<SmsAlertStatus> {
+  try {
+    const response = await ceriousFetch('/api/alerts/sms/status')
+    const payload = await response.json().catch(() => ({})) as SmsAlertStatus
+    return response.ok ? payload : { ok: false, ready: false, error: payload.error ?? `SMS status failed (${response.status})` }
+  } catch (error) {
+    return { ok: false, ready: false, error: error instanceof Error ? error.message : 'SMS status unavailable' }
   }
 }
 
@@ -2767,7 +2997,14 @@ function TreeProductPicker({
   const [expanded, setExpanded] = useState<ProviderKey>('cme')
   const [query, setQuery] = useState('')
   const existing = new Set(rows.map(row => `${row.provider}-${row.symbol}`))
-  const mappedOptions = options.filter(option => option.asset && CME_PRODUCT_ASSETS.includes(option.asset))
+  const mappedOptions = options.filter(option => option.asset)
+  const serverAssetOrder = Array.from(new Set(mappedOptions.map(option => option.asset).filter(Boolean))) as Asset[]
+  const assetRank = (asset?: Asset) => {
+    const serverRank = serverAssetOrder.indexOf(asset as Asset)
+    if (serverRank >= 0) return serverRank
+    const fallbackRank = CME_PRODUCT_ASSETS.indexOf(asset ?? 'EVENT')
+    return fallbackRank >= 0 ? serverAssetOrder.length + fallbackRank : Number.MAX_SAFE_INTEGER
+  }
 
   const visibleForProvider = (provider: ProviderKey) => mappedOptions
     .filter(option => option.provider === provider)
@@ -2777,8 +3014,8 @@ function TreeProductPicker({
       return `${option.label} ${option.symbol} ${option.subtitle}`.toLowerCase().includes(q)
     })
     .sort((a, b) => {
-      const ai = CME_PRODUCT_ASSETS.indexOf(a.asset ?? 'EVENT')
-      const bi = CME_PRODUCT_ASSETS.indexOf(b.asset ?? 'EVENT')
+      const ai = assetRank(a.asset)
+      const bi = assetRank(b.asset)
       if (ai !== bi) return ai - bi
       return a.label.localeCompare(b.label)
     })
@@ -3228,18 +3465,25 @@ function bookUsesRawPrices(book: PolyBook | undefined, ticks?: PolyTradeTick[]):
   return bookPrices.some(isRawDepthPrice) || (ticks ?? []).some(tick => isRawDepthPrice(tick.price))
 }
 
+type DepthLevelMatrixValue = {
+  size: number
+  count: number
+}
+
 function aggregateDepthLevels(
-  levels: Array<{ price: number; size: number }> | undefined,
+  levels: Array<{ price: number; size: number; count?: number; ct?: number }> | undefined,
   rowStep: number,
-): Map<string, number> {
-  const next = new Map<string, number>()
+): Map<string, DepthLevelMatrixValue> {
+  const next = new Map<string, DepthLevelMatrixValue>()
   if (!Number.isFinite(rowStep) || rowStep <= 0) return next
   for (const level of levels ?? []) {
     const price = finiteDepthPrice(level.price)
     const size = Number(level.size)
     if (price === undefined || !Number.isFinite(size) || size <= 0) continue
+    const count = Math.max(0, Math.trunc(Number(level.count ?? level.ct ?? 0))) || 0
     const key = fmtLadderPrice(roundToTick(price, rowStep), rowStep)
-    next.set(key, (next.get(key) ?? 0) + size)
+    const current = next.get(key) ?? { size: 0, count: 0 }
+    next.set(key, { size: current.size + size, count: current.count + count })
   }
   return next
 }
@@ -3266,9 +3510,7 @@ function useDepthMarketStream(asset: Asset | string | undefined, provider: Provi
     let ws: WebSocket | null = null
     let endpointIndex = 0
     const configuredWsBase = (import.meta.env.VITE_CERIOUS_WS_BASE as string | undefined)?.trim()
-    const endpoints = [
-      configuredWsBase || `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`,
-    ]
+    const endpoints = [configuredWsBase || ceriousWsBase()]
     const target = String(asset).toUpperCase()
 
     const ingestBook = (nextBook: CmeBook, source: 'ws' | 'snapshot' | 'rest') => {
@@ -3319,7 +3561,10 @@ function useDepthMarketStream(asset: Asset | string | undefined, provider: Provi
       if (!alive) return
       const base = endpoints[endpointIndex] ?? endpoints[0]
       setState(current => ({ ...current, status: current.lastEventAt ? 'retrying' : 'connecting' }))
-      ws = new WebSocket(`${base}/${encodeURIComponent(target)}?provider=${encodeURIComponent(marketProvider)}`)
+      const wsParams = new URLSearchParams({ provider: marketProvider })
+      const token = workspaceSessionToken()
+      if (token) wsParams.set('token', token)
+      ws = new WebSocket(`${base}/${encodeURIComponent(target)}?${wsParams.toString()}`)
 
       ws.onopen = () => {
         if (!alive) return
@@ -3398,8 +3643,8 @@ function NormalDepthLadderWindow({
     return key || undefined
   }, [activeSymbol, option?.asset, option?.marketKey])
   const depthStream = useDepthMarketStream(streamAsset, activeProvider)
+  const serviceConnected = useStore(s => s.connected)
   const simulationEnabled = useStore(s => s.simulationEnabled)
-  const cancelSimOrder = useStore(s => s.cancelSimOrder)
   const simOrders = useStore(s => s.simOrders)
   const simPositions = useStore(s => s.simPositions)
   const simMessages = useStore(s => s.simMessages)
@@ -3564,12 +3809,12 @@ function NormalDepthLadderWindow({
     const preferBookLast = bookLast !== undefined && bookTs >= tickTs
     const lastTrade = preferBookLast ? bookLast : tickLast ?? bookLast
     const normalizedBids = (book?.bids ?? [])
-      .map(level => ({ price: finiteDepthPrice(level.price), size: Number(level.size) }))
-      .filter((level): level is { price: number; size: number } => level.price !== undefined && Number.isFinite(level.size))
+      .map(level => ({ price: finiteDepthPrice(level.price), size: Number(level.size), count: Number(level.count ?? level.ct ?? 0) }))
+      .filter((level): level is { price: number; size: number; count: number } => level.price !== undefined && Number.isFinite(level.size))
       .sort((a, b) => b.price - a.price)
     const normalizedAsks = (book?.asks ?? [])
-      .map(level => ({ price: finiteDepthPrice(level.price), size: Number(level.size) }))
-      .filter((level): level is { price: number; size: number } => level.price !== undefined && Number.isFinite(level.size))
+      .map(level => ({ price: finiteDepthPrice(level.price), size: Number(level.size), count: Number(level.count ?? level.ct ?? 0) }))
+      .filter((level): level is { price: number; size: number; count: number } => level.price !== undefined && Number.isFinite(level.size))
       .sort((a, b) => a.price - b.price)
     const bestBid = finiteDepthPrice(book?.bestBid) ?? normalizedBids[0]?.price
     const bestAsk = finiteDepthPrice(book?.bestAsk) ?? normalizedAsks[0]?.price
@@ -3596,6 +3841,12 @@ function NormalDepthLadderWindow({
   }, [book, option?.priceToBeat, option?.spot, option?.tickSize, priceMultiplier, ticks])
   const depthDefinitionReady = depthDisplayContract.ready && Number.isFinite(ladderModel.rowStep) && ladderModel.rowStep > 0
   const depthDefinitionMessage = depthDisplayContract.message ?? 'Waiting for price service product definition.'
+  const depthPriceReady = latestDepthLastPrice !== undefined
+    || finiteDepthPrice(book?.bestBid) !== undefined
+    || finiteDepthPrice(book?.bestAsk) !== undefined
+    || finiteDepthPrice(book?.mid) !== undefined
+    || finiteDepthPrice(option?.spot) !== undefined
+    || finiteDepthPrice(option?.priceToBeat) !== undefined
 
   const simDepthOrders = useMemo(() => {
     if (!marketKey || !Number.isFinite(ladderModel.rowStep) || ladderModel.rowStep <= 0) return []
@@ -3629,8 +3880,9 @@ function NormalDepthLadderWindow({
   }, [ladderMarketAliases, ladderModel.rowStep, marketKey, simOrders])
 
   const displayActiveOrders = useMemo(() => {
+    if (simulationEnabled) return []
     const simIds = new Set(simOrders.map(order => order.id))
-    return activeOrders.filter(order => !simulationEnabled || !simIds.has(order.id))
+    return activeOrders.filter(order => !simIds.has(order.id))
   }, [activeOrders, simOrders, simulationEnabled])
 
   useEffect(() => {
@@ -3692,6 +3944,8 @@ function NormalDepthLadderWindow({
     return Array.from({ length: rowCount }, (_, index) => {
       const price = center + (centerIndex - index) * rowStep
       const key = fmtLadderPrice(roundToTick(price, rowStep), rowStep)
+      const bidCell = ladderModel.bidMap.get(key)
+      const askCell = ladderModel.askMap.get(key)
       const myBidSize = displayActiveOrders
         .filter(order => order.side === 'BID' && order.priceKey === key && (order.status === 'pending' || order.status === 'working'))
         .reduce((sum, order) => sum + order.size, 0)
@@ -3703,8 +3957,10 @@ function NormalDepthLadderWindow({
       return {
         price,
         key,
-        bidSize: ladderModel.bidMap.get(key) ?? 0,
-        askSize: ladderModel.askMap.get(key) ?? 0,
+        bidSize: bidCell?.size ?? 0,
+        bidCount: bidCell?.count ?? 0,
+        askSize: askCell?.size ?? 0,
+        askCount: askCell?.count ?? 0,
         myBidSize,
         myAskSize,
         inside: Number.isFinite(ladderModel.bid) && Number.isFinite(ladderModel.ask) && price >= ladderModel.bid - rowStep / 2 && price <= ladderModel.ask + rowStep / 2,
@@ -3723,13 +3979,15 @@ function NormalDepthLadderWindow({
       ...displayActiveOrders.filter(order => order.status === 'pending' || order.status === 'working'),
       ...simDepthOrders,
     ]
-    const bidQty = working
+    const bidOrders = working.filter(order => order.side === 'BID').length
+    const askOrders = working.filter(order => order.side === 'ASK').length
+    const bidContracts = working
       .filter(order => order.side === 'BID')
       .reduce((sum, order) => sum + Number(order.size || 0), 0)
-    const askQty = working
+    const askContracts = working
       .filter(order => order.side === 'ASK')
       .reduce((sum, order) => sum + Number(order.size || 0), 0)
-    return { bidQty, askQty, totalQty: bidQty + askQty }
+    return { bidOrders, askOrders, bidContracts, askContracts, totalOrders: bidOrders + askOrders, totalContracts: bidContracts + askContracts }
   }, [displayActiveOrders, simDepthOrders])
   const activeForSide = (side: DepthOrderSide) => (
     displayActiveOrders.some(order => order.side === side && (order.status === 'pending' || order.status === 'working'))
@@ -3750,50 +4008,19 @@ function NormalDepthLadderWindow({
         openPnl,
       }
     }
-    const filled = activeOrders.filter(order => order.status === 'filled')
-    const net = filled.reduce((sum, order) => sum + (order.side === 'BID' ? order.size : -order.size), 0)
-    const notional = filled.reduce((sum, order) => sum + (order.fillPrice ?? Number(order.priceKey)) * order.size, 0)
-    const size = filled.reduce((sum, order) => sum + order.size, 0)
     return {
-      net,
-      avg: size > 0 ? notional / size : undefined,
+      net: 0,
+      avg: undefined,
       openPnl: 0,
     }
-  }, [activeOrders, ladderMarketAliases, marketKey, simPositions])
-
-  const getSimFillPrice = (side: DepthOrderSide, orderType: 'limit' | 'market', limitPrice: number): number | null => {
-    const bestBid = Number(ladderModel.bid)
-    const bestAsk = Number(ladderModel.ask)
-    if (orderType === 'market') {
-      const fillPrice = side === 'BID' ? bestAsk : bestBid
-      return Number.isFinite(fillPrice) ? fillPrice : null
-    }
-    if (side === 'BID' && Number.isFinite(bestAsk) && limitPrice >= bestAsk) return bestAsk
-    if (side === 'ASK' && Number.isFinite(bestBid) && limitPrice <= bestBid) return bestBid
-    return null
-  }
+  }, [ladderMarketAliases, marketKey, simPositions])
 
   const applyDepthOrderState = (order: LocalDepthOrder): LocalDepthOrder => {
     if (simulationEnabled) {
-      const fillPrice = getSimFillPrice(order.side, order.orderType, Number(order.priceKey))
-      return fillPrice === null ? { ...order, status: 'working' } : { ...order, status: 'filled', fillPrice, filledAt: Date.now() }
+      return { ...order, status: order.orderType === 'market' ? 'pending' : 'working' }
     }
-    if (!simulationEnabled) return { ...order, status: fastTrade ? 'working' : 'pending' }
-    const fillPrice = getSimFillPrice(order.side, order.orderType, Number(order.priceKey))
-    if (fillPrice !== null) {
-      return { ...order, status: 'filled', fillPrice, filledAt: Date.now() }
-    }
-    return { ...order, status: 'working' }
+    return { ...order, status: fastTrade ? 'working' : 'pending' }
   }
-
-  useEffect(() => {
-    if (!simulationEnabled) return
-    setActiveOrders(current => current.map(order => {
-      if (order.status !== 'working') return order
-      const fillPrice = getSimFillPrice(order.side, order.orderType, Number(order.priceKey))
-      return fillPrice === null ? order : { ...order, status: 'filled', fillPrice, filledAt: Date.now() }
-    }))
-  }, [ladderModel.ask, ladderModel.bid, simulationEnabled])
 
   const submitDepthOrder = async (side: DepthOrderSide, priceKey: string) => {
     if (!marketKey) return
@@ -3813,8 +4040,8 @@ function NormalDepthLadderWindow({
       status: 'pending',
       createdAt: Date.now(),
     })
-    setActiveOrders(current => [order, ...current].slice(0, 80))
     if (simulationEnabled) {
+      setDefaultStatus(`Sending ${side} ${priceKey}`)
       await submitSharedOrder({
         id,
         marketKey,
@@ -3833,9 +4060,10 @@ function NormalDepthLadderWindow({
       })
       return
     }
+    setActiveOrders(current => [order, ...current].slice(0, 80))
     if (fastTrade && !simulationEnabled) {
       try {
-        await fetch('/api/order', {
+        await ceriousFetch('/api/order', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -3862,7 +4090,7 @@ function NormalDepthLadderWindow({
     )))
     if (simulationEnabled) return
     pending.forEach(order => {
-      void fetch('/api/order', {
+      void ceriousFetch('/api/order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -3882,15 +4110,19 @@ function NormalDepthLadderWindow({
   const cancelOrderGroup = (event: React.MouseEvent, side: DepthOrderSide, priceKey: string) => {
     event.stopPropagation()
     setActiveOrders(current => current.filter(order => !(order.side === side && order.priceKey === priceKey)))
+    setDefaultStatus(`Cancel requested ${side} ${priceKey}`)
     simDepthOrders
       .filter(order => order.side === side && order.priceKey === priceKey)
       .forEach(order => {
-        void cancelSharedOrder(order.id).catch(() => cancelSimOrder(order.id))
+        void cancelSharedOrder(order.id)
+          .then(() => setDefaultStatus(`Cancelled ${side} ${priceKey}`))
+          .catch(err => setDefaultStatus(`Cancel failed ${side} ${priceKey}: ${err instanceof Error ? err.message : 'gateway unavailable'}`))
       })
   }
 
   const moveOrder = (targetPriceKey: string) => {
     if (!draggingOrder || !marketKey) return
+    const orderToMove = draggingOrder
     if (targetPriceKey === draggingOrder.priceKey) {
       setDraggingOrder(null)
       setDragTargetPriceKey(null)
@@ -3900,33 +4132,40 @@ function NormalDepthLadderWindow({
       order.id === draggingOrder.id ? applyDepthOrderState({ ...order, priceKey: targetPriceKey, status: 'pending', fillPrice: undefined, filledAt: undefined }) : order
     )))
     if (simulationEnabled) {
-      cancelSimOrder(draggingOrder.id)
-      void cancelSharedOrder(draggingOrder.id).catch(() => undefined)
-      void submitSharedOrder({
-        id: draggingOrder.id,
-        marketKey: marketKey ?? '',
-        outcome: 'yes',
-        side: draggingOrder.side === 'BID' ? 'bid' : 'offer',
-        orderType: 'limit',
-        price: Number(targetPriceKey),
-        size: draggingOrder.size,
-        operator: operatorName,
-        source: draggingOrder.source ?? 'manual',
-        strategy: draggingOrder.strategy ?? 'depth-ladder',
-        legId: draggingOrder.legId ?? `depth-${marketKey}-${targetPriceKey}-${draggingOrder.side}`,
-        orderTag: draggingOrder.orderTag,
-        algoRole: draggingOrder.algoRole,
-        algoId: draggingOrder.algoId,
-        algoName: draggingOrder.algoName,
-        parentOrderId: draggingOrder.parentOrderId,
-        layer: draggingOrder.layer,
-        trigger: draggingOrder.trigger,
-        coverTicksFromFill: draggingOrder.coverTicksFromFill,
-        coverTickSize: draggingOrder.coverTickSize,
-        tickSize: draggingOrder.tickSize ?? book?.tickSize ?? option?.tickSize,
-        tickValue: draggingOrder.tickValue ?? book?.tickValue ?? option?.tickValue,
-        multiplier: draggingOrder.multiplier ?? book?.multiplier ?? option?.multiplier,
-      }).catch(() => undefined)
+      setDefaultStatus(`Modify requested ${orderToMove.id}`)
+      void (async () => {
+        try {
+          await cancelSharedOrder(orderToMove.id)
+          await submitSharedOrder({
+            id: orderToMove.id,
+            marketKey: marketKey ?? '',
+            outcome: 'yes',
+            side: orderToMove.side === 'BID' ? 'bid' : 'offer',
+            orderType: 'limit',
+            price: Number(targetPriceKey),
+            size: orderToMove.size,
+            operator: operatorName,
+            source: orderToMove.source ?? 'manual',
+            strategy: orderToMove.strategy ?? 'depth-ladder',
+            legId: orderToMove.legId ?? `depth-${marketKey}-${targetPriceKey}-${orderToMove.side}`,
+            orderTag: orderToMove.orderTag,
+            algoRole: orderToMove.algoRole,
+            algoId: orderToMove.algoId,
+            algoName: orderToMove.algoName,
+            parentOrderId: orderToMove.parentOrderId,
+            layer: orderToMove.layer,
+            trigger: orderToMove.trigger,
+            coverTicksFromFill: orderToMove.coverTicksFromFill,
+            coverTickSize: orderToMove.coverTickSize,
+            tickSize: orderToMove.tickSize ?? book?.tickSize ?? option?.tickSize,
+            tickValue: orderToMove.tickValue ?? book?.tickValue ?? option?.tickValue,
+            multiplier: orderToMove.multiplier ?? book?.multiplier ?? option?.multiplier,
+          })
+          setDefaultStatus(`Modified ${orderToMove.id}`)
+        } catch (err) {
+          setDefaultStatus(`Modify failed ${orderToMove.id}: ${err instanceof Error ? err.message : 'gateway unavailable'}`)
+        }
+      })()
     }
     setDraggingOrder(null)
     setDragTargetPriceKey(null)
@@ -3950,10 +4189,13 @@ function NormalDepthLadderWindow({
 
   const clearSide = (side?: DepthOrderSide) => {
     setActiveOrders(current => side ? current.filter(order => order.side !== side) : [])
+    setDefaultStatus(side ? `Cancel requested ${side}` : 'Cancel requested all')
     simDepthOrders
       .filter(order => !side || order.side === side)
       .forEach(order => {
-        void cancelSharedOrder(order.id).catch(() => cancelSimOrder(order.id))
+        void cancelSharedOrder(order.id)
+          .then(() => setDefaultStatus(side ? `Cancelled ${side}` : 'Cancelled all working orders'))
+          .catch(err => setDefaultStatus(`Cancel failed: ${err instanceof Error ? err.message : 'gateway unavailable'}`))
       })
   }
 
@@ -4051,25 +4293,27 @@ function NormalDepthLadderWindow({
     const orders = displayActiveOrders.filter(item => item.side === side && item.priceKey === priceKey)
     const sharedOrders = simDepthOrders.filter(item => item.side === side && item.priceKey === priceKey)
     if (!orders.length && !sharedOrders.length) return null
+    const orderTickets = orders.length + sharedOrders.length
     const workingOrder = orders.find(order => order.status === 'working')
     const pendingOrder = orders.find(order => order.status === 'pending')
     const filledOrder = orders.find(order => order.status === 'filled')
     const draggableOrder = workingOrder ?? pendingOrder ?? filledOrder ?? orders[0] ?? sharedOrders[0]
-    const totalSize = orders.reduce((sum, order) => sum + order.size, 0) + sharedOrders.reduce((sum, order) => sum + order.size, 0)
+    const totalContracts = orders.reduce((sum, order) => sum + order.size, 0) + sharedOrders.reduce((sum, order) => sum + order.size, 0)
+    const contractLabel = fmtCompact(totalContracts)
     const status = sharedOrders.length || workingOrder ? 'working' : pendingOrder ? 'pending' : filledOrder ? 'filled' : 'rejected'
     const sideColor = side === 'BID' ? buyColor.bg : sellColor.bg
     const primaryTag = sharedOrders[0]?.orderTag
     const colors = status === 'pending'
-      ? { bg: '#ffe800', fg: '#151200', label: `${totalSize}`, border: sideColor }
+      ? { bg: '#ffe800', fg: '#151200', label: contractLabel, border: sideColor }
       : status === 'filled'
-        ? { bg: '#22c55e', fg: '#001407', label: `${totalSize}`, border: '#bbf7d0' }
+        ? { bg: '#22c55e', fg: '#001407', label: contractLabel, border: '#bbf7d0' }
         : status === 'rejected'
           ? { bg: '#7f1d1d', fg: '#fff0f2', label: density === 'small' ? 'R' : 'REJ', border: sellColor.bg }
-          : { bg: sideColor, fg: side === 'BID' ? '#001014' : '#fff0f2', label: `${totalSize}`, border: side === 'BID' ? buyColor.border : sellColor.border }
+          : { bg: sideColor, fg: side === 'BID' ? '#001014' : '#fff0f2', label: contractLabel, border: side === 'BID' ? buyColor.border : sellColor.border }
     return (
       <button
         className={cx(
-          'relative flex h-[78%] min-w-0 flex-1 cursor-pointer select-none items-center justify-center border px-1 font-black shadow',
+          'relative flex h-[78%] w-full min-w-0 cursor-pointer select-none items-center justify-center overflow-hidden border px-1 font-black shadow',
           side === 'BID' ? 'rounded-l-sm' : 'rounded-r-sm',
         )}
         style={{
@@ -4080,7 +4324,7 @@ function NormalDepthLadderWindow({
           fontSize: density === 'small' ? 8 : 10,
           cursor: draggingOrder?.id === draggableOrder?.id ? 'grabbing' : 'grab',
         }}
-        title={`${primaryTag ? `${primaryTag} ` : ''}${status.toUpperCase()} ${totalSize}x across ${orders.length + sharedOrders.length} order(s) ${side === 'BID' ? 'BUY' : 'SELL'} @ ${priceKey}. Right-click drag to modify price.`}
+        title={`${primaryTag ? `${primaryTag} ` : ''}${status.toUpperCase()} ${orderTickets} order ticket${orderTickets === 1 ? '' : 's'} / ${totalContracts} contract${totalContracts === 1 ? '' : 's'} ${side === 'BID' ? 'BUY' : 'SELL'} @ ${priceKey}. Right-click drag to modify price.`}
         onClick={event => cancelOrderGroup(event, side, priceKey)}
         onDoubleClick={event => {
           event.preventDefault()
@@ -4099,16 +4343,16 @@ function NormalDepthLadderWindow({
           event.stopPropagation()
         }}
       >
-        {orders.length + sharedOrders.length > 1 && (
+        {orderTickets > 1 && (
           <span
             className="absolute -top-px left-1/2 z-30 -translate-x-1/2 border px-0.5 text-[7px] leading-[9px]"
             style={{ backgroundColor: '#d1d5db', borderColor: sideColor, color: sideColor }}
           >
-            x{orders.length + sharedOrders.length}
+            o{orderTickets}
           </span>
         )}
         <span className="mr-0.5 text-[8px]">{primaryTag?.includes('ALGO') ? 'A' : side === 'BID' ? 'B' : 'S'}</span>
-        <span>{colors.label}</span>
+        <span className="min-w-0 truncate">{colors.label}</span>
       </button>
     )
   }
@@ -4117,7 +4361,7 @@ function NormalDepthLadderWindow({
     const hasOrders = displayActiveOrders.some(item => item.priceKey === priceKey) || simDepthOrders.some(item => item.priceKey === priceKey)
     return (
       <div
-        className="flex h-full items-center gap-px px-1"
+        className="grid h-full grid-cols-2 items-center gap-px px-1"
         style={{
           backgroundColor: laneGrey,
           color: laneText,
@@ -4127,10 +4371,15 @@ function NormalDepthLadderWindow({
       >
         {hasOrders ? (
           <>
-            {renderOrderFlag(priceKey, 'BID')}
-            {renderOrderFlag(priceKey, 'ASK')}
+            <div className="flex h-full min-w-0 items-center">{renderOrderFlag(priceKey, 'BID')}</div>
+            <div className="flex h-full min-w-0 items-center">{renderOrderFlag(priceKey, 'ASK')}</div>
           </>
-        ) : null}
+        ) : (
+          <>
+            <span />
+            <span />
+          </>
+        )}
       </div>
     )
   }
@@ -4210,7 +4459,9 @@ function NormalDepthLadderWindow({
     level: {
       key: string
       bidSize: number
+      bidCount: number
       askSize: number
+      askCount: number
       myBidSize: number
       myAskSize: number
       bestBid: boolean
@@ -4253,7 +4504,8 @@ function NormalDepthLadderWindow({
       )
     }
     if (column === 'bid') {
-      const visibleSize = (Number(level.bidSize) || 0) + (Number(level.myBidSize) || 0)
+      const bookSize = Number(level.bidSize) || 0
+      const visibleSize = bookSize + (Number(level.myBidSize) || 0)
       const hasDepth = visibleSize > 0
       const cellBg = hasDepth ? (level.myBidSize ? bidDepthBg : bidDepthBgSoft) : bidColumnBg
       return (
@@ -4264,16 +4516,20 @@ function NormalDepthLadderWindow({
           onMouseEnter={event => { event.currentTarget.style.backgroundColor = hasDepth ? bidDepthBgHover : bidColumnBgHover }}
           onMouseLeave={event => { event.currentTarget.style.backgroundColor = cellBg }}
           onClick={() => submitDepthOrder('BID', level.key)}
-          title={`${actionMode.toUpperCase()} BID @ ${level.key}`}
+          title={`${actionMode.toUpperCase()} BID @ ${level.key}${level.bidCount > 0 && bookSize > 0 ? `; book ${fmtCompact(bookSize)} contracts / ${fmtCompact(level.bidCount)} order${level.bidCount === 1 ? '' : 's'}` : ''}`}
         >
           <span className="relative z-10 inline-flex items-center justify-end gap-1">
             {level.myBidSize > 0 && <span className="rounded-sm bg-[#00d8ff] px-0.5 text-[8px] font-black text-[#001014]">ME</span>}
             {visibleSize ? fmtCompact(visibleSize) : ''}
+            {bookSize > 0 && level.bidCount > 0 && (
+              <span className="text-[8px] font-black opacity-70">({fmtCompact(level.bidCount)})</span>
+            )}
           </span>
         </button>
       )
     }
-    const visibleSize = (Number(level.askSize) || 0) + (Number(level.myAskSize) || 0)
+    const bookSize = Number(level.askSize) || 0
+    const visibleSize = bookSize + (Number(level.myAskSize) || 0)
     const hasDepth = visibleSize > 0
     const cellBg = hasDepth ? (level.myAskSize ? askDepthBgStrong : askDepthBg) : askColumnBg
     return (
@@ -4284,10 +4540,13 @@ function NormalDepthLadderWindow({
         onMouseEnter={event => { event.currentTarget.style.backgroundColor = hasDepth ? askDepthBgHover : askColumnBgHover }}
         onMouseLeave={event => { event.currentTarget.style.backgroundColor = cellBg }}
         onClick={() => submitDepthOrder('ASK', level.key)}
-        title={`${actionMode.toUpperCase()} ASK @ ${level.key}`}
+        title={`${actionMode.toUpperCase()} ASK @ ${level.key}${level.askCount > 0 && bookSize > 0 ? `; book ${fmtCompact(bookSize)} contracts / ${fmtCompact(level.askCount)} order${level.askCount === 1 ? '' : 's'}` : ''}`}
       >
         <span className="relative z-10 inline-flex items-center gap-1">
           {visibleSize ? fmtCompact(visibleSize) : ''}
+          {bookSize > 0 && level.askCount > 0 && (
+            <span className="text-[8px] font-black opacity-70">({fmtCompact(level.askCount)})</span>
+          )}
           {level.myAskSize > 0 && <span className="rounded-sm bg-[#ff3045] px-0.5 text-[8px] font-black text-white">ME</span>}
         </span>
       </button>
@@ -4307,7 +4566,7 @@ function NormalDepthLadderWindow({
       <div className="border-b p-2" style={{ backgroundColor: '#08101d', borderColor: rowLine }}>
         <ProductSelector provider={activeProvider} symbol={activeSymbol} onSelect={onSelect} />
       </div>
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 border-b px-2 py-1.5" style={{ borderColor: rowLine, backgroundColor: '#070a10' }}>
+      <div className="grid h-[54px] grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 overflow-hidden border-b px-2 py-1.5" style={{ borderColor: rowLine, backgroundColor: '#070a10' }}>
         <div className="min-w-0" title={option?.subtitle}>
           <div className="truncate text-[13px] font-black uppercase tracking-normal" style={{ color: buyColor.strong }}>
             {(option?.asset ?? activeSymbol) || 'Depth Ladder'}
@@ -4321,7 +4580,7 @@ function NormalDepthLadderWindow({
             </div>
           )}
         </div>
-        <div className="flex flex-wrap items-center justify-center gap-1.5">
+        <div className="flex max-w-full items-center justify-center gap-1.5 overflow-hidden">
           {(['small', 'medium', 'large'] as DepthLadderDensity[]).map(size => (
             <button
               key={size}
@@ -4360,8 +4619,8 @@ function NormalDepthLadderWindow({
           >
             FAST
           </button>
-          <span className={cx(controlButtonClass, 'inline-flex items-center bg-[#121212] text-[#00d8ff]')} style={{ borderColor: rowLine }}>W {activeWorkingCount}</span>
-          <span className={cx(controlButtonClass, 'inline-flex items-center bg-[#121212] text-[#22c55e]')} style={{ borderColor: rowLine }}>F {filledCount}</span>
+          <span className={cx(controlButtonClass, 'inline-flex items-center bg-[#121212] text-[#00d8ff]')} style={{ borderColor: rowLine }} title="Working order tickets, not contract quantity">W {activeWorkingCount}</span>
+          <span className={cx(controlButtonClass, 'inline-flex items-center bg-[#121212] text-[#22c55e]')} style={{ borderColor: rowLine }} title="Local fill events in this ladder window">F {filledCount}</span>
           <button
             onClick={() => setSimulationEnabled(!simulationEnabled)}
             className={cx(controlButtonClass, simulationEnabled ? 'bg-[#163300] text-[#74ff8d]' : 'bg-[#121212] text-[#8b929e]')}
@@ -4372,7 +4631,13 @@ function NormalDepthLadderWindow({
           </button>
           <button onClick={() => setShowSettings(value => !value)} className={cx(controlButtonClass, 'bg-[#121212] text-[#d1d5db]')} style={{ borderColor: rowLine }}>SET</button>
           <button onClick={saveAsDepthDefault} className={cx(controlButtonClass, 'bg-[#121212] text-[#00d8ff]')} style={{ borderColor: rowLine }} title="Save this depth ladder shape as the default for future ladders">DFLT</button>
-          {defaultStatus && <span className={cx(controlButtonClass, 'inline-flex items-center bg-[#06111d] text-[#00d8ff]')} style={{ borderColor: '#00d8ff' }}>{defaultStatus}</span>}
+          <span
+            className={cx(controlButtonClass, 'inline-flex w-36 shrink-0 items-center overflow-hidden bg-[#06111d] text-[#00d8ff]', !defaultStatus && 'opacity-0')}
+            style={{ borderColor: '#00d8ff' }}
+            title={defaultStatus || undefined}
+          >
+            <span className="truncate">{defaultStatus || 'status'}</span>
+          </span>
         </div>
         <span />
       </div>
@@ -4423,17 +4688,29 @@ function NormalDepthLadderWindow({
                 <div className="mt-2 text-[10px] leading-relaxed text-[#aab2c0]">{depthDefinitionMessage}</div>
               </div>
             </div>
+          ) : !depthPriceReady || levels.length === 0 ? (
+            <div className="flex h-full items-center justify-center p-6 text-center">
+              <div className="max-w-sm border bg-[#070a10] p-4" style={{ borderColor: gridLine }}>
+                <div className="text-[12px] font-black uppercase tracking-wide text-[#ffe800]">
+                  {serviceConnected ? 'Waiting for First Book' : 'Market Data Connecting'}
+                </div>
+                <div className="mt-2 text-[10px] leading-relaxed text-[#aab2c0]">
+                  {streamAsset ? `${streamAsset} is mapped. The ladder will center when the C++ price service publishes the first live MBP-1 book or trade.` : 'Select a mapped CME product from the menu above.'}
+                </div>
+              </div>
+            </div>
           ) : levels.map(level => (
             <div
               key={level.key}
               data-depth-ladder-row="true"
-              className={cx('grid select-none border-b', draggingOrder ? 'outline outline-1 outline-[#ffe800]/10' : false)}
+              className="grid select-none border-b"
               style={{
                 gridTemplateColumns: ladderGridTemplate,
-                borderColor: dragTargetPriceKey === level.key ? '#ffe800' : level.inside ? 'rgba(250, 204, 21, .38)' : mdRowLine,
+                borderColor: level.inside ? 'rgba(250, 204, 21, .38)' : mdRowLine,
                 backgroundColor: dragTargetPriceKey === level.key ? 'rgba(255, 232, 0, .18)' : level.inside ? 'rgba(250, 204, 21, .09)' : '#05070b',
                 height: densitySpec.rowHeight,
                 lineHeight: `${densitySpec.rowHeight}px`,
+                boxShadow: dragTargetPriceKey === level.key ? 'inset 0 0 0 1px #ffe800' : undefined,
               }}
               onPointerEnter={() => {
                 if (draggingOrder) setDragTargetPriceKey(level.key)
@@ -4458,19 +4735,19 @@ function NormalDepthLadderWindow({
           ))}
         </div>
       )}
-      <div className="shrink-0 border-t p-1" style={{ borderColor: rowLine, backgroundColor: '#05070b' }}>
+      <div className="h-[68px] shrink-0 overflow-hidden border-t p-1" style={{ borderColor: rowLine, backgroundColor: '#05070b' }}>
         <div className="mb-1 flex items-center gap-1">
           <div className="grid min-w-0 flex-1 grid-cols-[1fr_1fr_1.25fr] gap-px text-[8px] uppercase">
             <div className="border px-1 py-0.5" style={{ borderColor: gridLine, backgroundColor: '#07111f' }}>
-              <div className="text-[#8b929e]">Working Bids</div>
+              <div className="text-[#8b929e]">Bid Orders</div>
               <div className="truncate text-[11px] font-black" style={{ color: buyColor.strong }}>
-                {fmtCompact(workingTotals.bidQty)}
+                {workingTotals.bidOrders}o / {fmtCompact(workingTotals.bidContracts)}c
               </div>
             </div>
             <div className="border px-1 py-0.5" style={{ borderColor: gridLine, backgroundColor: '#17070a' }}>
-              <div className="text-[#8b929e]">Working Sells</div>
+              <div className="text-[#8b929e]">Sell Orders</div>
               <div className="truncate text-[11px] font-black" style={{ color: sellColor.strong }}>
-                {fmtCompact(workingTotals.askQty)}
+                {workingTotals.askOrders}o / {fmtCompact(workingTotals.askContracts)}c
               </div>
             </div>
             <div
@@ -4493,7 +4770,7 @@ function NormalDepthLadderWindow({
             </div>
           </div>
           <label className="grid w-20 grid-rows-[12px_1fr] border bg-[#121212]" style={{ borderColor: gridLine }} title="Custom order quantity">
-            <span className="px-1 text-[8px] uppercase text-[#8b929e]">Qty</span>
+            <span className="px-1 text-[8px] uppercase text-[#8b929e]">Cntr</span>
             <input
               type="number"
               min={1}
@@ -4503,11 +4780,12 @@ function NormalDepthLadderWindow({
             />
           </label>
         </div>
-        {simulationEnabled && simMessages[0] && (
-          <div className="mt-1 truncate border px-1 py-0.5 text-[8px] font-bold uppercase text-[#74ff8d]" style={{ borderColor: '#1f5f2f', backgroundColor: '#07120a' }}>
-            {simMessages[0]}
-          </div>
-        )}
+        <div
+          className={cx('mt-1 truncate border px-1 py-0.5 text-[8px] font-bold uppercase text-[#74ff8d]', !(simulationEnabled && simMessages[0]) && 'opacity-0')}
+          style={{ borderColor: '#1f5f2f', backgroundColor: '#07120a' }}
+        >
+          {simulationEnabled && simMessages[0] ? simMessages[0] : 'status'}
+        </div>
       </div>
     </div>
   )
@@ -4842,8 +5120,6 @@ function OrderBookWindow({ operatorName }: { operatorName: string }) {
   const [cancelStatus, setCancelStatus] = useState('')
   const simOrders = useStore(s => s.simOrders)
   const simPositions = useStore(s => s.simPositions)
-  const cancelSimOrder = useStore(s => s.cancelSimOrder)
-  const cancelSimOrders = useStore(s => s.cancelSimOrders)
   const simulationEnabled = useStore(s => s.simulationEnabled)
 
   const allRows = useMemo(
@@ -4914,15 +5190,14 @@ function OrderBookWindow({ operatorName }: { operatorName: string }) {
       try {
         await cancelSharedOrder(row.order_id)
         setCancelStatus(`Cancelled ${row.order_tag} ${row.order_id}`)
-      } catch {
-        cancelSimOrder(row.order_id)
-        setCancelStatus(`Cancelled local fallback ${row.order_tag} ${row.order_id}`)
+      } catch (err) {
+        setCancelStatus(`Cancel failed for ${row.order_id}: ${err instanceof Error ? err.message : 'gateway unavailable'}`)
       }
       return
     }
     setCancelStatus(`Cancelling ${row.order_id}...`)
     try {
-      const response = await fetch(`/api/acme/orders/${encodeURIComponent(row.order_id)}/cancel`, {
+      const response = await ceriousFetch(`/api/acme/orders/${encodeURIComponent(row.order_id)}/cancel`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       })
@@ -4933,26 +5208,12 @@ function OrderBookWindow({ operatorName }: { operatorName: string }) {
   }
 
   const cancelAllOrders = async () => {
-    setCancelStatus(simulationEnabled ? 'Cancelling Sim Exchange orders...' : 'Cancelling all venues...')
-    cancelSimOrders()
-    if (simulationEnabled) {
-      setCancelStatus('Sim Exchange cancelled local working orders')
-      return
-    }
-    const endpoints = [
-      '/api/execution/cancel-all',
-      '/api/orders/cancel-all',
-      '/api/poly/cancel-all',
-      '/api/poly/orders/cancel-all',
-    ]
-    const results = await Promise.allSettled(endpoints.map(endpoint => fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ scope: 'all', account: 'parent', operator: operatorName, timestamp: Date.now() }),
-    })))
-    const acmeCancel = await fetch('/api/acme/orders/cancel-all', { method: 'POST' }).catch(() => null)
+    setCancelStatus(simulationEnabled ? 'Cancelling Sim Exchange orders...' : 'Cancelling working orders...')
+    const acmeCancel = await ceriousFetch('/api/acme/orders/cancel-all', { method: 'POST' }).catch(() => null)
+    let acmeCount = 0
     if (acmeCancel?.ok) {
       const payload = await acmeCancel.json().catch(() => ({}))
+      acmeCount = Number(payload.count ?? 0)
       if (payload.state) {
         useStore.getState().setSimTradingState({
           simOrders: payload.state.simOrders,
@@ -4962,8 +5223,9 @@ function OrderBookWindow({ operatorName }: { operatorName: string }) {
         })
       }
     }
-    const ok = results.filter(result => result.status === 'fulfilled' && result.value.ok).length
-    setCancelStatus(ok > 0 ? `Cancel all accepted by ${ok} service${ok === 1 ? '' : 's'} + Sim Exchange` : 'Sim Exchange cancelled local orders; no live adapter acknowledged yet')
+    setCancelStatus(acmeCancel?.ok
+      ? `Cancel all accepted by order service; ${acmeCount} server order${acmeCount === 1 ? '' : 's'} cancelled.`
+      : 'Cancel-all failed; no order service acknowledged.')
   }
 
   const exportOrders = () => {
@@ -5038,7 +5300,7 @@ function OrderBookWindow({ operatorName }: { operatorName: string }) {
             <span>Leg</span>
             <span>Side</span>
             <span className="text-right">Price</span>
-            <span className="text-right">Size</span>
+            <span className="text-right">Contracts</span>
             <span className="text-right">P&L</span>
             <span>Status / Details</span>
             <span className="text-right">Action</span>
@@ -5627,7 +5889,7 @@ function FillsWindow({ operatorName }: { operatorName: string }) {
             <span>Leg</span>
             <span>Side</span>
             <span className="text-right">Price</span>
-            <span className="text-right">Size</span>
+            <span className="text-right">Contracts</span>
             <span className="text-right">P&L</span>
             <span>Details</span>
           </div>
@@ -5655,7 +5917,7 @@ function FillsWindow({ operatorName }: { operatorName: string }) {
         </>
       )}
       <div className="flex items-center justify-between border-t border-surface-border px-2 py-1 text-[10px] text-muted">
-        <span>{visibleFillRows.length} visible fills, {visiblePositionRows.length} visible position rows</span>
+        <span>{visibleFillRows.length} visible fill tickets, {visiblePositionRows.length} visible position rows</span>
         <span>Filled orders leave the order book and publish here with live position P&L.</span>
       </div>
     </div>
@@ -5689,24 +5951,27 @@ function AlgoBuilderWindow({
     }))
   }, [operatorName, provider, selectedOption?.marketKey, symbol])
 
-  const quote = computeAlgoQuote(selectedOption, draft.quoteModel, draft.quoteWidth)
-  const saveDraft = (status: AlgoStatus) => {
+  const saveDraft = (status: AlgoStatus = 'held') => {
     const saveSymbol = selectedOption?.marketKey ?? symbol
     const acmeFields = normalizeAcmeFields({
       ...draft,
       instruments: draft.instruments?.length ? draft.instruments : [saveSymbol],
     }, saveSymbol)
-    upsertAlgo({
+    const savedStatus: AlgoStatus = status === 'draft' ? 'draft' : 'held'
+    const savedAlgo: AlgoDefinition = {
       ...draft,
       ...acmeFields,
       id: draft.id || `algo-${Date.now()}`,
       provider,
       symbol: saveSymbol,
       marketKey: selectedOption?.marketKey ?? saveSymbol,
+      instruments: [saveSymbol],
       operator: operatorName,
-      status,
+      status: savedStatus,
       updatedAt: Date.now(),
-    })
+    }
+    upsertAlgo(savedAlgo)
+    void saveAlgoDefinitionServer(savedAlgo)
     setDraft(defaultAlgo(selectedOption, operatorName))
   }
   const acmeDraft = normalizeAcmeFields(draft, draft.marketKey ?? draft.symbol)
@@ -5717,6 +5982,7 @@ function AlgoBuilderWindow({
   const syntheticOrderManager = draft.syntheticOrderManager ?? acmeDraft.syntheticOrderManager
   const exitPolicy = draft.exitPolicy ?? acmeDraft.exitPolicy
   const orderPolicy = draft.orderPolicy ?? acmeDraft.orderPolicy
+  const sniperMode = String(orderPolicy.mode || syntheticOrderManager.entryTechnique || '').toLowerCase().includes('sniper')
   const setTemplate = (template: AlgoTemplate) => {
     setDraft(current => {
       const symbolKey = selectedOption?.marketKey ?? current.symbol
@@ -5734,9 +6000,27 @@ function AlgoBuilderWindow({
   const updateRisk = (patch: Partial<AlgoRisk>) => setDraft(current => ({ ...current, risk: { ...(current.risk ?? acmeDraft.risk), ...patch } }))
   const updateEntryPeg = (patch: Partial<AlgoEntryPeg>) => setDraft(current => ({ ...current, entryPeg: { ...(current.entryPeg ?? acmeDraft.entryPeg), ...patch } }))
   const updateLayerPlan = (patch: Partial<AlgoLayerPlan>) => setDraft(current => ({ ...current, layerPlan: { ...(current.layerPlan ?? acmeDraft.layerPlan), ...patch } }))
-  const updateSyntheticManager = (patch: Partial<AlgoSyntheticOrderManager>) => setDraft(current => ({ ...current, syntheticOrderManager: { ...(current.syntheticOrderManager ?? acmeDraft.syntheticOrderManager), ...patch } }))
   const updateExitPolicy = (patch: Partial<AlgoExitPolicy>) => setDraft(current => ({ ...current, exitPolicy: { ...(current.exitPolicy ?? acmeDraft.exitPolicy), ...patch } }))
   const updateOrderPolicy = (patch: Partial<AlgoOrderPolicy>) => setDraft(current => ({ ...current, orderPolicy: { ...(current.orderPolicy ?? acmeDraft.orderPolicy), ...patch } }))
+  const setSniperMode = (enabled: boolean) => {
+    setDraft(current => {
+      const currentFields = normalizeAcmeFields(current, current.marketKey ?? current.symbol)
+      return {
+        ...current,
+        orderType: 'limit',
+        syntheticOrderManager: {
+          ...(current.syntheticOrderManager ?? currentFields.syntheticOrderManager),
+          entryTechnique: enabled ? 'sniper-market-if-target-price-achievable' : 'regular-limit',
+          holdUntilTriggered: enabled,
+        },
+        orderPolicy: {
+          ...(current.orderPolicy ?? currentFields.orderPolicy),
+          mode: enabled ? 'synthetic-sniper' : 'regular-limit',
+          orderType: enabled ? 'synthetic-held-market-release' : 'limit',
+        },
+      }
+    })
+  }
 
   return (
     <div className="flex h-full flex-col bg-surface text-xs">
@@ -5758,20 +6042,6 @@ function AlgoBuilderWindow({
               </select>
             </label>
             <label className="text-[10px] uppercase text-muted">
-              Pricing Model
-              <select className="input-field mt-1 w-full py-1 text-[11px]" value={draft.quoteModel} onChange={event => setDraft(current => ({ ...current, quoteModel: event.target.value as QuoteModel }))}>
-                <option value="study-peg">Study Peg</option>
-                <option value="market-mid">Market Mid</option>
-              </select>
-            </label>
-            <label className="text-[10px] uppercase text-muted">
-              Outcome
-              <select className="input-field mt-1 w-full py-1 text-[11px]" value={draft.outcome} onChange={event => setDraft(current => ({ ...current, outcome: event.target.value as 'yes' | 'no' }))}>
-                <option value="yes">YES</option>
-                <option value="no">NO</option>
-              </select>
-            </label>
-            <label className="text-[10px] uppercase text-muted">
               Quote Side
               <select className="input-field mt-1 w-full py-1 text-[11px]" value={draft.side} onChange={event => setDraft(current => ({ ...current, side: event.target.value as AlgoDefinition['side'] }))}>
                 <option value="both">Both</option>
@@ -5779,20 +6049,30 @@ function AlgoBuilderWindow({
                 <option value="offer">Offer</option>
               </select>
             </label>
+            <label className="flex items-center gap-2 rounded border border-surface-border bg-surface-card px-2 py-2 text-[10px] uppercase text-muted">
+              <input type="checkbox" checked={sniperMode} onChange={event => setSniperMode(event.target.checked)} />
+              <span className="font-bold text-slate-200">Sniper</span>
+              <span className="ml-auto font-mono text-[10px] text-muted">{sniperMode ? 'Sniper' : 'Limit'}</span>
+            </label>
             {[
-              ['Quote Width', 'quoteWidth', 0.5],
-              ['Edge Trigger', 'edgeThreshold', 0.5],
-              ['Clip Size', 'clipSize', 1],
-              ['Max Position', 'maxPosition', 1],
-            ].map(([label, key, step]) => (
+              ['Clip Size', 'clipSize', 1, 'Contracts per order ticket. Separate from layers.'],
+              ['Max Position', 'maxPosition', 1, 'Per-side cap in synthetic spread units. Max 5 means up to 5 long units and separately up to 5 short units.'],
+            ].map(([label, key, step, help]) => (
               <label key={String(key)} className="text-[10px] uppercase text-muted">
-                {label}
+                <span title={String(help)}>{label}</span>
                 <input
                   type="number"
                   step={Number(step)}
                   className="input-field mt-1 w-full py-1 text-[11px]"
                   value={Number(draft[key as keyof AlgoDefinition])}
-                  onChange={event => setDraft(current => ({ ...current, [key]: Number(event.target.value) }))}
+                  onChange={event => {
+                    const value = Number(event.target.value)
+                    setDraft(current => ({
+                      ...current,
+                      [key]: value,
+                      ...(key === 'maxPosition' ? { risk: { ...(current.risk ?? acmeDraft.risk), maxPosition: value } } : {}),
+                    }))
+                  }}
                 />
               </label>
             ))}
@@ -5838,7 +6118,7 @@ function AlgoBuilderWindow({
               <div className="mb-2 font-mono text-[10px] font-black uppercase text-accent">Layer Plan</div>
               <div className="grid grid-cols-2 gap-2">
                 <label className="text-[10px] uppercase text-muted">
-                  Layers
+                  <span title="Number of order rows or bands to layer off the market. Separate from clip size.">Layers</span>
                   <input type="number" className="input-field mt-1 w-full py-1 text-[11px]" value={layerPlan.layerCount} onChange={event => updateLayerPlan({ layerCount: Number(event.target.value) || 1 })} />
                 </label>
                 <label className="text-[10px] uppercase text-muted">
@@ -5858,21 +6138,12 @@ function AlgoBuilderWindow({
               </div>
             </div>
             <div className="rounded border border-surface-border bg-surface-card p-2">
-              <div className="mb-2 font-mono text-[10px] font-black uppercase text-accent">Risk / Synthetic Manager</div>
+              <div className="mb-2 font-mono text-[10px] font-black uppercase text-accent">Risk Controls</div>
               <div className="grid grid-cols-2 gap-2">
-                <label className="text-[10px] uppercase text-muted">
-                  Max Pos
-                  <input type="number" className="input-field mt-1 w-full py-1 text-[11px]" value={risk.maxPosition} onChange={event => { const value = Number(event.target.value) || 1; updateRisk({ maxPosition: value }); setDraft(current => ({ ...current, maxPosition: value, clipSize: value })) }} />
-                </label>
-                <label className="text-[10px] uppercase text-muted">
+                <label className="col-span-2 text-[10px] uppercase text-muted">
                   Max Loss ATR
                   <input type="number" className="input-field mt-1 w-full py-1 text-[11px]" value={risk.maxLossAtr} onChange={event => updateRisk({ maxLossAtr: Number(event.target.value) || 0 })} />
                 </label>
-                <label className="col-span-2 text-[10px] uppercase text-muted">
-                  Entry Technique
-                  <input className="input-field mt-1 w-full py-1 text-[11px]" value={syntheticOrderManager.entryTechnique} onChange={event => updateSyntheticManager({ entryTechnique: event.target.value })} />
-                </label>
-                <label className="flex items-center gap-2 text-[10px] uppercase text-muted"><input type="checkbox" checked={syntheticOrderManager.holdUntilTriggered} onChange={event => updateSyntheticManager({ holdUntilTriggered: event.target.checked })} /> Hold until trigger</label>
                 <label className="flex items-center gap-2 text-[10px] uppercase text-muted"><input type="checkbox" checked={risk.requireMarketOpen} onChange={event => updateRisk({ requireMarketOpen: event.target.checked })} /> RTH required</label>
               </div>
             </div>
@@ -5898,22 +6169,22 @@ function AlgoBuilderWindow({
           </div>
           <div className="mt-2 grid grid-cols-2 gap-2">
             <button className="btn-neutral py-2 text-[11px] font-bold" onClick={() => saveDraft('held')}>Stage Held</button>
-            <button className="btn-accent py-2 text-[11px] font-bold" onClick={() => saveDraft('quoting')}>Stage Quoting</button>
+            <button className="btn-accent py-2 text-[11px] font-bold" onClick={() => saveDraft('held')}>Save to Manager</button>
           </div>
         </div>
         <div className="rounded border border-surface-border bg-surface-card p-2 font-mono">
-          <div className="text-[10px] font-black uppercase text-accent">Peg Quote</div>
+          <div className="text-[10px] font-black uppercase text-accent">Deployment Contract</div>
           <div className="mt-2 grid grid-cols-2 gap-y-1 text-[10px]">
-            <span className="text-muted">Fair</span><span className="text-right font-black text-slate-100">{quote.fair.toFixed(1)}c</span>
-            <span className="text-muted">Bid</span><span className="text-right font-black text-blue-300">{quote.bid.toFixed(1)}c</span>
-            <span className="text-muted">Ask</span><span className="text-right font-black text-red-300">{quote.ask.toFixed(1)}c</span>
-            <span className="text-muted">Edge</span><span className={cx('text-right font-black', quote.edge >= 0 ? 'text-up' : 'text-down')}>{quote.edge >= 0 ? '+' : ''}{quote.edge.toFixed(1)}c</span>
-          </div>
-          <div className="mt-3 h-2 overflow-hidden rounded bg-surface">
-            <div className="h-full bg-accent" style={{ width: `${clamp(Math.abs(quote.edge) * 8, 2, 100)}%` }} />
+            <span className="text-muted">Send Peg</span><span className="text-right font-black text-slate-100">LR27 +/-2</span>
+            <span className="text-muted">Order Type</span><span className="text-right font-black text-slate-100">{sniperMode ? 'Sniper' : 'Limit'}</span>
+            <span className="text-muted">Period</span><span className="text-right font-black text-slate-100">{entryPeg.period} x 30m</span>
+            <span className="text-muted">Layers</span><span className="text-right font-black text-slate-100">{layerPlan.layerCount}</span>
+            <span className="text-muted">Spacing</span><span className="text-right font-black text-slate-100">{layerPlan.layerSpacingTicks} ticks</span>
+            <span className="text-muted">Clip</span><span className="text-right font-black text-slate-100">{draft.clipSize}</span>
+            <span className="text-muted">Max/Side</span><span className="text-right font-black text-slate-100">{draft.maxPosition}</span>
           </div>
           <div className="mt-2 text-[9px] leading-relaxed text-muted">
-            Held algos stay in Manager until status is changed. Quoting algos are represented as staged synthetic orders until the algo engine service is connected.
+            Server deploy reads the saved script, server LR27, and product tick definition. Invalid scripts fail without sending.
           </div>
         </div>
       </div>
@@ -5931,6 +6202,11 @@ type AlgoDeploymentOrder = {
   coverTickSize: number
 }
 
+type AlgoDeploymentBuildResult = {
+  orders: AlgoDeploymentOrder[]
+  missingSendPrices: string[]
+}
+
 type RegressionBandValues = {
   mean?: number
   upper?: number
@@ -5940,8 +6216,6 @@ type RegressionBandValues = {
   label: string
 }
 
-const LR_DEPLOY_MAX_AGE_MS = 90 * 60 * 1000
-
 function finiteOptional(value: unknown): number | undefined {
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : undefined
@@ -5950,205 +6224,114 @@ function finiteOptional(value: unknown): number | undefined {
 function regressionBandsForPeg(stat: AcmeSpreadStat | undefined, period: number, deviations: number): RegressionBandValues | null {
   const lookback = Math.max(2, Math.floor(Number(period) || 27))
   const std = Math.max(0, Number(deviations) || 2)
-  if (lookback === 27 && Math.abs(std - 2) < 0.0001) {
-    const mean = finiteOptional(stat?.lr27Mean)
-    const upper = finiteOptional(stat?.lr27Upper2)
-    const lower = finiteOptional(stat?.lr27Lower2)
-    if (mean !== undefined || upper !== undefined || lower !== undefined) {
-      const interval = stat?.lr27Interval || '30m'
-      return {
-        mean,
-        upper,
-        lower,
-        sigma: finiteOptional(stat?.lr27Sigma),
-        slope: finiteOptional(stat?.lr27Slope),
-        label: `LR27 ${interval} +/-2`,
-      }
-    }
-    return null
-  }
-
-  if (stat?.bars?.length) {
-    const channel = acmeRegressionChannel(stat.bars, {
-      id: `algo-peg-lr-${lookback}-${std}`,
-      type: 'regression-channel',
-      lookback,
-      upperDeviation: std,
-      lowerDeviation: std,
-    })
-    const latest = channel?.endpoints[channel.endpoints.length - 1]
-    if (latest) {
-      return {
-        mean: latest.mean,
-        upper: latest.upper,
-        lower: latest.lower,
-        sigma: latest.sigma,
-        slope: latest.slope,
-        label: `LR${lookback} +/-${std}`,
-      }
-    }
-  }
-
-  return null
-}
-
-function algoRequiresRegressionPeg(algo: AlgoDefinition): boolean {
-  const symbol = algoMarketCandidates(algo)[0] || 'ES_NQ'
-  const acmeFields = normalizeAcmeFields(algo, symbol)
-  const entryPeg = algo.entryPeg ?? acmeFields.entryPeg
-  return Boolean(entryPeg.pegBuySideToMinus2 || entryPeg.pegSellSideToPlus2)
-}
-
-function validateAlgoStudyFreshness(algo: AlgoDefinition, stat: AcmeSpreadStat | undefined): string | null {
-  if (!algoRequiresRegressionPeg(algo)) return null
-  const symbol = algoMarketCandidates(algo)[0] || algo.symbol
-  if (!stat) return `${algo.name}: send price not published for ${symbol}; missing spread study`
-  const mean = finiteOptional(stat.lr27Mean)
-  const upper = finiteOptional(stat.lr27Upper2)
-  const lower = finiteOptional(stat.lr27Lower2)
-  const bars = Number(stat.lr27Bars ?? 0)
-  const updatedAt = Number(stat.lr27UpdatedAt ?? 0)
-  if (mean === undefined || upper === undefined || lower === undefined) {
-    return `${algo.name}: send price not published for ${symbol}; LR27 +/-2 values are missing`
-  }
-  if (!Number.isFinite(bars) || bars < 27) {
-    return `${algo.name}: send price not published for ${symbol}; LR27 has ${Number.isFinite(bars) ? bars : 0} bar(s), needs 27`
-  }
-  if (!Number.isFinite(updatedAt) || updatedAt <= 0) {
-    return `${algo.name}: send price not published for ${symbol}; LR27 timestamp is missing`
-  }
-  const ageMs = Date.now() - updatedAt
-  if (ageMs > LR_DEPLOY_MAX_AGE_MS) {
-    const updated = new Date(updatedAt).toLocaleTimeString()
-    return `${algo.name}: send price not published for ${symbol}; LR27 is stale, last completed 30m bar ${updated}`
-  }
-  return null
-}
-
-function validateAlgoProductDefinition(algo: AlgoDefinition, option: ProductOption | undefined): string | null {
-  const symbol = resolveAlgoMarketKey(algo, option)
-  if (!option) return `${algo.name}: send price not published for ${symbol}; product definition missing`
-  const tick = finiteDepthPrice(option.tickSize)
-  if (tick === undefined || tick <= 0) return `${algo.name}: send price not published for ${symbol}; product tick size not published`
-  return null
-}
-
-function statWithFreshLr27(marketKey: string, lr: AcmeLr27State, fallback?: AcmeSpreadStat): AcmeSpreadStat {
-  const last = finiteOptional(lr.lastTraded) ?? fallback?.lastTraded ?? fallback?.spread ?? 0
+  if (lookback !== 27 || Math.abs(std - 2) >= 0.0001) return null
+  const mean = finiteOptional(stat?.lr27Mean)
+  const upper = finiteOptional(stat?.lr27Upper2)
+  const lower = finiteOptional(stat?.lr27Lower2)
+  if (upper === undefined || lower === undefined) return null
+  const interval = stat?.lr27Interval || '30m'
   return {
-    key: marketKey,
-    label: fallback?.label ?? lr.label ?? marketKey,
-    spread: last,
-    lastTraded: last,
-    mean: fallback?.mean ?? last,
-    longTermMean: fallback?.longTermMean ?? fallback?.mean ?? last,
-    lookbackMean: fallback?.lookbackMean ?? fallback?.mean ?? last,
-    priorLookbackMean: fallback?.priorLookbackMean ?? fallback?.mean ?? last,
-    lookbackDays: fallback?.lookbackDays,
-    priorSettle: fallback?.priorSettle,
-    moveFromMean: fallback?.moveFromMean ?? 0,
-    movePctOfAtr: fallback?.movePctOfAtr ?? 0,
-    atr: fallback?.atr ?? 0,
-    atr3: fallback?.atr3,
-    atr20: fallback?.atr20,
-    atr30: fallback?.atr30,
-    blendedAtr: fallback?.blendedAtr,
-    halfAtr: fallback?.halfAtr,
-    vwapBasis: fallback?.vwapBasis,
-    dayZ: fallback?.dayZ,
-    z: fallback?.z ?? 0,
-    rawZ: fallback?.rawZ,
-    signalThreshold: fallback?.signalThreshold,
-    bias: fallback?.bias ?? 'neutral',
-    orderFlowScore: fallback?.orderFlowScore,
-    updateCadence: 'focused LR27 refresh before algo deployment',
-    rvInterval: fallback?.rvInterval,
-    rvBars: fallback?.rvBars,
-    rvUpdatedAt: fallback?.rvUpdatedAt,
-    publishedAt: fallback?.publishedAt,
-    publishReason: fallback?.publishReason,
-    lr27Mean: lr.mean,
-    lr27Upper2: lr.upper2,
-    lr27Lower2: lr.lower2,
-    lr27Sigma: lr.sigma,
-    lr27Slope: lr.slope,
-    lr27Interval: lr.interval,
-    lr27Period: lr.period,
-    lr27Bars: lr.bars,
-    lr27UpdatedAt: lr.updatedAt,
-    lr27IsForming: lr.isForming,
-    lr27Source: lr.source ?? 'focused-lr27',
-    theoreticalBid: fallback?.theoreticalBid ?? lr.lower2,
-    theoreticalAsk: fallback?.theoreticalAsk ?? lr.upper2,
-    signal: fallback?.signal ?? 'LR27 refreshed',
-    volume: fallback?.volume,
-    live: Boolean(lr.live ?? fallback?.live),
-    bars: fallback?.bars ?? [],
+    mean,
+    upper,
+    lower,
+    sigma: finiteOptional(stat?.lr27Sigma),
+    slope: finiteOptional(stat?.lr27Slope),
+    label: `LR27 ${interval} +/-2`,
   }
 }
 
-function buildAlgoDeploymentOrders(algo: AlgoDefinition, option: ProductOption | undefined, spreadStat?: AcmeSpreadStat): AlgoDeploymentOrder[] {
+function algoUsesRegressionPeg(algo: AlgoDefinition, entryPeg: AlgoEntryPeg): boolean {
+  const source = [
+    entryPeg.source,
+    entryPeg.period,
+    algo.orderPolicy?.priceReference,
+    ...(algo.signalRules ?? []).map(rule => `${rule.field} ${rule.action}`),
+  ].join(' ').toLowerCase()
+  return source.includes('regression')
+    || source.includes('least-squares')
+    || source.includes('rls')
+    || source.includes('band')
+}
+
+function resolveAlgoSendBands(
+  algo: AlgoDefinition,
+  entryPeg: AlgoEntryPeg,
+  spreadStat: AcmeSpreadStat | undefined,
+): RegressionBandValues | null {
+  if (!entryPeg.pegBuySideToMinus2 && !entryPeg.pegSellSideToPlus2) return null
+  if (!algoUsesRegressionPeg(algo, entryPeg)) return null
+  return regressionBandsForPeg(spreadStat, entryPeg.period, entryPeg.standardDeviations)
+}
+
+function buildAlgoDeploymentOrders(
+  algo: AlgoDefinition,
+  option: ProductOption | undefined,
+  spreadStat?: AcmeSpreadStat,
+): AlgoDeploymentBuildResult {
   const symbol = resolveAlgoMarketKey(algo, option)
   const acmeFields = normalizeAcmeFields(algo, symbol)
   const layerPlan = algo.layerPlan ?? acmeFields.layerPlan
-  const risk = algo.risk ?? acmeFields.risk
   const entryPeg = algo.entryPeg ?? acmeFields.entryPeg
   const exitPolicy = algo.exitPolicy ?? acmeFields.exitPolicy
-  const quote = computeAlgoQuote(option, algo.quoteModel, algo.quoteWidth)
   const tick = finiteDepthPrice(option?.tickSize)
-  if (tick === undefined || tick <= 0) return []
-  if (validateAlgoStudyFreshness(algo, spreadStat)) return []
-  const pegBands = regressionBandsForPeg(spreadStat, entryPeg.period, entryPeg.standardDeviations)
-  const layers = clamp(Math.floor(Number(layerPlan.layerCount) || 1), 1, Math.max(1, Number(layerPlan.maxLayers) || 10))
+  if (tick === undefined || tick <= 0) return { orders: [], missingSendPrices: [`${algo.name}: product tick size missing`] }
+  const pegBands = resolveAlgoSendBands(algo, entryPeg, spreadStat)
+  const layers = clamp(Math.floor(Number(layerPlan.layerCount) || 1), 1, 100)
   const spacingTicks = Number(layerPlan.layerSpacingTicks) || 0
-  const size = Math.max(1, Number(algo.clipSize || risk.maxPosition) || 1)
+  const size = Math.max(1, Number(algo.clipSize) || 1)
   const sides: Array<'bid' | 'offer'> = []
   if ((algo.side === 'both' || algo.side === 'bid') && layerPlan.workBuySide !== false) sides.push('bid')
   if ((algo.side === 'both' || algo.side === 'offer') && layerPlan.workSellSide !== false) sides.push('offer')
-  const base = quote.fair
-  const buyBase = entryPeg.pegBuySideToMinus2 && pegBands?.lower !== undefined ? pegBands.lower : base
-  const sellBase = entryPeg.pegSellSideToPlus2 && pegBands?.upper !== undefined ? pegBands.upper : base
+  const buyBase = entryPeg.pegBuySideToMinus2 ? pegBands?.lower : undefined
+  const sellBase = entryPeg.pegSellSideToPlus2 ? pegBands?.upper : undefined
+  const missingSendPrices: string[] = []
+  if (sides.includes('bid') && buyBase === undefined) {
+    missingSendPrices.push(`${algo.name}: buy send peg ${entryPeg.source} -${entryPeg.standardDeviations} not published`)
+  }
+  if (sides.includes('offer') && sellBase === undefined) {
+    missingSendPrices.push(`${algo.name}: sell send peg ${entryPeg.source} +${entryPeg.standardDeviations} not published`)
+  }
   const orders: AlgoDeploymentOrder[] = []
   for (let layer = 0; layer < layers; layer += 1) {
     const buyOffset = (Number(layerPlan.buyTicksOffMidpoint ?? layerPlan.ticksOffMidpoint) || 0) + (layer * spacingTicks)
     const sellOffset = (Number(layerPlan.sellTicksOffMidpoint ?? layerPlan.ticksOffMidpoint) || 0) + (layer * spacingTicks)
-    if (sides.includes('bid')) {
+    if (sides.includes('bid') && buyBase !== undefined) {
       orders.push({
         side: 'bid',
         price: roundToTick(buyBase - (buyOffset * tick), tick),
         size,
         layer: layer + 1,
-        trigger: entryPeg.pegBuySideToMinus2 ? `${pegBands?.label ?? `LR${entryPeg.period}`} lower` : 'midpoint',
+        trigger: `${pegBands?.label ?? 'LR27'} lower`,
         coverTicksFromFill: Number(exitPolicy.coverTicksFromFill) || 0,
         coverTickSize: tick,
       })
     }
-    if (sides.includes('offer')) {
+    if (sides.includes('offer') && sellBase !== undefined) {
       orders.push({
         side: 'offer',
         price: roundToTick(sellBase + (sellOffset * tick), tick),
         size,
         layer: layer + 1,
-        trigger: entryPeg.pegSellSideToPlus2 ? `${pegBands?.label ?? `LR${entryPeg.period}`} upper` : 'midpoint',
+        trigger: `${pegBands?.label ?? 'LR27'} upper`,
         coverTicksFromFill: Number(exitPolicy.coverTicksFromFill) || 0,
         coverTickSize: tick,
       })
     }
   }
-  return orders
+  return { orders, missingSendPrices }
 }
 
 function AlgoManagerWindow() {
   const { algos, updateAlgo, removeAlgo } = useAlgoLibrary()
   const options = useProductOptions()
-  const intelligence = useAcmeIntelligence()
-  const cancelSimOrders = useStore(s => s.cancelSimOrders)
+  const intelligence = useAcmeIntelligence(30000)
   const simOrders = useStore(s => s.simOrders)
-  const [statusFilter, setStatusFilter] = useState<AlgoStatus | 'all'>('all')
+  const initialManagerState = useMemo(loadAlgoManagerWorkspaceState, [])
+  const [statusFilter, setStatusFilter] = useState<AlgoStatus | 'all'>(initialManagerState.statusFilter ?? 'all')
   const [algoToLoad, setAlgoToLoad] = useState('')
-  const [stagedAlgoIds, setStagedAlgoIds] = useState<string[]>([])
-  const [selectedDeployIds, setSelectedDeployIds] = useState<string[]>([])
-  const [deployStatus, setDeployStatus] = useState('')
+  const [stagedAlgoIds, setStagedAlgoIds] = useState<string[]>(initialManagerState.stagedAlgoIds)
+  const [selectedDeployIds, setSelectedDeployIds] = useState<string[]>(initialManagerState.selectedDeployIds)
+  const [deployStatus, setDeployStatus] = useState(initialManagerState.deployStatus ?? '')
   const [deploying, setDeploying] = useState(false)
   const activeAlgoOrderCount = simOrders.filter(order => (
     order.source === 'algo'
@@ -6162,7 +6345,7 @@ function AlgoManagerWindow() {
   const spreadStatsByKey = useMemo(() => {
     const map = new Map<string, AcmeSpreadStat>()
     ;(intelligence?.spreadPack?.spreads ?? []).forEach(stat => {
-      map.set(stat.key, stat)
+      map.set(String(stat.key).toUpperCase(), stat)
     })
     return map
   }, [intelligence?.spreadPack?.spreads])
@@ -6170,6 +6353,30 @@ function AlgoManagerWindow() {
     acc[algo.status] += 1
     return acc
   }, { draft: 0, held: 0, quoting: 0, paused: 0 })
+  useEffect(() => {
+    saveAlgoManagerWorkspaceState({
+      stagedAlgoIds,
+      selectedDeployIds,
+      statusFilter,
+      deployStatus: '',
+      updatedAt: Date.now(),
+    })
+  }, [selectedDeployIds, stagedAlgoIds, statusFilter])
+  useEffect(() => {
+    const sync = () => {
+      const next = loadAlgoManagerWorkspaceState()
+      setStatusFilter(next.statusFilter ?? 'all')
+      setStagedAlgoIds(next.stagedAlgoIds)
+      setSelectedDeployIds(next.selectedDeployIds)
+      setDeployStatus(next.deployStatus ?? '')
+    }
+    window.addEventListener(ALGO_MANAGER_STATE_EVENT, sync)
+    window.addEventListener('storage', sync)
+    return () => {
+      window.removeEventListener(ALGO_MANAGER_STATE_EVENT, sync)
+      window.removeEventListener('storage', sync)
+    }
+  }, [])
   const loadAlgo = () => {
     if (!algoToLoad) return
     setStagedAlgoIds(current => current.includes(algoToLoad) ? current : [...current, algoToLoad])
@@ -6179,134 +6386,41 @@ function AlgoManagerWindow() {
   const toggleDeploySelection = (id: string) => {
     setSelectedDeployIds(current => current.includes(id) ? current.filter(item => item !== id) : [...current, id])
   }
-  const pauseAndAuditSendPriceBlockers = async (blockers: Array<{ algo: AlgoDefinition; marketKey: string; reason: string }>) => {
-    if (!blockers.length) return
-    const blockedIds = new Set(blockers.map(item => item.algo.id))
-    blockers.forEach(({ algo }) => updateAlgo(algo.id, { status: 'paused' }))
-    setStagedAlgoIds(current => current.filter(id => !blockedIds.has(id)))
-    setSelectedDeployIds(current => current.filter(id => !blockedIds.has(id)))
-    await Promise.all(blockers.map(({ algo, marketKey, reason }) => publishAlgoGuardAuditEvent(algo, marketKey, reason)))
-  }
   const deployAlgoDefinitions = async (selected: AlgoDefinition[]) => {
     if (!selected.length) {
       setDeployStatus('Select algo rows to deploy')
       return 0
     }
     setDeploying(true)
-    let orderCount = 0
     try {
-      setDeployStatus('Refreshing LR27 studies before deployment...')
-      const freshSpreadStatsByKey = new Map(spreadStatsByKey)
-      const requiredMarkets = Array.from(new Set(selected
-        .filter(algoRequiresRegressionPeg)
-        .map(algo => {
-          const option = findProductOptionForAlgo(options, algo)
-          return resolveAlgoMarketKey(algo, option)
-        })))
-      for (const marketKey of requiredMarkets) {
-        try {
-          const lr = await fetchFreshLr27(marketKey)
-          freshSpreadStatsByKey.set(marketKey, statWithFreshLr27(marketKey, lr, freshSpreadStatsByKey.get(marketKey)))
-        } catch (err) {
-          freshSpreadStatsByKey.delete(marketKey)
-          freshSpreadStatsByKey.set(marketKey, {
-            key: marketKey,
-            label: marketKey,
-            spread: 0,
-            lastTraded: 0,
-            mean: 0,
-            longTermMean: 0,
-            lookbackMean: 0,
-            z: 0,
-            atr: 0,
-            lr27Mean: undefined,
-            lr27Upper2: undefined,
-            lr27Lower2: undefined,
-            lr27Bars: 0,
-            lr27UpdatedAt: 0,
-            lr27Source: err instanceof Error ? err.message : 'fresh LR27 refresh failed',
-            theoreticalBid: 0,
-            theoreticalAsk: 0,
-            signal: 'send price not published',
-            live: false,
-            bars: [],
-          })
-        }
-      }
-      const blockers: Array<{ algo: AlgoDefinition; marketKey: string; reason: string }> = []
-      selected.forEach(algo => {
-        const option = findProductOptionForAlgo(options, algo)
-        const marketKey = resolveAlgoMarketKey(algo, option)
-        const blocker = validateAlgoProductDefinition(algo, option)
-          ?? validateAlgoStudyFreshness(algo, freshSpreadStatsByKey.get(marketKey))
-        if (blocker) blockers.push({ algo, marketKey, reason: blocker })
+      setDeployStatus('Deploying selected algos...')
+      const response = await ceriousFetch('/api/algo-manager/deploy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ algoIds: selected.map(algo => algo.id) }),
       })
-      if (blockers.length) {
-        await pauseAndAuditSendPriceBlockers(blockers)
-        const messages = blockers.map(item => item.reason)
-        setDeployStatus(`DEPLOY BLOCKED: ${messages.slice(0, 2).join(' | ')}${messages.length > 2 ? ` (+${messages.length - 2} more)` : ''}`)
+      const payload = await response.json().catch(() => ({}))
+      if (payload.state) {
+        useStore.getState().setSimTradingState({
+          simOrders: payload.state.simOrders,
+          simPositions: payload.state.simPositions,
+          fills: payload.state.fills,
+          simMessages: payload.state.simMessages,
+        })
+      }
+      if (!response.ok || !payload.ok) {
+        const errors = Array.isArray(payload.errors) ? payload.errors : []
+        const detail = payload.detail || errors.slice(0, 2).join(' | ') || `HTTP ${response.status}`
+        setDeployStatus(`DEPLOY ERROR: ${detail}${errors.length > 2 ? ` (+${errors.length - 2} more)` : ''}`)
         return 0
       }
-
-      let restedCount = 0
-      let filledImmediatelyCount = 0
-      let cancelledImmediatelyCount = 0
-      for (const algo of selected) {
-        const option = findProductOptionForAlgo(options, algo)
-        const marketKey = resolveAlgoMarketKey(algo, option)
-        const deploymentOrders = buildAlgoDeploymentOrders(algo, option, freshSpreadStatsByKey.get(marketKey))
-        if (!deploymentOrders.length) continue
-        for (const order of deploymentOrders) {
-          const orderId = `algo-${algo.id}-${order.side}-${order.layer}-${Date.now()}-${orderCount}`
-          const placed = await submitSharedOrder({
-            id: orderId,
-            marketKey,
-            outcome: algo.outcome,
-            side: order.side,
-            orderType: algo.orderType,
-            price: order.price,
-            size: order.size,
-            operator: algo.operator,
-            source: 'algo',
-            strategy: algo.name,
-            legId: `${algo.id}-${order.side}-L${order.layer}`,
-            orderTag: 'ALGO ENTRY',
-            algoRole: 'entry',
-            algoId: algo.id,
-            algoName: algo.name,
-            layer: order.layer,
-            trigger: order.trigger,
-            coverTicksFromFill: order.coverTicksFromFill,
-            coverTickSize: order.coverTickSize,
-            tickSize: option?.tickSize,
-            tickValue: option?.tickValue,
-            multiplier: option?.multiplier,
-          })
-          if (placed && (placed.status === 'working' || placed.status === 'partially_filled') && placed.remaining > 0) {
-            restedCount += 1
-          } else if (placed?.status === 'filled') {
-            filledImmediatelyCount += 1
-          } else if (placed?.status === 'cancelled') {
-            cancelledImmediatelyCount += 1
-          }
-          orderCount += 1
-        }
-        updateAlgo(algo.id, { status: 'quoting' })
-      }
-      setDeployStatus(orderCount
-        ? `Released ${orderCount} algo order${orderCount === 1 ? '' : 's'}: ${restedCount} working in ladders/book, ${filledImmediatelyCount} filled immediately${cancelledImmediatelyCount ? `, ${cancelledImmediatelyCount} cancelled` : ''}.`
-        : 'No deployable orders were generated')
-      return orderCount
+      selected.forEach(algo => updateAlgo(algo.id, { status: 'quoting' }))
+      const accepted = Number(payload.acceptedCount ?? 0)
+      const notes = Array.isArray(payload.notes) ? payload.notes.filter(Boolean) : []
+      setDeployStatus(`Released ${accepted} algo order${accepted === 1 ? '' : 's'} from server LR27.${notes.length ? ` ${notes[0]}` : ''}`)
+      return accepted
     } catch (err) {
-      const blockers = selected
-        .filter(algoRequiresRegressionPeg)
-        .map(algo => ({
-          algo,
-          marketKey: resolveAlgoMarketKey(algo, findProductOptionForAlgo(options, algo)),
-          reason: `${algo.name}: send price not published for ${resolveAlgoMarketKey(algo, findProductOptionForAlgo(options, algo))}; ${err instanceof Error ? err.message : 'fresh study refresh failed'}`,
-        }))
-      await pauseAndAuditSendPriceBlockers(blockers)
-      setDeployStatus(`DEPLOY BLOCKED: ${blockers[0]?.reason ?? (err instanceof Error ? err.message : 'fresh study refresh failed')}`)
+      setDeployStatus(`DEPLOY ERROR: ${err instanceof Error ? err.message : 'deployment failed'}`)
       return 0
     } finally {
       setDeploying(false)
@@ -6318,14 +6432,16 @@ function AlgoManagerWindow() {
   }
   const killAllAlgos = async () => {
     const pausedCount = algos.filter(algo => algo.status !== 'draft').length
-    cancelSimOrders({ source: 'algo' })
     try {
-      const response = await fetch('/api/acme/orders/cancel-all', {
+      const response = await ceriousFetch('/api/acme/orders/cancel-all', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ source: 'algo' }),
       })
       const payload = await response.json().catch(() => ({}))
+      if (!response.ok || !payload.ok) {
+        throw new Error(String(payload.detail || payload.message || `HTTP ${response.status}`))
+      }
       if (payload.state) {
         useStore.getState().setSimTradingState({
           simOrders: payload.state.simOrders,
@@ -6334,8 +6450,9 @@ function AlgoManagerWindow() {
           simMessages: payload.state.simMessages,
         })
       }
-    } catch {
-      // Local cancel still pauses the UI if the gateway is unavailable.
+    } catch (err) {
+      setDeployStatus(`KILL ALL FAILED: ${err instanceof Error ? err.message : 'gateway unavailable'}`)
+      return
     }
     algos.forEach(algo => {
       if (algo.status !== 'draft') updateAlgo(algo.id, { status: 'paused' })
@@ -6378,7 +6495,7 @@ function AlgoManagerWindow() {
             {algos.map(algo => <option key={algo.id} value={algo.id}>{algo.name} / {algo.symbol} / {algo.status}</option>)}
           </select>
           <button className="btn-neutral px-2 py-1 text-[11px] font-bold" onClick={loadAlgo}>Load Row</button>
-          <button className="btn-accent px-3 py-1 text-[11px] font-black" onClick={deploySelected} disabled={deploying}>{deploying ? 'Checking...' : 'Deploy Selected'}</button>
+          <button className="btn-accent px-3 py-1 text-[11px] font-black" onClick={deploySelected} disabled={deploying}>{deploying ? 'Deploying...' : 'Deploy Selected'}</button>
           <button className="btn-neutral px-2 py-1 text-[11px]" onClick={() => { setStagedAlgoIds([]); setSelectedDeployIds([]) }}>Clear</button>
         </div>
         <div className="mt-2 grid grid-cols-[26px_1fr_80px_66px_58px_58px_76px_70px_70px] border border-surface-border bg-surface-card px-2 py-1 font-mono text-[10px] font-bold uppercase text-muted">
@@ -6386,21 +6503,21 @@ function AlgoManagerWindow() {
           <span>Deploy Queue</span>
           <span>Product</span>
           <span>Side</span>
-          <span className="text-right">Layers</span>
+          <span className="text-right" title="Order rows or bands layered off the market">Layers</span>
           <span className="text-right">Rules</span>
           <span className="text-right">First Bid</span>
           <span className="text-right">First Ask</span>
-          <span className="text-right">Clip</span>
+          <span className="text-right" title="Contracts per order ticket">Clip</span>
         </div>
         <div className="max-h-40 overflow-y-auto border-x border-b border-surface-border">
           {stagedAlgos.map(algo => {
             const option = findProductOptionForAlgo(options, algo)
             const marketKey = resolveAlgoMarketKey(algo, option)
-            const deploymentOrders = buildAlgoDeploymentOrders(algo, option, spreadStatsByKey.get(marketKey))
-            const firstBid = deploymentOrders.find(order => order.side === 'bid')
-            const firstAsk = deploymentOrders.find(order => order.side === 'offer')
+            const deploymentBuild = buildAlgoDeploymentOrders(algo, option, spreadStatsByKey.get(marketKey))
+            const firstBid = deploymentBuild.orders.find(order => order.side === 'bid')
+            const firstAsk = deploymentBuild.orders.find(order => order.side === 'offer')
             const activeRules = (algo.signalRules ?? []).filter(rule => rule.enabled).length
-            const layerCount = algo.layerPlan?.layerCount ?? deploymentOrders.reduce((max, order) => Math.max(max, order.layer), 0)
+            const layerCount = algo.layerPlan?.layerCount ?? deploymentBuild.orders.reduce((max, order) => Math.max(max, order.layer), 0)
             return (
               <label key={algo.id} className="grid cursor-pointer grid-cols-[26px_1fr_80px_66px_58px_58px_76px_70px_70px] items-center gap-1 border-b border-surface-border/50 px-2 py-1.5 font-mono text-[10px] hover:bg-surface-hover">
                 <input type="checkbox" checked={selectedDeployIds.includes(algo.id)} onChange={() => toggleDeploySelection(algo.id)} />
@@ -6420,14 +6537,14 @@ function AlgoManagerWindow() {
         <div className={cx('mt-1 h-4 font-mono text-[10px]', deployStatus ? 'text-accent' : 'text-muted')}>{deployStatus || `${selectedDeployIds.length} selected for release`}</div>
       </div>
       <div className="grid grid-cols-[1.2fr_82px_82px_70px_74px_76px_108px] border-b border-surface-border bg-surface-card px-2 py-1 font-mono text-[10px] font-bold uppercase text-muted">
-        <span>Algo</span><span>Product</span><span>Template</span><span>Status</span><span className="text-right">Clip</span><span className="text-right">Max Pos</span><span className="text-right">Controls</span>
+        <span>Algo</span><span>Product</span><span>Template</span><span>Status</span><span className="text-right" title="Contracts per order ticket">Clip</span><span className="text-right" title="Per-side cap in synthetic spread units">Max Pos/Side</span><span className="text-right">Controls</span>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
         {filtered.map(algo => (
           <div key={algo.id} className="grid grid-cols-[1.2fr_82px_82px_70px_74px_76px_108px] items-center gap-1 border-b border-surface-border/50 px-2 py-1.5 font-mono text-[10px]">
             <div className="min-w-0">
               <div className="truncate font-black text-slate-100">{algo.name}</div>
-              <div className="truncate text-[9px] text-muted">{quoteModelLabel(algo.quoteModel)} / {algo.operator}</div>
+              <div className="truncate text-[9px] text-muted">{algo.operator}</div>
             </div>
             <span className="truncate text-accent">{algo.symbol}</span>
             <span className="truncate text-slate-300">{algoTemplateLabel(algo.template)}</span>
@@ -6480,7 +6597,7 @@ function LiquidityMapWindow() {
       const activity = providerVolume + tapeVolume + fillVolume
       const oiProxy = option.openInterest ?? bookNotional + fillVolume + Math.max(activity * 0.18, 0)
       const spread = book?.spread_pct ?? (option.live
-        ? option.provider === 'coinbase' || option.provider === 'hyperliquid'
+        ? option.provider === 'hyperliquid'
           ? 0.02
           : Math.max(0.5, 8 - Math.log10(Math.max(activity, 1)))
         : undefined)
@@ -6610,7 +6727,7 @@ function LiquidityMapWindow() {
                 <div className="h-1 overflow-hidden rounded bg-surface-card"><div className="h-full bg-up" style={{ width: `${(row.bookDepth / maxDepth) * 100}%` }} /></div>
               </div>
             </div>
-            <span className="text-right text-slate-200">{row.option.provider === 'cme' ? (Number.isFinite(row.last) ? fmtLadderPrice(Number(row.last)) : '-') : row.option.provider === 'coinbase' || row.option.provider === 'hyperliquid' ? fmtMoney(row.last) : fmtCents(row.last)}</span>
+            <span className="text-right text-slate-200">{row.option.provider === 'cme' ? (Number.isFinite(row.last) ? fmtLadderPrice(Number(row.last)) : '-') : row.option.provider === 'hyperliquid' ? fmtMoney(row.last) : fmtCents(row.last)}</span>
             <span className="text-right text-slate-200">{fmtMoney(row.activity)}</span>
             <span className="text-right text-slate-200">{fmtMoney(row.oiProxy)}</span>
             <span className="text-right text-slate-200" title={`Bid depth ${fmtCompact(row.bidDepth)} / Ask depth ${fmtCompact(row.askDepth)}`}>{fmtCompact(row.bookDepth)}</span>
@@ -6640,8 +6757,26 @@ function AlertsWindow({
   const polyTicks = useStore(s => s.polyTicks)
   const fills = useStore(s => s.fills)
   const [deliveryStatus, setDeliveryStatus] = useState<Record<string, AlertDeliveryStatus>>({})
+  const [smsStatus, setSmsStatus] = useState<SmsAlertStatus | null>(null)
 
   const defaultOption = options.find(option => option.provider === 'cme' && option.symbol === 'ES') ?? options[0]
+
+  useEffect(() => {
+    let cancelled = false
+    void fetchSmsAlertStatus().then(status => {
+      if (!cancelled) setSmsStatus(status)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const smsStatusLabel = useMemo(() => {
+    if (!smsStatus) return 'SMS checking'
+    if (!smsStatus.ready) return 'SMS not configured'
+    if (smsStatus.dryRun) return 'SMS dry-run ready'
+    return `SMS ${smsStatus.provider ?? 'transport'} ready`
+  }, [smsStatus])
 
   const isMoneyProduct = (option: ProductOption | undefined) => option?.provider !== 'cme' && option?.spot !== undefined
 
@@ -6792,7 +6927,15 @@ function AlertsWindow({
   return (
     <div className="flex h-full flex-col bg-surface text-xs">
       <div className="flex items-center justify-between border-b border-surface-border bg-surface-panel px-3 py-2">
-        <div className="text-[10px] text-muted">Rules evaluate against the abstraction layer.</div>
+        <div className="flex items-center gap-2 text-[10px] text-muted">
+          <span>Alert Manager</span>
+          <span className={cx(
+            'rounded border px-2 py-0.5 font-mono',
+            smsStatus?.ready ? 'border-up/40 text-up' : 'border-warn/40 text-warn',
+          )} title={smsStatus?.error ?? smsStatus?.provider ?? 'SMS status'}>
+            {smsStatusLabel}
+          </span>
+        </div>
         <button className="btn-accent flex items-center gap-1 px-2 py-1 text-[11px]" onClick={addAlert}>
           <Plus size={13} /> Add
         </button>
@@ -7000,7 +7143,7 @@ function ServiceMapWindow() {
 const ACME_SPREAD_PRODUCTS = [
   { symbol: 'ES_NQ', label: 'ES / NQ', legs: 'ES - 0.2666667 x NQ', service: 'price.synthetic-spread' },
   { symbol: 'YM_ES', label: 'YM / ES', legs: 'YM - 6.6666667 x ES', service: 'price.synthetic-spread' },
-  { symbol: 'RTY_ES', label: 'RTY / ES', legs: 'RTY - 0.4265 x ES', service: 'price.synthetic-spread' },
+  { symbol: 'RTY_ES', label: 'RTY / ES', legs: 'RTY - 0.4285714 x ES', service: 'price.synthetic-spread' },
 ]
 
 const ACME_PANEL_DETAILS: Partial<Record<WorkspaceWindowKind, { service: string; body: string; bullets: string[] }>> = {
@@ -7011,7 +7154,7 @@ const ACME_PANEL_DETAILS: Partial<Record<WorkspaceWindowKind, { service: string;
   },
   streamingNews: {
     service: 'news.stream',
-    body: 'Streaming News window from Acme, reserved for the real-time news ingestion feed.',
+    body: 'Streaming News window reserved for the real-time news ingestion feed.',
     bullets: ['Timestamped feed', 'Source attribution', 'Spread impact tags'],
   },
   liveApiArchitecture: {
@@ -7021,7 +7164,7 @@ const ACME_PANEL_DETAILS: Partial<Record<WorkspaceWindowKind, { service: string;
   },
   tradeAnalytics: {
     service: 'analytics.trade',
-    body: 'Trade Analytics workspace from Acme, fed by fills, orders, spread marks, and operator tags.',
+    body: 'Trade Analytics workspace fed by fills, orders, spread marks, and operator tags.',
     bullets: ['P&L attribution', 'Operator/source split', 'Export-ready rows'],
   },
   positionsOrders: {
@@ -7036,12 +7179,12 @@ const ACME_PANEL_DETAILS: Partial<Record<WorkspaceWindowKind, { service: string;
   },
   spreadConfigurations: {
     service: 'product-library',
-    body: 'Spread Configurations window for Acme synthetic products and leg definitions.',
+    body: 'Spread Configurations window for Cerious synthetic products and leg definitions.',
     bullets: ACME_SPREAD_PRODUCTS.map(product => `${product.symbol}: ${product.legs}`),
   },
   relativeSpreadVisuals: {
     service: 'visuals.relative-spread',
-    body: 'Relative Spread Visuals from Acme, reserved for cross-spread visual diagnostics.',
+    body: 'Relative Spread Visuals reserved for cross-spread visual diagnostics.',
     bullets: ['Spread value', 'Leg pressure', 'Dislocation state'],
   },
   notionalCalculator: {
@@ -7051,7 +7194,7 @@ const ACME_PANEL_DETAILS: Partial<Record<WorkspaceWindowKind, { service: string;
   },
   macroRegimeSummary: {
     service: 'macro.regime',
-    body: 'Macro Regime Summary from Acme, ready for the macro advisor and market-state feed.',
+    body: 'Macro Regime Summary ready for the macro advisor and market-state feed.',
     bullets: ['Regime state', 'Volatility context', 'Session profile'],
   },
   liveSpreadSignals: {
@@ -7061,12 +7204,12 @@ const ACME_PANEL_DETAILS: Partial<Record<WorkspaceWindowKind, { service: string;
   },
   atrZScoreEngine: {
     service: 'signal.atr-zscore',
-    body: 'ATR and Z-Score Engine from Acme, preserved as a signal service target.',
+    body: 'ATR and Z-Score Engine preserved as a signal service target.',
     bullets: ['Rolling z-score', 'ATR bands', 'Trigger thresholds'],
   },
   executionRules: {
     service: 'risk.execution-rules',
-    body: 'Execution Rules window, preserving the Acme operating checklist around held orders and releases.',
+    body: 'Execution Rules window for the operating checklist around held orders and releases.',
     bullets: ['Entry gating', 'Cancel logic', 'Throttle rules'],
   },
   orderLayeringTechniques: {
@@ -7081,7 +7224,7 @@ const ACME_PANEL_DETAILS: Partial<Record<WorkspaceWindowKind, { service: string;
   },
   crossSpreadOpportunityMap: {
     service: 'signal.cross-spread',
-    body: 'Cross-Spread Opportunity Map from Acme, intended to compare all synthetic spread products.',
+    body: 'Cross-Spread Opportunity Map intended to compare all synthetic spread products.',
     bullets: ['Relative z-score', 'Best opportunity', 'Correlation check'],
   },
   riskChecklist: {
@@ -7091,12 +7234,12 @@ const ACME_PANEL_DETAILS: Partial<Record<WorkspaceWindowKind, { service: string;
   },
   sourceNotes: {
     service: 'knowledge.notes',
-    body: 'Source Notes from Acme, kept for model assumptions, data-source comments, and operator notes.',
+    body: 'Source Notes kept for model assumptions, data-source comments, and operator notes.',
     bullets: ['Model notes', 'Data notes', 'Change notes'],
   },
   modelResearchGovernance: {
     service: 'knowledge.governance',
-    body: 'Model Research & Governance window from Acme, reserved for model versioning and review state.',
+    body: 'Model Research & Governance window reserved for model versioning and review state.',
     bullets: ['Version registry', 'Research status', 'Approval state'],
   },
 }
@@ -7113,115 +7256,14 @@ function AcmeDepthTraderWindow({
   return <LadderWindow provider="polymarket" symbol={symbol} onSelect={onSelect} operatorName={operatorName} />
 }
 
-type PlotlyLike = {
-  react: (node: HTMLElement, traces: unknown[], layout: Record<string, unknown>, config?: Record<string, unknown>) => Promise<unknown>
-  Plots?: { resize: (node: HTMLElement) => void }
-  Fx?: { unhover?: (node: HTMLElement) => void }
-}
-
-type PlotlyHoverEvent = {
-  points?: Array<{ curveNumber?: number }>
-}
-
-type PlotlyEventNode = HTMLElement & {
-  on?: (eventName: string, handler: (event: PlotlyHoverEvent) => void) => void
-  removeAllListeners?: (eventName: string) => void
-}
-
 function acmeChartStudyLabel(study: AcmeChartStudy) {
   if (study.type === 'atr') return `ATR ${study.lookback} x${(study.atrMultiplier ?? 2).toFixed(2)}`
   if (study.type === 'volume-at-price') return `Volume at Price ${study.bins ?? 28}`
   return `Linear Regression ${study.lookback} +${(study.upperDeviation ?? 2).toFixed(2)}/-${(study.lowerDeviation ?? 2).toFixed(2)}`
 }
 
-function acmeChartPalette(index: number) {
-  const palettes = [
-    { basis: '#ffd166', upper: '#fbbf24', lower: '#f59e0b' },
-    { basis: '#ffe08a', upper: '#facc15', lower: '#d97706' },
-    { basis: '#fff0b3', upper: '#eab308', lower: '#b45309' },
-    { basis: '#fcd34d', upper: '#f59e0b', lower: '#92400e' },
-  ]
-  return palettes[Math.abs(index) % palettes.length]
-}
-
 function acmeAverage(values: number[]) {
   return values.length ? values.reduce((total, value) => total + value, 0) / values.length : 0
-}
-
-function acmeMedian(values: number[]) {
-  const sorted = values.filter(value => Number.isFinite(value) && value > 0).sort((a, b) => a - b)
-  if (!sorted.length) return 0
-  const middle = Math.floor(sorted.length / 2)
-  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2
-}
-
-function acmeClampLatestFormingBar(rows: Bar[]): Bar[] {
-  if (rows.length < 8) return rows
-  const latest = rows[rows.length - 1]
-  const prior = rows.slice(Math.max(0, rows.length - 81), -1)
-  const medianRange = acmeMedian(prior.map(row => row.high - row.low))
-  const medianMove = acmeMedian(prior.slice(1).map((row, index) => Math.abs(row.close - prior[index].close)))
-  const latestRange = latest.high - latest.low
-  const previousClose = rows[rows.length - 2]?.close
-  const latestMove = Number.isFinite(previousClose) ? Math.abs(latest.close - previousClose) : 0
-  const rangeLimit = Math.max(medianRange * 2.4, medianMove * 5, 0.01)
-  const closeLimit = Math.max(medianRange * 3.2, medianMove * 6, 0.01)
-  if (!medianRange || (latestRange <= rangeLimit && latestMove <= closeLimit)) return rows
-
-  const repairedClose = latestMove > closeLimit && Number.isFinite(previousClose)
-    ? previousClose + Math.sign(latest.close - previousClose) * closeLimit
-    : latest.close
-  const repairedOpen = latestMove > closeLimit && Number.isFinite(previousClose)
-    ? previousClose
-    : latest.open
-  const bodyHigh = Math.max(repairedOpen, repairedClose)
-  const bodyLow = Math.min(repairedOpen, repairedClose)
-  const pad = Math.max(medianRange * 1.35, Math.abs(repairedClose - repairedOpen) * 1.2, 0.01)
-  const repaired = {
-    ...latest,
-    open: repairedOpen,
-    close: repairedClose,
-    high: Math.max(bodyHigh, Math.min(latest.high, bodyHigh + pad)),
-    low: Math.min(bodyLow, Math.max(latest.low, bodyLow - pad)),
-  }
-  return [...rows.slice(0, -1), repaired]
-}
-
-function acmeTimeframeMs(timeframe: AcmeChartTimeframe): number {
-  if (timeframe === '1m') return 60_000
-  if (timeframe === '5m') return 5 * 60_000
-  if (timeframe === '30m') return 30 * 60_000
-  if (timeframe === '1h') return 60 * 60_000
-  return 24 * 60 * 60_000
-}
-
-function acmeCompletedStudyRows(rows: Bar[], timeframe: AcmeChartTimeframe): Bar[] {
-  const periodMs = acmeTimeframeMs(timeframe)
-  const now = Date.now()
-  return rows.filter(row => Number.isFinite(row.timestamp) && row.timestamp + periodMs <= now)
-}
-
-function acmeTimeLabel(ms: number) {
-  const date = new Date(ms)
-  if (!Number.isFinite(date.getTime())) return ''
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-}
-
-function acmeCompressedAxis(bars: Bar[]) {
-  const x = bars.map((_, index) => index)
-  const maxTicks = Math.max(2, Math.min(9, Math.floor(Math.max(320, bars.length * 8) / 120)))
-  const step = Math.max(1, Math.floor((bars.length - 1) / Math.max(1, maxTicks - 1)))
-  const tickvals: number[] = []
-  const ticktext: string[] = []
-  for (let index = 0; index < bars.length; index += step) {
-    tickvals.push(index)
-    ticktext.push(acmeTimeLabel(bars[index].timestamp))
-  }
-  if (bars.length && tickvals[tickvals.length - 1] !== bars.length - 1) {
-    tickvals.push(bars.length - 1)
-    ticktext.push(acmeTimeLabel(bars[bars.length - 1].timestamp))
-  }
-  return { x, tickvals, ticktext, labels: bars.map(bar => new Date(bar.timestamp).toLocaleString()) }
 }
 
 function acmeRegressionChannel(bars: Bar[], study: AcmeChartStudy) {
@@ -7245,7 +7287,7 @@ function acmeRegressionChannel(bars: Bar[], study: AcmeChartStudy) {
   const intercept = yMean - slope * xMean
   const residuals = sample.map((value, index) => value - (intercept + slope * index))
   const sigma = Math.sqrt(acmeAverage(residuals.map(value => value ** 2)) || 0)
-  const endpoints = [0, n - 1].map(sampleIndex => {
+  const points = sample.map((_value, sampleIndex) => {
     const barIndex = startIndex + sampleIndex
     const mean = intercept + slope * sampleIndex
     return {
@@ -7258,119 +7300,152 @@ function acmeRegressionChannel(bars: Bar[], study: AcmeChartStudy) {
       slope,
     }
   })
-  return { study, endpoints }
+  return { study, points }
 }
 
-function acmeRegressionTraces(
-  bars: Bar[],
-  studies: AcmeChartStudy[],
-  xValues: Array<number | Date>,
-  labels: string[],
-) {
-  return studies.flatMap((study, index) => {
-    const channel = acmeRegressionChannel(bars, study)
-    if (!channel) return []
-    const palette = acmeChartPalette(index)
-    const x = channel.endpoints.map(point => xValues[point.index])
-    const customdata = channel.endpoints.map(point => labels[point.index])
-    const suffix = ` ${index + 1}`
-    const upperLabel = `+${(study.upperDeviation ?? 2).toFixed(2)} Dev Band${suffix}`
-    const lowerLabel = `-${(study.lowerDeviation ?? 2).toFixed(2)} Dev Band${suffix}`
+function publishedRegressionChannel(rows: Bar[], stat?: AcmeSpreadStat) {
+  if (!rows.length) return null
+  const mean = finiteOptional(stat?.lr27Mean)
+  const upper = finiteOptional(stat?.lr27Upper2)
+  const lower = finiteOptional(stat?.lr27Lower2)
+  if (upper === undefined || lower === undefined) return null
+  const slope = finiteOptional(stat?.lr27Slope) ?? 0
+  const upperDistance = mean !== undefined ? Math.max(0, upper - mean) : Math.abs(upper - lower) / 2
+  const lowerDistance = mean !== undefined ? Math.max(0, mean - lower) : Math.abs(upper - lower) / 2
+  const latestMean = mean ?? (upper + lower) / 2
+  const period = Math.max(2, Math.floor(Number(stat?.lr27Period ?? stat?.lr27Bars ?? 27) || 27))
+  const updatedAt = finiteOptional(stat?.lr27UpdatedAt)
+  const eligibleRows = updatedAt !== undefined
+    ? rows.filter(row => row.timestamp <= updatedAt)
+    : rows
+  const studyRows = eligibleRows.slice(-period)
+  if (studyRows.length < 2) return null
+  const lastIndex = studyRows.length - 1
+  const points = studyRows.map((row, index) => {
+    const value = latestMean - slope * (lastIndex - index)
+    return {
+      time: acmeChartTime(row),
+      mean: value,
+      upper: value + upperDistance,
+      lower: value - lowerDistance,
+    }
+  })
+  return {
+    mean: points.map(point => ({ time: point.time, value: point.mean })),
+    upper: points.map(point => ({ time: point.time, value: point.upper })),
+    lower: points.map(point => ({ time: point.time, value: point.lower })),
+    label: `Server LR27 ${stat?.lr27Interval || '30m'} +/-2`,
+  }
+}
+
+function acmeChartBucketMs(timeframe: AcmeChartTimeframe): number {
+  if (timeframe === '1m') return 60_000
+  if (timeframe === '5m') return 5 * 60_000
+  if (timeframe === '30m') return 30 * 60_000
+  if (timeframe === '1h') return 60 * 60_000
+  return 24 * 60 * 60_000
+}
+
+function acmeChartBucketStart(timestamp: number, timeframe: AcmeChartTimeframe): number {
+  if (timeframe !== '1d') return Math.floor(timestamp / acmeChartBucketMs(timeframe)) * acmeChartBucketMs(timeframe)
+  const date = new Date(timestamp)
+  return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
+}
+
+function acmeChartSeriesBars(rows: Bar[], timeframe: AcmeChartTimeframe): Bar[] {
+  const bucketed = new Map<number, Bar>()
+  for (const row of rows) {
+    if (![row.open, row.high, row.low, row.close, row.timestamp].every(Number.isFinite)) continue
+    const timestamp = acmeChartBucketStart(row.timestamp, timeframe)
+    const existing = bucketed.get(timestamp)
+    if (!existing) {
+      bucketed.set(timestamp, { ...row, timestamp })
+    } else {
+      existing.high = Math.max(existing.high, row.high)
+      existing.low = Math.min(existing.low, row.low)
+      existing.close = row.close
+      existing.volume = (existing.volume ?? 0) + (row.volume ?? 0)
+    }
+  }
+  return [...bucketed.values()].sort((a, b) => a.timestamp - b.timestamp)
+}
+
+function acmeCompletedStudyRows(rows: Bar[], timeframe: AcmeChartTimeframe): Bar[] {
+  const periodMs = acmeChartBucketMs(timeframe)
+  const now = Date.now()
+  return rows.filter(row => Number.isFinite(row.timestamp) && row.timestamp + periodMs <= now)
+}
+
+function acmeChartWithLiveLast(rows: Bar[], timeframe: AcmeChartTimeframe, book: PolyBook | undefined, ticks: PolyTradeTick[]): Bar[] {
+  const prepared = acmeChartSeriesBars(rows, timeframe)
+  const latestTick = ticks.at(-1)
+  const tickPrice = finiteOptional(latestTick?.price)
+  const bookPrice = finiteOptional(book?.ltp) ?? finiteOptional(book?.up_pct)
+  const tickTimestamp = finiteOptional(latestTick?.timestamp) ?? 0
+  const bookTimestamp = finiteOptional(book?.timestamp_ms) ?? finiteOptional((book as PolyBook & { seen_ms?: number } | undefined)?.seen_ms) ?? 0
+  const livePrice = tickPrice !== undefined && tickTimestamp >= bookTimestamp ? tickPrice : bookPrice ?? tickPrice
+  if (livePrice === undefined) return prepared
+  const liveTimestamp = Math.max(tickTimestamp, bookTimestamp) || Date.now()
+  const liveSize = tickPrice !== undefined && tickTimestamp >= bookTimestamp
+    ? Math.max(0, latestTick?.size ?? 0)
+    : Math.max(0, book?.ltp_size ?? latestTick?.size ?? 0)
+  const bucket = acmeChartBucketStart(liveTimestamp, timeframe)
+  const latest = prepared.at(-1)
+  if (latest && latest.timestamp === bucket) {
     return [
+      ...prepared.slice(0, -1),
       {
-        x,
-        y: channel.endpoints.map(point => point.mean),
-        customdata,
-        type: 'scatter',
-        mode: 'lines',
-        name: `Mean Line${suffix}`,
-        line: { color: palette.basis, width: 1.55, dash: 'dash' },
-        hovertemplate: '%{customdata}<br>Mean %{y:.2f}<extra></extra>',
-      },
-      {
-        x,
-        y: channel.endpoints.map(point => point.upper),
-        customdata,
-        type: 'scatter',
-        mode: 'lines',
-        name: upperLabel,
-        line: { color: palette.upper, width: 1.35 },
-        hovertemplate: `%{customdata}<br>${upperLabel} %{y:.2f}<extra></extra>`,
-      },
-      {
-        x,
-        y: channel.endpoints.map(point => point.lower),
-        customdata,
-        type: 'scatter',
-        mode: 'lines',
-        name: lowerLabel,
-        line: { color: palette.lower, width: 1.35 },
-        hovertemplate: `%{customdata}<br>${lowerLabel} %{y:.2f}<extra></extra>`,
+        ...latest,
+        high: Math.max(latest.high, livePrice),
+        low: Math.min(latest.low, livePrice),
+        close: livePrice,
+        volume: (latest.volume ?? 0) + liveSize,
       },
     ]
-  })
+  }
+  return [
+    ...prepared,
+    {
+      timestamp: bucket,
+      open: latest?.close ?? livePrice,
+      high: Math.max(latest?.close ?? livePrice, livePrice),
+      low: Math.min(latest?.close ?? livePrice, livePrice),
+      close: livePrice,
+      volume: liveSize,
+    },
+  ]
 }
 
-function acmeAtrValue(bars: Bar[], period: number): number | null {
-  const lookback = Math.max(2, Math.floor(period || 14))
-  if (bars.length < lookback + 1) return null
-  const trs: number[] = []
-  for (let index = 1; index < bars.length; index += 1) {
-    const current = bars[index]
-    const previous = bars[index - 1]
-    trs.push(Math.max(
-      current.high - current.low,
-      Math.abs(current.high - previous.close),
-      Math.abs(current.low - previous.close),
+function acmeChartTime(row: Pick<Bar, 'timestamp'>) {
+  return Math.floor(row.timestamp / 1000) as any
+}
+
+function acmeAtrBands(rows: Bar[], study: AcmeChartStudy) {
+  const lookback = Math.max(2, Math.floor(study.lookback || 14))
+  const multiplier = Math.max(0, Number(study.atrMultiplier ?? 2))
+  if (rows.length < lookback + 1) return []
+  const trueRanges: number[] = []
+  for (let index = 1; index < rows.length; index += 1) {
+    const row = rows[index]
+    const prior = rows[index - 1]
+    trueRanges.push(Math.max(
+      row.high - row.low,
+      Math.abs(row.high - prior.close),
+      Math.abs(row.low - prior.close),
     ))
   }
-  return acmeAverage(trs.slice(-lookback))
-}
-
-function acmeAtrTraces(
-  bars: Bar[],
-  studies: AcmeChartStudy[],
-  xValues: Array<number | Date>,
-  labels: string[],
-) {
-  return studies.filter(study => study.type === 'atr').flatMap((study, index) => {
-    const period = Math.max(2, Math.floor(study.lookback || 14))
-    const multiplier = Math.max(0, study.atrMultiplier ?? 2)
-    const yUpper: Array<number | null> = []
-    const yLower: Array<number | null> = []
-    for (let i = 0; i < bars.length; i += 1) {
-      const atr = acmeAtrValue(bars.slice(0, i + 1), period)
-      yUpper.push(atr === null ? null : bars[i].close + atr * multiplier)
-      yLower.push(atr === null ? null : bars[i].close - atr * multiplier)
+  return rows.map((row, index) => {
+    if (index < lookback) return null
+    const atr = acmeAverage(trueRanges.slice(index - lookback, index))
+    return {
+      time: acmeChartTime(row),
+      upper: row.close + atr * multiplier,
+      lower: row.close - atr * multiplier,
     }
-    const upperColor = index % 2 ? '#38bdf8' : '#00d8ff'
-    const lowerColor = index % 2 ? '#fb7185' : '#ff3045'
-    return [
-      {
-        x: xValues,
-        y: yUpper,
-        customdata: labels,
-        type: 'scatter',
-        mode: 'lines',
-        name: `ATR +${multiplier.toFixed(2)}`,
-        line: { color: upperColor, width: 1, dash: 'dot' },
-        hovertemplate: '%{customdata}<br>ATR Upper %{y:.2f}<extra></extra>',
-      },
-      {
-        x: xValues,
-        y: yLower,
-        customdata: labels,
-        type: 'scatter',
-        mode: 'lines',
-        name: `ATR -${multiplier.toFixed(2)}`,
-        line: { color: lowerColor, width: 1, dash: 'dot' },
-        hovertemplate: '%{customdata}<br>ATR Lower %{y:.2f}<extra></extra>',
-      },
-    ]
-  })
+  }).filter((row): row is { time: any; upper: number; lower: number } => Boolean(row))
 }
 
-function acmeVolumeAtPriceShapes(rows: Bar[], studies: AcmeChartStudy[]) {
+function acmeVolumeAtPriceBuckets(rows: Bar[], studies: AcmeChartStudy[]) {
   const study = studies.find(item => item.type === 'volume-at-price')
   if (!study || rows.length < 2) return []
   const prices = rows.flatMap(row => [row.low, row.high, row.close]).filter(Number.isFinite)
@@ -7380,32 +7455,23 @@ function acmeVolumeAtPriceShapes(rows: Bar[], studies: AcmeChartStudy[]) {
   const bins = Math.max(8, Math.min(80, Math.floor(study.bins ?? 28)))
   const step = (max - min) / bins
   const buckets = Array.from({ length: bins }, (_, index) => ({ low: min + index * step, high: min + (index + 1) * step, volume: 0 }))
-  rows.forEach(row => {
+  for (const row of rows) {
     const typical = (row.high + row.low + row.close) / 3
     const index = clamp(Math.floor((typical - min) / step), 0, bins - 1)
-    buckets[index].volume += Math.max(0, row.volume || 0)
-  })
+    buckets[index].volume += Math.max(0, row.volume ?? 0)
+  }
   const maxVolume = Math.max(1, ...buckets.map(bucket => bucket.volume))
   return buckets
     .filter(bucket => bucket.volume > 0)
-    .map(bucket => {
-      const width = 0.18 * (bucket.volume / maxVolume)
-      return {
-        type: 'rect',
-        xref: 'paper',
-        yref: 'y',
-        x0: 1 - width,
-        x1: 1,
-        y0: bucket.low,
-        y1: bucket.high,
-        line: { width: 0 },
-        fillcolor: 'rgba(0, 216, 255, .18)',
-        layer: 'below',
-      }
-    })
+    .map(bucket => ({
+      ...bucket,
+      pct: bucket.volume / maxVolume,
+      y: ((max - (bucket.low + bucket.high) / 2) / (max - min)) * 100,
+      h: Math.max(1.2, (step / (max - min)) * 100),
+    }))
 }
 
-function AcmeProductCandleChart({
+function CeriousStudyChart({
   symbol,
   timeframe,
   mode,
@@ -7413,6 +7479,7 @@ function AcmeProductCandleChart({
   showGrid,
   solidCandles,
   studies,
+  publishedStudy,
 }: {
   symbol: string
   timeframe: AcmeChartTimeframe
@@ -7421,284 +7488,308 @@ function AcmeProductCandleChart({
   showGrid: boolean
   solidCandles: boolean
   studies: AcmeChartStudy[]
+  publishedStudy?: AcmeSpreadStat
 }) {
-  const ref = useRef<HTMLDivElement | null>(null)
-  const { bars, error } = useAcmeBars(symbol || 'ES_NQ', timeframe)
-  const [legendOpen, setLegendOpen] = useState(false)
-  const [hoverReady, setHoverReady] = useState(false)
-  const legendTimerRef = useRef<number | null>(null)
-  const hoverTimerRef = useRef<number | null>(null)
-  const hoverTokenRef = useRef(0)
-
-  const clearLegendTimer = () => {
-    if (legendTimerRef.current !== null) {
-      window.clearTimeout(legendTimerRef.current)
-      legendTimerRef.current = null
-    }
-  }
-
-  const showLegendAfterHold = () => {
-    clearLegendTimer()
-    legendTimerRef.current = window.setTimeout(() => {
-      setLegendOpen(true)
-      legendTimerRef.current = null
-    }, 550)
-  }
-
-  const hideLegend = () => {
-    clearLegendTimer()
-    setLegendOpen(false)
-  }
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const chartRef = useRef<any>(null)
+  const candleRef = useRef<any>(null)
+  const lineRef = useRef<any>(null)
+  const volumeRef = useRef<any>(null)
+  const studySeriesRef = useRef<any[]>([])
+  const chartFitKeyRef = useRef('')
+  const livePriceLineRef = useRef<{ series: any; line: any } | null>(null)
+  const [bars, setBars] = useState<Bar[]>([])
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+  const normalizedSymbol = String(symbol || 'ES_NQ').trim().toUpperCase()
+  const chartSubscriptionSymbols = useMemo(() => [normalizedSymbol], [normalizedSymbol])
+  useCmeMarketDataSubscriptions(chartSubscriptionSymbols)
+  const book = useStore(state => state.polyBooks[normalizedSymbol])
+  const ticks = useStore(state => state.polyTicks[normalizedSymbol] ?? EMPTY_TRADE_TICKS)
+  const axisMode = compressBlankSessions ? 'service-session-axis' : 'calendar-axis'
+  const showVolumeStudy = studies.some(study => study.type === 'volume-at-price')
 
   useEffect(() => {
-    const node = ref.current
-    if (!node) return
-    let cancelled = false
-    let retryId = 0
-    let detachHoverEvents: (() => void) | null = null
-    let resizeObserver: ResizeObserver | null = null
-    const clearHoverIntent = () => {
-      if (hoverTimerRef.current !== null) {
-        window.clearTimeout(hoverTimerRef.current)
-        hoverTimerRef.current = null
-      }
-      hoverTokenRef.current += 1
-      setHoverReady(false)
-    }
-    const render = () => {
-      const plotly = (window as typeof window & { Plotly?: PlotlyLike }).Plotly
-      if (!plotly) {
-        retryId = window.setTimeout(render, 250)
-        return
-      }
-      const rows = acmeClampLatestFormingBar(bars.filter(bar => [bar.open, bar.high, bar.low, bar.close].every(Number.isFinite)))
-      if (!rows.length) {
-        detachHoverEvents?.()
-        clearHoverIntent()
-        node.innerHTML = '<div class="flex h-full items-center justify-center text-xs text-slate-500">Waiting for chart bars.</div>'
-        return
-      }
-      const compressed = compressBlankSessions ? acmeCompressedAxis(rows) : null
-      const x = compressed ? compressed.x : rows.map(bar => new Date(bar.timestamp))
-      const labels = compressed ? compressed.labels : rows.map(bar => new Date(bar.timestamp).toLocaleString())
-      const studyRows = acmeCompletedStudyRows(rows, timeframe)
-      const compressedStudy = compressBlankSessions ? acmeCompressedAxis(studyRows) : null
-      const studyX = compressedStudy ? compressedStudy.x : studyRows.map(bar => new Date(bar.timestamp))
-      const studyLabels = compressedStudy ? compressedStudy.labels : studyRows.map(bar => new Date(bar.timestamp).toLocaleString())
-      const baseTrace = mode === 'candles'
-        ? {
-            x,
-            customdata: labels,
-            open: rows.map(bar => bar.open),
-            high: rows.map(bar => bar.high),
-            low: rows.map(bar => bar.low),
-            close: rows.map(bar => bar.close),
-            type: 'candlestick',
-            name: symbol || 'ACME Chart',
-            increasing: {
-              line: { color: solidCandles ? 'rgba(255,255,255,.95)' : '#00d8ff', width: solidCandles ? 0.9 : 1.3 },
-              fillcolor: solidCandles ? '#006dff' : 'rgba(0,216,255,.34)',
-            },
-            decreasing: {
-              line: { color: solidCandles ? 'rgba(255,255,255,.95)' : '#ff3045', width: solidCandles ? 0.9 : 1.3 },
-              fillcolor: solidCandles ? '#ff3045' : 'rgba(255,48,69,.42)',
-            },
-            hoverlabel: { bgcolor: '#101a29', font: { color: '#edf4ff' } },
-            hovertemplate: '%{customdata}<br>O %{open:.2f}<br>H %{high:.2f}<br>L %{low:.2f}<br>C %{close:.2f}<extra></extra>',
-          }
-        : {
-            x,
-            customdata: labels,
-            y: rows.map(bar => bar.close),
-            type: 'scatter',
-            mode: 'lines',
-            name: `${symbol || 'ACME'} Close`,
-            line: { color: '#00d8ff', width: 1.8 },
-            connectgaps: false,
-            hovertemplate: '%{customdata}<br>Close %{y:.2f}<extra></extra>',
-          }
-      const regressionTraces = acmeRegressionTraces(studyRows, studies, studyX, studyLabels)
-      const atrTraces = acmeAtrTraces(studyRows, studies, studyX, studyLabels)
-      const volumeAtPriceShapes = acmeVolumeAtPriceShapes(rows, studies)
-      const last = rows[rows.length - 1]
-      const traces = [baseTrace, ...regressionTraces, ...atrTraces]
-      const priceMarkerShapes = Number.isFinite(last.close)
-        ? [{
-            type: 'line',
-            xref: 'paper',
-            yref: 'y',
-            x0: 0.985,
-            x1: 1,
-            y0: last.close,
-            y1: last.close,
-            line: { color: '#00d8ff', width: 1 },
-          }]
-        : []
-      const layout = {
-        autosize: true,
-        paper_bgcolor: '#05070b',
-        plot_bgcolor: '#05070b',
-        margin: { l: 4, r: 46, t: 6, b: 24 },
-        dragmode: 'pan',
-        showlegend: regressionTraces.length + atrTraces.length > 0,
-        legend: {
-          orientation: 'h',
-          x: 0.01,
-          y: 0.995,
-          xanchor: 'left',
-          yanchor: 'top',
-          font: { color: '#e5f0ff', size: 9 },
-          bgcolor: 'rgba(5,7,11,.9)',
-          bordercolor: 'rgba(0,216,255,.3)',
-          borderwidth: 1,
-        },
-        hovermode: 'closest',
-        hoverdistance: 8,
-        spikedistance: -1,
-        uirevision: `${symbol}-${timeframe}-${mode}-${compressBlankSessions ? 'nogaps' : 'time'}-${studies.map(acmeChartStudyLabel).join('|')}`,
-        font: { family: 'Inter, Arial, sans-serif', color: '#e5f0ff', size: 11 },
-        shapes: [...volumeAtPriceShapes, ...priceMarkerShapes],
-        annotations: Number.isFinite(last.close)
-          ? [{
-              xref: 'paper',
-              yref: 'y',
-              x: 1.002,
-              y: last.close,
-              xanchor: 'left',
-              yanchor: 'middle',
-              text: last.close.toFixed(2),
-              showarrow: false,
-              font: { color: '#001014', size: 9 },
-              bgcolor: '#00d8ff',
-              bordercolor: 'rgba(0,216,255,.68)',
-              borderwidth: 1,
-              borderpad: 1,
-            }]
-          : [],
-        xaxis: {
-          title: { text: '' },
-          type: compressed ? 'linear' : 'date',
-          rangeslider: { visible: false },
-          showgrid: showGrid,
-          gridcolor: 'rgba(38,50,65,.55)',
-          linecolor: '#4b5f76',
-          tickcolor: '#4b5f76',
-          tickfont: { color: '#a8b4c4', size: 9 },
-          ticklen: 3,
-          nticks: 7,
-          showline: true,
-          automargin: false,
-          fixedrange: false,
-          ...(compressed ? { tickmode: 'array', tickvals: compressed.tickvals, ticktext: compressed.ticktext } : {}),
-        },
-        yaxis: {
-          title: { text: '' },
-          side: 'right',
-          showgrid: showGrid,
-          gridcolor: 'rgba(38,50,65,.55)',
-          linecolor: '#4b5f76',
-          tickcolor: '#4b5f76',
-          tickfont: { color: '#a8b4c4', size: 9 },
-          tickformat: '.2f',
-          ticklen: 3,
-          nticks: 9,
-          showline: true,
-          zeroline: false,
-          automargin: false,
-          fixedrange: false,
-        },
-      }
-      if (!cancelled) void plotly.react(node, traces, layout, {
-        responsive: true,
-        scrollZoom: true,
-        displaylogo: false,
-        modeBarButtonsToRemove: ['toImage', 'sendDataToCloud', 'lasso2d', 'select2d'],
-      }).then(() => {
-        if (cancelled) return
-        detachHoverEvents?.()
-        resizeObserver?.disconnect()
-        const plotNode = node as PlotlyEventNode
-        plotNode.removeAllListeners?.('plotly_hover')
-        plotNode.removeAllListeners?.('plotly_unhover')
-        const handleHover = (event: PlotlyHoverEvent) => {
-          const point = event.points?.[0]
-          if (point?.curveNumber !== 0) {
-            clearHoverIntent()
-            plotly.Fx?.unhover?.(node)
-            return
-          }
-          if (hoverTimerRef.current !== null) window.clearTimeout(hoverTimerRef.current)
-          const token = hoverTokenRef.current + 1
-          hoverTokenRef.current = token
-          setHoverReady(false)
-          hoverTimerRef.current = window.setTimeout(() => {
-            if (!cancelled && hoverTokenRef.current === token) setHoverReady(true)
-            hoverTimerRef.current = null
-          }, 850)
-        }
-        const handleUnhover = () => {
-          clearHoverIntent()
-        }
-        plotNode.on?.('plotly_hover', handleHover)
-        plotNode.on?.('plotly_unhover', handleUnhover)
-        node.addEventListener('mouseleave', handleUnhover)
-        detachHoverEvents = () => {
-          plotNode.removeAllListeners?.('plotly_hover')
-          plotNode.removeAllListeners?.('plotly_unhover')
-          node.removeEventListener('mouseleave', handleUnhover)
-        }
-        const resize = () => {
-          if (!cancelled) window.requestAnimationFrame(() => plotly.Plots?.resize(node))
-        }
-        resizeObserver = new ResizeObserver(resize)
-        resizeObserver.observe(node)
-        if (node.parentElement) resizeObserver.observe(node.parentElement)
-        resize()
-      })
-    }
-    render()
-    return () => {
-      cancelled = true
-      detachHoverEvents?.()
-      resizeObserver?.disconnect()
-      clearHoverIntent()
-      if (retryId) window.clearTimeout(retryId)
-    }
-  }, [bars, compressBlankSessions, mode, showGrid, solidCandles, studies, symbol, timeframe])
+    if (!containerRef.current) return
+    const chart = createChart(containerRef.current, {
+      layout: {
+        background: { type: ColorType.Solid, color: '#05070b' },
+        textColor: '#a8b4c4',
+      },
+      grid: {
+        vertLines: { color: showGrid ? 'rgba(46, 63, 87, .62)' : 'rgba(46, 63, 87, .12)', style: LineStyle.Dotted },
+        horzLines: { color: showGrid ? 'rgba(46, 63, 87, .62)' : 'rgba(46, 63, 87, .12)', style: LineStyle.Dotted },
+      },
+      crosshair: { mode: CrosshairMode.Normal },
+      rightPriceScale: {
+        borderColor: '#2a3b50',
+        scaleMargins: { top: 0.05, bottom: 0.12 },
+      },
+      timeScale: {
+        borderColor: '#2a3b50',
+        timeVisible: timeframe !== '1d',
+        secondsVisible: false,
+        rightOffset: 4,
+      },
+      autoSize: true,
+    })
+    chartRef.current = chart
+    candleRef.current = chart.addSeries(CandlestickSeries, {
+      upColor: '#006dff',
+      downColor: '#ff3045',
+      borderUpColor: solidCandles ? '#f8fbff' : '#00d8ff',
+      borderDownColor: solidCandles ? '#f8fbff' : '#ff7a89',
+      wickUpColor: '#e6f1ff',
+      wickDownColor: '#e6f1ff',
+      priceLineVisible: false,
+      lastValueVisible: false,
+    })
+    lineRef.current = chart.addSeries(LineSeries, {
+      color: '#00d8ff',
+      lineWidth: 2,
+      priceLineVisible: false,
+      lastValueVisible: false,
+    })
+    volumeRef.current = chart.addSeries(HistogramSeries, {
+      priceFormat: { type: 'volume' },
+      priceScaleId: 'volume',
+    })
+    volumeRef.current.applyOptions({ visible: false })
+    volumeRef.current.priceScale().applyOptions({ scaleMargins: { top: 0.84, bottom: 0 } })
 
-  useEffect(() => () => {
-    clearLegendTimer()
-    if (hoverTimerRef.current !== null) window.clearTimeout(hoverTimerRef.current)
+    return () => {
+      if (livePriceLineRef.current) {
+        try { livePriceLineRef.current.series.removePriceLine(livePriceLineRef.current.line) } catch { /* ignore */ }
+      }
+      livePriceLineRef.current = null
+      for (const series of studySeriesRef.current) {
+        try { chart.removeSeries(series) } catch { /* ignore */ }
+      }
+      studySeriesRef.current = []
+      chart.remove()
+    }
   }, [])
 
+  useEffect(() => {
+    chartRef.current?.applyOptions({
+      grid: {
+        vertLines: { color: showGrid ? 'rgba(46, 63, 87, .62)' : 'rgba(46, 63, 87, .12)', style: LineStyle.Dotted },
+        horzLines: { color: showGrid ? 'rgba(46, 63, 87, .62)' : 'rgba(46, 63, 87, .12)', style: LineStyle.Dotted },
+      },
+      timeScale: { timeVisible: timeframe !== '1d' },
+    })
+    candleRef.current?.applyOptions({
+      visible: mode === 'candles',
+      borderUpColor: solidCandles ? '#f8fbff' : '#00d8ff',
+      borderDownColor: solidCandles ? '#f8fbff' : '#ff7a89',
+      priceLineVisible: false,
+      lastValueVisible: false,
+    })
+    lineRef.current?.applyOptions({ visible: mode === 'line', priceLineVisible: false, lastValueVisible: false })
+  }, [mode, showGrid, solidCandles, timeframe])
+
+  useEffect(() => {
+    let cancelled = false
+    let timeoutId = 0
+    const pull = async () => {
+      setLoading(true)
+      let delay = 15_000
+      try {
+        const next = await fetchBars(normalizedSymbol, timeframe, 1200, 45_000)
+        if (!cancelled) {
+          setBars(next)
+          setError(next.length ? '' : 'No bars returned from Cerious price service')
+        }
+      } catch (err) {
+        delay = 7_500
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Chart bars unavailable')
+      } finally {
+        if (!cancelled) {
+          setLoading(false)
+          timeoutId = window.setTimeout(pull, delay)
+        }
+      }
+    }
+    pull()
+    return () => {
+      cancelled = true
+      if (timeoutId) window.clearTimeout(timeoutId)
+    }
+  }, [normalizedSymbol, timeframe])
+
+  const historicalDisplayBars = useMemo(
+    () => acmeChartSeriesBars(bars, timeframe),
+    [bars, timeframe],
+  )
+
+  const displayBars = useMemo(
+    () => acmeChartWithLiveLast(bars, timeframe, book, ticks),
+    [bars, book, ticks, timeframe],
+  )
+
+  const volumeProfile = useMemo(
+    () => acmeVolumeAtPriceBuckets(displayBars.slice(-240), studies),
+    [displayBars, studies],
+  )
+
+  useEffect(() => {
+    const chart = chartRef.current
+    const candle = candleRef.current
+    const line = lineRef.current
+    const volume = volumeRef.current
+    if (!chart || !candle || !line || !historicalDisplayBars.length) return
+    const unique = new Map<number, Bar>()
+    for (const row of historicalDisplayBars) unique.set(row.timestamp, row)
+    const rows = [...unique.values()].sort((a, b) => a.timestamp - b.timestamp)
+    const candleData = rows.map(row => ({
+      time: acmeChartTime(row),
+      open: row.open,
+      high: row.high,
+      low: row.low,
+      close: row.close,
+    }))
+    const lineData = rows.map(row => ({ time: acmeChartTime(row), value: row.close }))
+    const volumeData = rows.map(row => ({
+      time: acmeChartTime(row),
+      value: Math.max(0, row.volume ?? 0),
+      color: row.close >= row.open ? 'rgba(0, 109, 255, .28)' : 'rgba(255, 48, 69, .28)',
+    }))
+    candle.setData(candleData)
+    line.setData(lineData)
+    volume?.applyOptions({ visible: showVolumeStudy })
+    volume?.setData(showVolumeStudy ? volumeData : [])
+
+    for (const series of studySeriesRef.current) {
+      try { chart.removeSeries(series) } catch { /* ignore */ }
+    }
+    studySeriesRef.current = []
+    const studyRows = acmeCompletedStudyRows(rows, timeframe)
+
+    studies.forEach((study, index) => {
+      if (study.type === 'regression-channel') {
+        const usePublishedDefault = isDefaultRegressionChartStudy(study)
+          && String(publishedStudy?.lr27Interval || '30m').toLowerCase() === timeframe
+        if (usePublishedDefault) {
+          const channel = publishedRegressionChannel(studyRows, publishedStudy)
+          if (!channel) return
+          const mean = channel.mean
+            ? chart.addSeries(LineSeries, { color: '#facc15', lineWidth: 2, lineStyle: LineStyle.Dashed, priceLineVisible: false, lastValueVisible: false })
+            : null
+          const upper = chart.addSeries(LineSeries, { color: '#facc15', lineWidth: 1, priceLineVisible: false, lastValueVisible: false })
+          const lower = chart.addSeries(LineSeries, { color: '#facc15', lineWidth: 1, priceLineVisible: false, lastValueVisible: false })
+          if (mean && channel.mean) mean.setData(channel.mean)
+          upper.setData(channel.upper)
+          lower.setData(channel.lower)
+          studySeriesRef.current.push(...[mean, upper, lower].filter(Boolean))
+          return
+        }
+        const channel = acmeRegressionChannel(studyRows, study)
+        if (!channel) return
+        const palette = ['#facc15', '#fde68a', '#f59e0b', '#fff0b3'][index % 4]
+        const mean = chart.addSeries(LineSeries, { color: palette, lineWidth: 2, lineStyle: LineStyle.Dashed, priceLineVisible: false, lastValueVisible: false })
+        const upper = chart.addSeries(LineSeries, { color: palette, lineWidth: 1, priceLineVisible: false, lastValueVisible: false })
+        const lower = chart.addSeries(LineSeries, { color: palette, lineWidth: 1, priceLineVisible: false, lastValueVisible: false })
+        mean.setData(channel.points.map(point => ({ time: Math.floor(point.time / 1000) as any, value: point.mean })))
+        upper.setData(channel.points.map(point => ({ time: Math.floor(point.time / 1000) as any, value: point.upper })))
+        lower.setData(channel.points.map(point => ({ time: Math.floor(point.time / 1000) as any, value: point.lower })))
+        studySeriesRef.current.push(mean, upper, lower)
+      } else if (study.type === 'atr') {
+        const bands = acmeAtrBands(studyRows, study)
+        if (!bands.length) return
+        const upper = chart.addSeries(LineSeries, { color: '#38bdf8', lineWidth: 1, lineStyle: LineStyle.Dotted, priceLineVisible: false, lastValueVisible: false })
+        const lower = chart.addSeries(LineSeries, { color: '#fb7185', lineWidth: 1, lineStyle: LineStyle.Dotted, priceLineVisible: false, lastValueVisible: false })
+        upper.setData(bands.map(point => ({ time: point.time, value: point.upper })))
+        lower.setData(bands.map(point => ({ time: point.time, value: point.lower })))
+        studySeriesRef.current.push(upper, lower)
+      }
+    })
+    const fitKey = `${normalizedSymbol}|${timeframe}|${rows[0]?.timestamp ?? 0}|${rows.length}`
+    if (chartFitKeyRef.current !== fitKey) {
+      chart.timeScale().fitContent()
+      chartFitKeyRef.current = fitKey
+    }
+  }, [
+    historicalDisplayBars,
+    normalizedSymbol,
+    publishedStudy?.lr27Interval,
+    publishedStudy?.lr27Lower2,
+    publishedStudy?.lr27Mean,
+    publishedStudy?.lr27Period,
+    publishedStudy?.lr27Sigma,
+    publishedStudy?.lr27Slope,
+    publishedStudy?.lr27Upper2,
+    publishedStudy?.lr27UpdatedAt,
+    showVolumeStudy,
+    studies,
+    timeframe,
+  ])
+
+  useEffect(() => {
+    const candle = candleRef.current
+    const line = lineRef.current
+    const volume = volumeRef.current
+    if (!candle || !line || !displayBars.length) return
+    const latest = displayBars.at(-1)
+    if (!latest || ![latest.open, latest.high, latest.low, latest.close, latest.timestamp].every(Number.isFinite)) return
+    const time = acmeChartTime(latest)
+    candle.update({
+      time,
+      open: latest.open,
+      high: latest.high,
+      low: latest.low,
+      close: latest.close,
+    })
+    line.update({ time, value: latest.close })
+    if (showVolumeStudy) {
+      volume?.update({
+        time,
+        value: Math.max(0, latest.volume ?? 0),
+        color: latest.close >= latest.open ? 'rgba(0, 109, 255, .28)' : 'rgba(255, 48, 69, .28)',
+      })
+    }
+    if (livePriceLineRef.current) {
+      try { livePriceLineRef.current.series.removePriceLine(livePriceLineRef.current.line) } catch { /* ignore */ }
+      livePriceLineRef.current = null
+    }
+    const priceLineSeries = mode === 'line' ? line : candle
+    livePriceLineRef.current = {
+      series: priceLineSeries,
+      line: priceLineSeries.createPriceLine({
+        price: latest.close,
+        color: '#facc15',
+        lineWidth: 1,
+        lineStyle: LineStyle.Solid,
+        lineVisible: false,
+        axisLabelVisible: true,
+        title: '',
+      }),
+    }
+  }, [displayBars, mode, showVolumeStudy])
+
   return (
-    <div className="relative h-full w-full">
-      <style>{`
-        .acme-product-plot .legend {
-          opacity: 1;
-          transition: opacity 140ms ease, transform 140ms ease;
-        }
-        .acme-product-plot:not(.acme-legend-open) .legend {
-          opacity: 0 !important;
-          pointer-events: none !important;
-          transform: translateY(-10px);
-        }
-        .acme-product-plot:not(.acme-hover-ready) .hoverlayer {
-          opacity: 0 !important;
-          pointer-events: none !important;
-        }
-      `}</style>
-      <div
-        className="absolute left-0 top-0 z-20 h-8 w-full"
-        onPointerEnter={showLegendAfterHold}
-        onPointerLeave={hideLegend}
-        title="Hover and hold to show chart legend"
-      />
-      <div
-        ref={ref}
-        className={cx('acme-product-plot h-full w-full', legendOpen && 'acme-legend-open', hoverReady && 'acme-hover-ready')}
-      />
-      {error && <div className="pointer-events-none absolute bottom-2 left-2 rounded border border-down/30 bg-down/10 px-2 py-1 font-mono text-[10px] text-down">Chart bars retrying: {error}</div>}
+    <div className="relative h-full w-full overflow-hidden rounded bg-[#05070b]">
+      <div ref={containerRef} className="h-full w-full" data-axis-mode={axisMode} />
+      {volumeProfile.length > 0 && (
+        <div className="pointer-events-none absolute right-[46px] top-2 h-[calc(100%-38px)] w-[22%]">
+          {volumeProfile.map(bucket => (
+            <div
+              key={`${bucket.low}-${bucket.high}`}
+              className="absolute right-0 rounded-l bg-cyan-300/20"
+              style={{
+                top: `${bucket.y - bucket.h / 2}%`,
+                height: `${bucket.h}%`,
+                width: `${Math.max(4, bucket.pct * 100)}%`,
+              }}
+              title={`${bucket.low.toFixed(2)}-${bucket.high.toFixed(2)} ${bucket.volume.toFixed(0)}`}
+            />
+          ))}
+        </div>
+      )}
+      {(loading || error || !displayBars.length) && (
+        <div className={cx('pointer-events-none absolute left-2 top-2 rounded border px-2 py-1 font-mono text-[10px]', error ? 'border-down/40 bg-down/10 text-down' : 'border-cyan-300/30 bg-cyan-400/10 text-cyan-200')}>
+          {error || (loading ? `Loading ${normalizedSymbol} ${timeframe} bars from Cerious price service...` : 'Waiting for bars')}
+        </div>
+      )}
     </div>
   )
 }
@@ -7729,11 +7820,15 @@ function AcmeSingleChartWindow({
   const [lowerDeviation, setLowerDeviation] = useState(settings?.lowerDeviation ?? 2)
   const [atrMultiplier, setAtrMultiplier] = useState(settings?.atrMultiplier ?? 2)
   const [volumePriceBins, setVolumePriceBins] = useState(settings?.volumePriceBins ?? 28)
-  const [studies, setStudies] = useState<AcmeChartStudy[]>(settings?.studies ?? [
-    { id: 'regch-default-27', type: 'regression-channel', lookback: 27, upperDeviation: 2, lowerDeviation: 2 },
-  ])
+  const [studies, setStudies] = useState<AcmeChartStudy[]>(() => initialAcmeChartStudies(settings))
   const selectedSymbol = symbol || 'ES_NQ'
+  const intelligence = useAcmeIntelligence(30000)
+  const publishedStudy = useMemo(
+    () => (intelligence?.spreadPack?.spreads ?? []).find(stat => String(stat.key).toUpperCase() === String(selectedSymbol).toUpperCase()),
+    [intelligence?.spreadPack?.spreads, selectedSymbol],
+  )
   const studyStatus = studies.length ? studies.map(acmeChartStudyLabel).join(' | ') : 'No studies'
+  const optionalStudyCount = studies.filter(study => !isDefaultRegressionChartStudy(study)).length
   const settingsRef = useRef(onSettingsChange)
 
   useEffect(() => {
@@ -7778,6 +7873,13 @@ function AcmeSingleChartWindow({
       ...current,
       nextStudy,
     ])
+  }
+
+  const clearOptionalStudies = () => {
+    setStudies(current => {
+      const defaults = current.filter(isDefaultRegressionChartStudy)
+      return defaults.length ? defaults : defaultAcmeChartStudies()
+    })
   }
 
   const applyDisplayPreset = (preset: AcmeChartDisplayPreset) => {
@@ -7827,14 +7929,14 @@ function AcmeSingleChartWindow({
         <button
           className={cx('btn-neutral flex h-8 items-center gap-1 px-2 text-[10px] font-black uppercase', showStudyBuilder && 'border-accent/60 text-accent')}
           onClick={() => setShowStudyBuilder(current => !current)}
-          title={studyStatus}
+          title={`Default 27-period linear regression stays on. Optional studies: ${optionalStudyCount}. ${studyStatus}`}
         >
           <SlidersHorizontal size={13} /> Studies {studies.length}
         </button>
       </div>
       {showStudyBuilder && (
       <div className="flex flex-wrap items-center gap-2 border-b border-surface-border bg-[#07101b] px-2 py-1">
-        <span className="font-mono text-[10px] font-black uppercase text-muted">Studies</span>
+        <span className="font-mono text-[10px] font-black uppercase text-muted">Optional Studies</span>
         <select className="input-field h-7 w-40 py-0 text-[10px] font-bold" value={studyType} onChange={event => setStudyType(event.target.value as AcmeChartStudyType)}>
           <option value="regression-channel">Linear Regression</option>
           <option value="atr">ATR</option>
@@ -7856,7 +7958,7 @@ function AcmeSingleChartWindow({
           <input className="input-field h-7 w-16 px-2 py-0 text-[10px]" type="number" min={8} max={80} step={1} value={volumePriceBins} onChange={event => setVolumePriceBins(Number(event.target.value))} />
         </label>}
         <button className="btn-accent h-7 px-2 text-[10px]" onClick={addStudy}>Add Study</button>
-        <button className="btn-neutral h-7 px-2 text-[10px]" onClick={() => setStudies([])} disabled={!studies.length}>Clear</button>
+        <button className="btn-neutral h-7 px-2 text-[10px]" onClick={clearOptionalStudies} disabled={!optionalStudyCount}>Clear Optional</button>
         <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto">
           {studies.map(study => (
             <button
@@ -7873,7 +7975,7 @@ function AcmeSingleChartWindow({
       )}
       <div className="min-h-0 flex-1 p-2">
         <div className="h-full rounded border border-surface-border bg-[#05070b] p-1">
-          <AcmeProductCandleChart
+          <CeriousStudyChart
             symbol={selectedSymbol}
             timeframe={timeframe}
             mode={mode}
@@ -7881,11 +7983,12 @@ function AcmeSingleChartWindow({
             showGrid={showGrid}
             solidCandles={solidCandles}
             studies={studies}
+            publishedStudy={publishedStudy}
           />
         </div>
       </div>
       <div className="border-t border-surface-border bg-surface-panel px-2 py-1 font-mono text-[9px] text-muted">
-        ACME Product Chart | {selectedSymbol} | {timeframe} REST bars | {mode === 'candles' ? 'Candlesticks' : 'Line'} | {compressBlankSessions ? 'No blank sessions' : 'Calendar time'} | {showGrid ? 'Grid' : 'No grid'} | {studyStatus}
+        Cerious Chart | {selectedSymbol} | {timeframe} service bars | {mode === 'candles' ? 'Candlesticks' : 'Line'} | {compressBlankSessions ? 'No blank sessions' : 'Calendar time'} | {showGrid ? 'Grid' : 'No grid'} | {studyStatus}
       </div>
     </div>
   )
@@ -8162,6 +8265,71 @@ function AcmeRelativeSpreadVisualsWindow() {
   )
 }
 
+function AcmeSpreadConfigurationsWindow() {
+  const data = useAcmeIntelligence(60000)
+  const rows = data?.spreadPack?.spreads ?? []
+  const fallbackConfigs: AcmeSpreadConfig[] = ACME_SPREAD_PRODUCTS.map(product => ({
+    symbol: product.symbol,
+    label: product.label,
+    meaning: 'Waiting for spread configuration service.',
+    legA: product.symbol.split('_')[0] ?? '',
+    legB: product.symbol.split('_')[1] ?? '',
+    ttRatio: '-',
+    displayFormula: product.legs.replace(' x ', ' * '),
+    syntheticTickValue: 0,
+    leftMultiplier: 0,
+    rightMultiplier: 0,
+    ratio: 0,
+  }))
+  const configs = data?.spreadConfigs?.length ? data.spreadConfigs : fallbackConfigs
+  const symbols = useMemo(
+    () => [...new Set([...configs.map(config => config.symbol), ...rows.map(row => row.key)].filter(Boolean))],
+    [configs, rows],
+  )
+  useCmeMarketDataSubscriptions(symbols)
+  const polyBooks = useStore(s => s.polyBooks)
+  const polyTicks = useStore(s => s.polyTicks)
+  const spreadByKey = useMemo(() => new Map(rows.map(row => [row.key, row])), [rows])
+
+  return (
+    <div className="flex h-full flex-col bg-surface text-xs">
+      <div className="grid grid-cols-[92px_1.2fr_96px_86px_88px_88px_88px_88px] border-b border-surface-border bg-surface-card px-2 py-1 font-mono text-[10px] font-black uppercase text-muted">
+        <span>Spread</span><span>Formula</span><span>Ratio</span><span className="text-right">Tick</span><span className="text-right">Last</span><span className="text-right">Bid</span><span className="text-right">Ask</span><span className="text-right">LR27 Mid</span>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {configs.map(config => {
+          const stat = spreadByKey.get(config.symbol)
+          const book = polyBooks[config.symbol]
+          const ticks = polyTicks[config.symbol] ?? []
+          const fallbackLast = finiteOptional(book?.ltp) ?? finiteOptional(book?.up_pct) ?? finiteOptional(stat?.lastTraded) ?? finiteOptional(stat?.spread) ?? 0
+          const last = stat ? liveSpreadLast(stat, polyBooks, polyTicks) : fallbackLast
+          const location = liveSpreadLocation(stat ?? { mean: last, atr: 0 }, last)
+          const tone = spreadTone({ z: location.dayZ })
+          const bid = finiteOptional(book?.best_bid)
+          const ask = finiteOptional(book?.best_ask)
+          const isLive = Boolean(book || ticks.length || stat?.live)
+          return (
+            <div key={config.symbol} className={cx('grid grid-cols-[92px_1.2fr_96px_86px_88px_88px_88px_88px] border-b px-2 py-2 font-mono text-[10px]', tone.border, isLive ? tone.bg : 'bg-surface')}>
+              <span className={cx('font-black', tone.accent)}>
+                {config.label}
+                <span className="ml-1 text-[8px] text-muted">{isLive ? 'LIVE' : 'WAIT'}</span>
+              </span>
+              <span className="truncate text-slate-200" title={config.meaning}>{config.displayFormula}</span>
+              <span className="truncate text-muted" title={config.meaning}>{config.ttRatio}</span>
+              <span className="text-right text-slate-200">{config.syntheticTickValue ? fmtMoney(config.syntheticTickValue) : '-'}</span>
+              <span className={cx('text-right font-black', tone.accent)}>{fmtNum(last, 2)}</span>
+              <span className="text-right text-blue-300">{fmtNum(bid, 2)}</span>
+              <span className="text-right text-red-300">{fmtNum(ask, 2)}</span>
+              <span className="text-right text-amber-200">{fmtNum(finiteOptional(stat?.lr27Mean), 2)}</span>
+            </div>
+          )
+        })}
+        {!configs.length && <div className="p-4 text-center font-mono text-[10px] text-muted">Waiting for spread configuration service.</div>}
+      </div>
+    </div>
+  )
+}
+
 function AcmeRelativeSpreadSvg({ stat }: { stat: AcmeSpreadStat }) {
   const width = 420
   const height = 170
@@ -8174,17 +8342,18 @@ function AcmeRelativeSpreadSvg({ stat }: { stat: AcmeSpreadStat }) {
   const points = (stat.bars ?? []).slice(-90).filter(row => Number.isFinite(row.close))
   if (points.length < 2) return <div className="p-4 text-[11px] text-muted">Need more bars for {stat.label}.</div>
   const closes = points.map(row => Number(row.close))
+  const last = points[points.length - 1]
+  const liveLast = finiteOptional(stat.lastTraded) ?? finiteOptional(stat.spread) ?? Number(last.close)
   const meanValue = Number(stat.mean)
   const upper = meanValue + 2 * Number(stat.atr)
   const lower = meanValue - 2 * Number(stat.atr)
-  const values = [...closes, meanValue, upper, lower].filter(Number.isFinite)
+  const values = [...closes, liveLast, meanValue, upper, lower].filter(Number.isFinite)
   const min = Math.min(...values)
   const max = Math.max(...values)
   const span = max - min || 1
   const x = (index: number) => left + (points.length <= 1 ? 0 : (index / (points.length - 1)) * plotWidth)
   const y = (value: number) => top + ((max - value) / span) * plotHeight
   const line = points.map((row, index) => `${x(index).toFixed(1)},${y(Number(row.close)).toFixed(1)}`).join(' ')
-  const last = points[points.length - 1]
   const firstDate = new Date(points[0].timestamp).toLocaleDateString()
   const lastDate = new Date(last.timestamp).toLocaleDateString()
   const horizontal = (value: number, color: string, label: string, dash: string) => {
@@ -8206,6 +8375,7 @@ function AcmeRelativeSpreadSvg({ stat }: { stat: AcmeSpreadStat }) {
       {horizontal(lower, 'rgba(77,163,255,.72)', '-2 ATR', '4 4')}
       <polyline points={line} fill="none" stroke="#7dd3fc" strokeWidth={2.2} strokeLinejoin="round" strokeLinecap="round" />
       <circle cx={x(points.length - 1)} cy={y(Number(last.close))} r={3.5} fill="#e6f1ff" />
+      <circle cx={x(points.length - 1)} cy={y(liveLast)} r={4.5} fill="#facc15" stroke="#05070b" strokeWidth={1.2} />
       <text x={left} y={height - 8} fill="rgba(230,241,255,.62)" fontSize={10}>{firstDate}</text>
       <text x={left + plotWidth} y={height - 8} textAnchor="end" fill="rgba(230,241,255,.62)" fontSize={10}>{lastDate}</text>
     </svg>
@@ -8215,28 +8385,33 @@ function AcmeRelativeSpreadSvg({ stat }: { stat: AcmeSpreadStat }) {
 function AcmeRelativeSpreadChartsWindow() {
   const data = useAcmeIntelligence(60000)
   const rows = data?.spreadPack?.spreads ?? []
+  useCmeMarketDataSubscriptions(rows.map(row => row.key))
+  const polyBooks = useStore(s => s.polyBooks)
+  const polyTicks = useStore(s => s.polyTicks)
   return (
     <div className="h-full overflow-y-auto bg-surface p-3">
       <div className="mb-3 flex items-center justify-between gap-2">
-        <div className="text-[10px] text-muted">Daily synthetic closes with 30-session mean and +/-2 blended ATR bands. Forecast rails update on completed study history, like the Acme HTML visual.</div>
+        <div className="text-[10px] text-muted">Daily synthetic closes with 30-session mean and +/-2 blended ATR bands. Forecast rails update on completed study history.</div>
         <span className="rounded border border-accent/30 bg-accent/10 px-2 py-1 font-mono text-[10px] font-bold text-accent">{rows.length} spreads</span>
       </div>
       <div className="grid gap-3">
         {rows.map(stat => {
           const bars = stat.bars ?? []
-          const last = bars[bars.length - 1]
+          const liveLast = liveSpreadLast(stat, polyBooks, polyTicks)
+          const location = liveSpreadLocation(stat, liveLast)
+          const liveStat = { ...stat, spread: liveLast, lastTraded: liveLast, z: location.z, dayZ: location.dayZ, signal: location.signal }
           return (
             <div key={stat.key} className="rounded border border-surface-border bg-surface-card p-3">
               <div className="mb-2 flex items-center justify-between">
-                <h3 className="font-mono text-[12px] font-black text-slate-100">{stat.label}</h3>
-                <span className={cx('font-mono text-[10px] font-black', stat.z >= 0 ? 'text-down' : 'text-up')}>z {stat.z.toFixed(2)}</span>
+                <h3 className="font-mono text-[12px] font-black text-slate-100">{liveStat.label}</h3>
+                <span className={cx('font-mono text-[10px] font-black', liveStat.z >= 0 ? 'text-down' : 'text-up')}>z {liveStat.z.toFixed(2)}</span>
               </div>
               <div className="h-44 rounded border border-surface-border bg-[#05070b]">
-                <AcmeRelativeSpreadSvg stat={stat} />
+                <AcmeRelativeSpreadSvg stat={liveStat} />
               </div>
               <div className="mt-2 flex justify-between font-mono text-[10px] text-muted">
                 <span>{bars.length} bars</span>
-                <span>{last ? `${Number(last.close).toFixed(3)} | ${stat.signal}` : 'Waiting'}</span>
+                <span>{Number.isFinite(liveLast) ? `${liveLast.toFixed(3)} live | ${liveStat.signal}` : 'Waiting'}</span>
               </div>
             </div>
           )
@@ -8585,7 +8760,7 @@ function AcmeNotionalCalculatorWindow() {
 }
 
 const DEFAULT_MODEL_VARIANT: ModelVariantDraft = {
-  name: 'ACME-FactorStack-Monitor',
+  name: 'Cerious-FactorStack-Monitor',
   version: 'v0.1',
   horizon: 'Intraday / 1-week',
   owner: 'Research',
@@ -8799,7 +8974,7 @@ function AcmeModelResearchGovernanceWindow() {
         <span className="font-mono text-[10px] text-muted">{status}</span>
       </div>
       <p className="mt-3 rounded border border-surface-border bg-surface-card p-2 font-mono text-[10px] leading-relaxed text-muted">
-        Naming convention: ACME-[SignalFamily]-[Horizon]-[Variant]-vMajor.Minor. Material methodology, feature, weight, threshold, data-source, or execution-policy changes require a new version.
+        Naming convention: CERIOUS-[SignalFamily]-[Horizon]-[Variant]-vMajor.Minor. Material methodology, feature, weight, threshold, data-source, or execution-policy changes require a new version.
       </p>
     </div>
   )
@@ -8842,8 +9017,6 @@ function AcmePositionsOrdersWindow() {
   const simOrders = useStore(s => s.simOrders)
   const simPositions = useStore(s => s.simPositions)
   const fillsByMarket = useStore(s => s.fills)
-  const cancelSimOrderLive = useStore(s => s.cancelSimOrder)
-  const cancelSimOrdersLive = useStore(s => s.cancelSimOrders)
   const [filter, setFilter] = useState('')
   const [sort, setSort] = useState<'instrument' | 'qty' | 'openPnl' | 'updated'>('instrument')
   const [actionStatus, setActionStatus] = useState('')
@@ -8933,15 +9106,14 @@ function AcmePositionsOrdersWindow() {
       try {
         await cancelSharedOrder(orderId)
         setActionStatus(`Cancelled order ${orderId}`)
-      } catch {
-        cancelSimOrderLive(orderId)
-        setActionStatus(`Cancelled local fallback order ${orderId}`)
+      } catch (err) {
+        setActionStatus(`Cancel failed ${orderId}: ${err instanceof Error ? err.message : 'gateway unavailable'}`)
       }
       return
     }
     setActionStatus(`Cancel requested for ${orderId}`)
     try {
-      const response = await fetch(`/api/acme/orders/${encodeURIComponent(orderId)}/cancel`, { method: 'POST' })
+      const response = await ceriousFetch(`/api/acme/orders/${encodeURIComponent(orderId)}/cancel`, { method: 'POST' })
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       await refresh()
       setActionStatus(`Cancel routed for ${orderId}`)
@@ -8951,11 +9123,9 @@ function AcmePositionsOrdersWindow() {
   }
 
   const cancelAll = async () => {
-    const localCount = liveOrderRows.length
     setActionStatus('Cancel-all requested')
-    if (localCount > 0) cancelSimOrdersLive()
     try {
-      const response = await fetch('/api/acme/orders/cancel-all', { method: 'POST' })
+      const response = await ceriousFetch('/api/acme/orders/cancel-all', { method: 'POST' })
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       const payload = await response.json()
       if (payload.state) {
@@ -8968,12 +9138,9 @@ function AcmePositionsOrdersWindow() {
       }
       await refresh()
       const backendCount = Number(payload.count ?? 0)
-      const totalCount = localCount + backendCount
-      setActionStatus(`Cancel-all routed for ${totalCount || orders.length} working order(s)`)
+      setActionStatus(`Cancel-all routed for ${backendCount || orders.length} working order(s)`)
     } catch (err) {
-      setActionStatus(localCount > 0
-        ? `Cancelled ${localCount} local sim order(s); backend cancel failed: ${err instanceof Error ? err.message : 'unknown error'}`
-        : `Cancel-all failed: ${err instanceof Error ? err.message : 'unknown error'}`)
+      setActionStatus(`Cancel-all failed: ${err instanceof Error ? err.message : 'unknown error'}`)
     }
   }
 
@@ -9047,7 +9214,7 @@ function AcmePositionsOrdersWindow() {
       <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
         <div className="min-h-0 overflow-hidden border-b border-surface-border">
           <div className="grid grid-cols-[1.2fr_74px_90px_90px_100px] border-b border-surface-border bg-surface-card px-2 py-1 font-mono text-[10px] font-black uppercase text-muted">
-            <span>Product</span><span className="text-right">Qty</span><span className="text-right">Avg</span><span className="text-right">Mark</span><span className="text-right">Open P&amp;L</span>
+            <span>Product</span><span className="text-right">Contracts</span><span className="text-right">Avg</span><span className="text-right">Mark</span><span className="text-right">Open P&amp;L</span>
           </div>
           <div className="h-[calc(100%-25px)] overflow-y-auto">
             {positions.map(position => {
@@ -9082,15 +9249,15 @@ function AcmePositionsOrdersWindow() {
         </div>
 
         <div className="min-h-0 overflow-hidden">
-          <div className="grid grid-cols-[1.1fr_90px_58px_58px_80px_92px_88px] border-b border-surface-border bg-surface-card px-2 py-1 font-mono text-[10px] font-black uppercase text-muted">
-            <span>Order</span><span>Product</span><span className="text-right">Side</span><span className="text-right">Qty</span><span className="text-right">Price</span><span>Status</span><span className="text-right">Action</span>
+          <div className="grid grid-cols-[1.1fr_90px_58px_72px_80px_92px_88px] border-b border-surface-border bg-surface-card px-2 py-1 font-mono text-[10px] font-black uppercase text-muted">
+            <span>Order</span><span>Product</span><span className="text-right">Side</span><span className="text-right">Contracts</span><span className="text-right">Price</span><span>Status</span><span className="text-right">Action</span>
           </div>
           <div className="h-[calc(100%-25px)] overflow-y-auto">
             {orders.map(order => {
               const isBuy = /^buy/i.test(order.side)
               const tag = order.algoName || order.orderType || order.source || 'Manual'
               return (
-                <div key={`${order.id}-${order.instrumentId}`} className="grid grid-cols-[1.1fr_90px_58px_58px_80px_92px_88px] items-center border-b border-surface-border/60 px-2 py-1.5 font-mono text-[10px]">
+                <div key={`${order.id}-${order.instrumentId}`} className="grid grid-cols-[1.1fr_90px_58px_72px_80px_92px_88px] items-center border-b border-surface-border/60 px-2 py-1.5 font-mono text-[10px]">
                   <div className="min-w-0">
                     <div className="truncate font-black text-slate-100">{order.id}</div>
                     <div className="truncate text-[9px] text-muted">{tag}</div>
@@ -9119,7 +9286,7 @@ function AcmePositionsOrdersWindow() {
       </div>
 
       <div className="flex items-center justify-between gap-2 border-t border-surface-border bg-surface-panel px-2 py-1 font-mono text-[9px] text-muted">
-        <span>{positions.length} open position(s), {orders.length} open order(s). Positions are rebuilt from fills; open orders come from the order state stream.</span>
+        <span>{positions.length} open position row(s), {orders.length} open order ticket(s). Qty/contracts stay separate from order count.</span>
         <span className={cx(error ? 'text-down' : actionStatus ? 'text-accent' : 'text-muted')}>{error || actionStatus || `Updated ${updated}`}</span>
       </div>
     </div>
@@ -9129,7 +9296,7 @@ function AcmePositionsOrdersWindow() {
 function AcmeIncomingWindow({ kind }: { kind: WorkspaceWindowKind }) {
   const details = ACME_PANEL_DETAILS[kind] ?? {
     service: 'terminal.workspace',
-    body: 'Incoming Acme window is registered in the Cerious launcher and ready for deeper service wiring.',
+    body: 'Incoming Cerious window is registered in the launcher and ready for deeper service wiring.',
     bullets: ['Polyman source preserved', 'React window registered', 'Service boundary pending'],
   }
   return (
@@ -9202,6 +9369,7 @@ function renderWindowBody(
   if (item.kind === 'algoManager') return <AlgoManagerWindow />
   if (item.kind === 'charts') return <AcmeSingleChartWindow provider={provider} symbol={symbol} onSelect={selectForWindow} settings={item.chartSettings} onSettingsChange={settings => props.updateWindowChartSettings(item.id, settings)} />
   if (item.kind === 'liquidityMap') return <LiquidityMapWindow />
+  if (item.kind === 'spreadConfigurations') return <AcmeSpreadConfigurationsWindow />
   if (item.kind === 'relativeSpreadCharts') return <AcmeRelativeSpreadChartsWindow />
   if (item.kind === 'goose') return <AcmeGooseWindow />
   if (item.kind === 'liveSpreadSignals') return <AcmeLiveSpreadSignalsWindow />
@@ -9214,7 +9382,6 @@ function renderWindowBody(
   if (item.kind === 'crossSpreadOpportunityMap') return <AcmeOpportunityMapWindow />
   if (
     item.kind === 'liveApiArchitecture'
-    || item.kind === 'spreadConfigurations'
     || item.kind === 'atrZScoreEngine'
     || item.kind === 'executionRules'
     || item.kind === 'orderLayeringTechniques'
@@ -9230,7 +9397,13 @@ function renderWindowBody(
 
 export function WorkspaceDesktop() {
   useMarketBootstrap()
-  const initialWorkspace = useMemo(loadActiveWorkspace, [])
+  const serviceReadiness = useCeriousServiceReadiness()
+  const desktopRuntime = isCeriousDesktopRuntime()
+  const initialWorkspace = useMemo(() => {
+    const workspace = loadActiveWorkspace()
+    if (workspace) applyWorkspaceAlgoSnapshot(workspace)
+    return workspace
+  }, [])
 
   const [windows, setWindows] = useState<WorkspaceWindow[]>(() => {
     return initialWorkspace?.windows ?? defaultWindows('cme')
@@ -9258,12 +9431,104 @@ export function WorkspaceDesktop() {
   const [selectedProvider, setSelectedProvider] = useState<ProviderKey>(normalizeProviderKey(initialWorkspace?.selectedProvider))
   const [selectedSymbol, setSelectedSymbol] = useState(initialWorkspace?.selectedSymbol ?? 'ES')
   const [saveStatus, setSaveStatus] = useState('')
+  const [systemMenuOpen, setSystemMenuOpen] = useState(false)
   const [widgetToAdd, setWidgetToAdd] = useState<WorkspaceWindowKind>('marketData')
   const [alerts, setAlerts] = useState<AlertRule[]>(() => initialWorkspace?.alerts ?? [])
   const setProvider = useStore(s => s.setMarketProvider)
   const simulationEnabled = useStore(s => s.simulationEnabled)
   const setSimulationEnabled = useStore(s => s.setSimulationEnabled)
-  const resetTradingSession = useStore(s => s.resetTradingSession)
+  const simOrdersForSystemActions = useStore(s => s.simOrders)
+  const workingOrderCountForSystemActions = simOrdersForSystemActions.filter(order => (
+    order.remaining > 0
+    && (order.status === 'working' || order.status === 'partially_filled')
+  )).length
+
+  const resetServerTradingSession = async () => {
+    const orderWarning = workingOrderCountForSystemActions
+      ? ` You currently have ${workingOrderCountForSystemActions} working order${workingOrderCountForSystemActions === 1 ? '' : 's'} visible in the workspace.`
+      : ' No working orders are visible in the workspace.'
+    const resetMessage = simulationEnabled
+      ? `Reset the SIM trading workspace?${orderWarning} This clears simulated working orders, simulated fills, simulated positions, and simulated P&L. A backup of the fill journal will be kept.`
+      : `Reset the server trading runtime?${orderWarning} This clears runtime order state and requires backend confirmation. The fill journal remains server-owned.`
+    const accepted = window.confirm(resetMessage)
+    if (!accepted) return
+    setSaveStatus('Reset requested')
+    try {
+      const response = await ceriousFetch('/api/acme/session/reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reason: simulationEnabled ? 'toolbar simulation reset' : 'toolbar reset',
+          confirm: 'RESET_TRADING_SESSION',
+          scope: simulationEnabled ? 'simulation' : 'runtime',
+          clearFills: simulationEnabled,
+        }),
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok || !payload.ok) throw new Error(String(payload.detail || payload.message || `HTTP ${response.status}`))
+      if (payload.state) {
+        useStore.getState().setSimTradingState({
+          simOrders: payload.state.simOrders,
+          simPositions: payload.state.simPositions,
+          fills: payload.state.fills,
+          simMessages: payload.state.simMessages,
+        })
+      }
+      setSaveStatus(payload.fillsCleared ? 'SIM workspace reset; fills cleared' : 'Runtime reset')
+    } catch (err) {
+      setSaveStatus(`Reset failed: ${err instanceof Error ? err.message : 'unknown error'}`)
+    }
+  }
+
+  const lockWorkspace = () => {
+    setSystemMenuOpen(false)
+    setSaveStatus('Workspace locked')
+    window.dispatchEvent(new CustomEvent('cerious-auth-lock', {
+      detail: { reason: 'Workspace locked. Orders and services remain active.' },
+    }))
+  }
+
+  const logoutWorkspace = async () => {
+    setSystemMenuOpen(false)
+    try {
+      await ceriousFetch('/api/auth/logout', { method: 'POST' })
+    } catch {
+      // Local logout is client-owned; backend logout is best-effort until server session revocation exists.
+    }
+    setSaveStatus('Logged out')
+    window.dispatchEvent(new CustomEvent('cerious-auth-lock', {
+      detail: { reason: 'Logged out. Log in to relaunch the workspace.' },
+    }))
+  }
+
+  const shutdownSystem = async () => {
+    setSystemMenuOpen(false)
+    const orderWarning = workingOrderCountForSystemActions
+      ? ` You currently have ${workingOrderCountForSystemActions} working order${workingOrderCountForSystemActions === 1 ? '' : 's'}.`
+      : ' No working orders are visible in the workspace.'
+    const accepted = window.confirm(`Shutdown Cerious services?${orderWarning} Shutdown does not cancel working orders. Use CXL ALL or KILL ALL separately if you want to cancel orders first.`)
+    if (!accepted) return
+    setSaveStatus('Shutdown requested')
+    try {
+      const response = await ceriousFetch('/api/system/shutdown', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: 'toolbar shutdown', confirm: 'SHUTDOWN_CERIOUS' }),
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok || !payload.ok) throw new Error(String(payload.detail || payload.message || `HTTP ${response.status}`))
+      window.dispatchEvent(new CustomEvent('cerious-auth-lock', {
+        detail: { reason: 'Cerious shutdown requested. Relaunch from the desktop shortcut when ready.' },
+      }))
+    } catch (err) {
+      setSaveStatus(`Shutdown failed: ${err instanceof Error ? err.message : 'unknown error'}`)
+    }
+  }
+
+  const downloadDesktopClient = () => {
+    setSaveStatus('Downloading desktop installer')
+    window.location.assign('/api/downloads/desktop/win64')
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -9312,6 +9577,7 @@ export function WorkspaceDesktop() {
       setWindows(activated.windows)
       setMarketRows(activated.rows)
       setAlerts(activated.alerts ?? [])
+      applyWorkspaceAlgoSnapshot(activated)
       const nextProvider = normalizeProviderKey(activated.selectedProvider)
       setProvider(nextProvider)
       setSelectedProvider(nextProvider)
@@ -9339,6 +9605,8 @@ export function WorkspaceDesktop() {
       windows,
       rows: marketRows,
       alerts,
+      algoLibrary: loadAlgoLibrary(),
+      algoManager: loadAlgoManagerWorkspaceState(),
       selectedProvider,
       selectedSymbol,
       updatedAt: Date.now(),
@@ -9354,6 +9622,8 @@ export function WorkspaceDesktop() {
       windows,
       rows: marketRows,
       alerts,
+      algoLibrary: loadAlgoLibrary(),
+      algoManager: loadAlgoManagerWorkspaceState(),
       selectedProvider,
       selectedSymbol,
       updatedAt: Date.now(),
@@ -9643,6 +9913,8 @@ export function WorkspaceDesktop() {
       windows,
       rows: marketRows,
       alerts,
+      algoLibrary: loadAlgoLibrary(),
+      algoManager: loadAlgoManagerWorkspaceState(),
       selectedProvider,
       selectedSymbol,
       updatedAt: Date.now(),
@@ -9666,6 +9938,7 @@ export function WorkspaceDesktop() {
     setWindows(normalized.windows)
     setMarketRows(normalized.rows)
     setAlerts(normalized.alerts ?? [])
+    applyWorkspaceAlgoSnapshot(normalized)
     if (normalized.selectedProvider) {
       const nextProvider = normalizeProviderKey(normalized.selectedProvider)
       setProvider(nextProvider)
@@ -9719,16 +9992,34 @@ export function WorkspaceDesktop() {
 
   const cloneChart = () => undefined
   const cloneRunway = () => undefined
+  const serviceTone = !serviceReadiness.gatewayOk
+    ? 'border-down/50 bg-down/10 text-red-200'
+    : serviceReadiness.connected && serviceReadiness.priceReady
+      ? 'border-[#22c55e]/50 bg-[#07120a] text-[#74ff8d]'
+      : serviceReadiness.connected
+        ? 'border-[#ffe800]/50 bg-[#1a1705] text-[#ffe800]'
+        : 'border-surface-border bg-surface-card text-muted'
+  const serviceDot = !serviceReadiness.gatewayOk
+    ? 'bg-down'
+    : serviceReadiness.connected && serviceReadiness.priceReady
+      ? 'bg-[#22c55e]'
+      : serviceReadiness.connected
+        ? 'bg-[#ffe800]'
+        : 'bg-muted'
+  const mdStatusLabel = serviceReadiness.marketData?.connected
+    ? serviceReadiness.priceReady ? 'MD Live' : 'MD Waiting'
+    : 'MD Connecting'
+  const execStatusLabel = serviceReadiness.executionReady ? 'SIM OK' : 'SIM Connecting'
 
   return (
-    <div className="h-screen overflow-hidden bg-[#05070b] text-slate-200">
-      <header className="absolute left-0 right-0 top-0 z-[5000] flex h-12 items-center justify-between border-b border-surface-border bg-[#080c14]/95 px-3 backdrop-blur">
+    <div className="h-screen overflow-hidden bg-surface text-slate-100">
+      <header className="absolute left-0 right-0 top-0 z-[5000] flex h-12 items-center justify-between border-b border-surface-border bg-surface-panel px-3">
         <div className="flex items-center gap-2">
-          <img src={ceriousLogo} alt="Cerious Systems" className="h-8 w-8 rounded border border-surface-border bg-[#05101c] object-cover" />
+          <img src={ceriousLogo} alt="Cerious Systems" className="h-8 w-8 rounded-sm border border-surface-border bg-surface object-cover" />
           <input
             value={workspaceName}
             onChange={event => setWorkspaceName(event.target.value)}
-            className="w-48 rounded border border-surface-border bg-surface-card px-2 py-1 text-xs font-bold text-slate-100 outline-none focus:border-accent"
+            className="w-48 rounded-sm border border-surface-border bg-surface-card px-2 py-1 text-xs font-bold text-slate-100 outline-none focus:border-accent"
             title="Workspace name"
           />
           <button className="btn-accent flex items-center gap-1 px-2 py-1 text-[11px]" onClick={saveWorkspace}>
@@ -9739,9 +10030,18 @@ export function WorkspaceDesktop() {
             {saved.map(item => <option key={workspaceKey(item.operator, item.name)} value={workspaceKey(item.operator, item.name)}>{item.name}</option>)}
           </select>
           <span className={cx('w-16 font-mono text-[10px]', saveStatus ? 'text-accent' : 'text-muted')}>{saveStatus || `${saved.length} saved`}</span>
+          <span
+            className={cx('ml-2 flex items-center gap-1 rounded-sm border px-2 py-1 font-mono text-[10px] font-black uppercase', serviceTone)}
+            title={`${serviceReadiness.detail}. Provider ${serviceReadiness.marketData?.provider ?? 'unknown'} ${serviceReadiness.marketData?.dataset ?? ''} ${serviceReadiness.marketData?.schema ?? ''}. Books: ${serviceReadiness.marketData?.bookSymbols?.join(', ') || 'waiting'}.`}
+          >
+            <span className={cx('h-2 w-2 rounded-full', serviceDot)} />
+            <span>{mdStatusLabel}</span>
+            <span className="text-slate-500">/</span>
+            <span>{execStatusLabel}</span>
+          </span>
           <button
             className={cx(
-              'ml-2 rounded border px-2 py-1 text-[11px] font-black uppercase',
+              'ml-2 rounded-sm border px-2 py-1 text-[11px] font-black uppercase',
               simulationEnabled ? 'border-up bg-up/15 text-up' : 'border-surface-border bg-surface-card text-muted hover:text-slate-100',
             )}
             onClick={() => setSimulationEnabled(!simulationEnabled)}
@@ -9750,16 +10050,13 @@ export function WorkspaceDesktop() {
             Sim Exchange {simulationEnabled ? 'On' : 'Off'}
           </button>
           <button
-            className="rounded border border-surface-border bg-surface-card px-2 py-1 text-[11px] font-black uppercase text-muted hover:border-accent/50 hover:text-accent"
-            onClick={() => {
-              resetTradingSession()
-              setSaveStatus('Session reset')
-            }}
-            title="Clear local orders, fills, positions, and execution rows without changing live CME market data."
+            className="rounded-sm border border-surface-border bg-surface-card px-2 py-1 text-[11px] font-black uppercase text-muted hover:border-accent/50 hover:text-accent"
+            onClick={resetServerTradingSession}
+            title={simulationEnabled ? 'Reset SIM orders, fills, positions, and P&L after confirmation' : 'Reset server runtime after explicit confirmation. Fill/P&L journal remains backend-owned.'}
           >
             Reset Session
           </button>
-          <div className="ml-2 flex items-center gap-1 rounded border border-surface-border bg-surface-card p-0.5">
+          <div className="ml-2 flex items-center gap-1 rounded-sm border border-surface-border bg-surface-card p-0.5">
             <select
               className="bg-transparent px-2 py-1 text-[11px] font-bold uppercase text-slate-200 outline-none"
               value={widgetToAdd}
@@ -9778,13 +10075,54 @@ export function WorkspaceDesktop() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            className="flex cursor-not-allowed items-center gap-1 rounded border border-surface-border bg-surface-card px-2 py-1 font-mono text-[11px] font-bold uppercase text-muted"
-            disabled
-            title="Native desktop client installer will be enabled after the cloud workflow is deterministic."
-          >
-            <Download size={13} /> Desktop Client
-          </button>
+          <div className="relative">
+            <button
+              className="flex items-center gap-1 rounded-sm border border-surface-border bg-surface-card px-2 py-1 text-[11px] font-bold uppercase text-slate-200 hover:border-accent/50 hover:text-accent"
+              onClick={() => setSystemMenuOpen(open => !open)}
+              title="Lock, logout, or shutdown Cerious"
+            >
+              <Power size={13} /> System
+            </button>
+            {systemMenuOpen && (
+              <div className="absolute right-0 top-[calc(100%+6px)] z-[7000] w-56 border border-surface-border bg-surface-panel p-1 shadow-[0_14px_34px_rgba(0,0,0,0.42)]">
+                <button
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] font-bold uppercase text-slate-200 hover:bg-surface-hover"
+                  onClick={lockWorkspace}
+                >
+                  <Lock size={13} /> Lock Workspace
+                </button>
+                <button
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] font-bold uppercase text-slate-200 hover:bg-surface-hover"
+                  onClick={logoutWorkspace}
+                >
+                  <LogOut size={13} /> Logout
+                </button>
+                <button
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] font-bold uppercase text-down hover:bg-down/15 hover:text-red-200"
+                  onClick={shutdownSystem}
+                >
+                  <Power size={13} /> Shutdown
+                </button>
+              </div>
+            )}
+          </div>
+          {!desktopRuntime && (
+            <button
+              className="flex items-center gap-1 rounded-sm border border-accent/50 bg-surface-card px-2 py-1 text-[11px] font-bold uppercase text-accent hover:bg-accent/10"
+              onClick={downloadDesktopClient}
+              title="Download the Win64 Cerious Systems desktop installer."
+            >
+              <Download size={13} /> Desktop Client
+            </button>
+          )}
+          {desktopRuntime && (
+            <span
+              className="flex items-center gap-1 rounded-sm border border-[#22c55e]/40 bg-[#07120a] px-2 py-1 text-[11px] font-bold uppercase text-[#74ff8d]"
+              title="Running in the native Cerious Systems desktop client."
+            >
+              <Download size={13} /> Desktop
+            </span>
+          )}
         </div>
       </header>
 
@@ -9795,8 +10133,7 @@ export function WorkspaceDesktop() {
         onPointerLeave={stopWorkspaceEdgePan}
         onWheel={handleWorkspaceWheel}
         style={{
-          background:
-            'linear-gradient(135deg, #05070b 0%, #090d14 55%, #07090d 100%)',
+          background: '#0d1014',
         }}
       >
         <div
@@ -9808,7 +10145,7 @@ export function WorkspaceDesktop() {
             transformOrigin: '0 0',
           }}
         >
-          <div className="absolute inset-0 opacity-[0.12]" style={{ backgroundImage: 'linear-gradient(#1f2937 1px, transparent 1px), linear-gradient(90deg, #1f2937 1px, transparent 1px)', backgroundSize: '32px 32px' }} />
+          <div className="absolute inset-0 opacity-[0.16]" style={{ backgroundImage: 'linear-gradient(#3b414a 1px, transparent 1px), linear-gradient(90deg, #3b414a 1px, transparent 1px)', backgroundSize: '32px 32px' }} />
           {windows.map(item => (
               <WorkspaceWindowFrame
                 key={item.id}
@@ -9845,7 +10182,7 @@ export function WorkspaceDesktop() {
         </div>
       </main>
 
-      <footer className="absolute bottom-0 left-0 right-0 z-[5000] flex h-7 items-center justify-between border-t border-surface-border bg-[#080c14]/95 px-3 font-mono text-[10px] text-muted">
+      <footer className="absolute bottom-0 left-0 right-0 z-[5000] flex h-7 items-center justify-between border-t border-surface-border bg-surface-panel px-3 text-[10px] text-muted">
         <div className="flex items-center gap-3">
           <span className="flex items-center gap-1 text-accent"><Database size={12} /> abstraction platform</span>
           {PROVIDERS.map(provider => (

@@ -125,7 +125,7 @@ function EquityCurve({ trades }: { trades: Trade[] }) {
     const allPoints = curves.filter(c => c.active).flatMap(c => c.data)
     if (!allPoints.length) {
       ctx.fillStyle = '#4a5568'
-      ctx.font = '11px JetBrains Mono, monospace'
+      ctx.font = '11px Cascadia Mono, Consolas, monospace'
       ctx.textAlign = 'center'
       ctx.fillText('No trades yet', W / 2, H / 2)
       return
@@ -170,7 +170,7 @@ function EquityCurve({ trades }: { trades: Trade[] }) {
       // Last value label
       const last = data[data.length - 1]
       ctx.fillStyle = color
-      ctx.font = 'bold 9px JetBrains Mono, monospace'
+      ctx.font = 'bold 9px Cascadia Mono, Consolas, monospace'
       ctx.textAlign = 'left'
       ctx.fillText((last >= 0 ? '+$' : '-$') + Math.abs(last).toFixed(0), PL + pW + 4, yOf(last) + 3)
     }

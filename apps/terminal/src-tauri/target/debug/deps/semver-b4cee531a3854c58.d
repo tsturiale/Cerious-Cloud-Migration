@@ -1,0 +1,11 @@
+C:\Users\tstur\Documents\Codex\Cerious Systems\Cerious local\apps\terminal\src-tauri\target\debug\deps\semver-b4cee531a3854c58.d: C:\Users\tstur\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\semver-1.0.28\src\lib.rs C:\Users\tstur\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\semver-1.0.28\src\display.rs C:\Users\tstur\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\semver-1.0.28\src\error.rs C:\Users\tstur\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\semver-1.0.28\src\eval.rs C:\Users\tstur\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\semver-1.0.28\src\identifier.rs C:\Users\tstur\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\semver-1.0.28\src\impls.rs C:\Users\tstur\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\semver-1.0.28\src\parse.rs
+
+C:\Users\tstur\Documents\Codex\Cerious Systems\Cerious local\apps\terminal\src-tauri\target\debug\deps\libsemver-b4cee531a3854c58.rmeta: C:\Users\tstur\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\semver-1.0.28\src\lib.rs C:\Users\tstur\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\semver-1.0.28\src\display.rs C:\Users\tstur\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\semver-1.0.28\src\error.rs C:\Users\tstur\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\semver-1.0.28\src\eval.rs C:\Users\tstur\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\semver-1.0.28\src\identifier.rs C:\Users\tstur\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\semver-1.0.28\src\impls.rs C:\Users\tstur\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\semver-1.0.28\src\parse.rs
+
+C:\Users\tstur\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\semver-1.0.28\src\lib.rs:
+C:\Users\tstur\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\semver-1.0.28\src\display.rs:
+C:\Users\tstur\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\semver-1.0.28\src\error.rs:
+C:\Users\tstur\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\semver-1.0.28\src\eval.rs:
+C:\Users\tstur\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\semver-1.0.28\src\identifier.rs:
+C:\Users\tstur\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\semver-1.0.28\src\impls.rs:
+C:\Users\tstur\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\semver-1.0.28\src\parse.rs:

@@ -125,5 +125,7 @@
       "tickValueFormula": "0.25 * (3 * ES multiplier 50)",
       "ratio": "3 ES / -2 NQ"
     }
-  ]
+  ],
+  "symbol": "ES_NQ",
+  "marketKey": "ES_NQ"
 }

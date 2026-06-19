@@ -96,5 +96,7 @@
     "doNotCrossSelf": true,
     "liveOrderEntryEnabled": false
   },
-  "notes": ""
+  "notes": "",
+  "symbol": "ES_NQ",
+  "marketKey": "ES_NQ"
 }

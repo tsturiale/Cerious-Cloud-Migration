@@ -15,7 +15,7 @@ include(FetchContent)
 
 # cpp-httplib — header-only embedded HTTP server for local status/command API.
 # The FIX engine runs as a standalone daemon and exposes its own REST endpoints.
-# Python gateway proxies UI traffic here. No subprocess bridge.
+# Native gateway can proxy UI traffic here. No subprocess bridge.
 FetchContent_Declare(
   httplib
   GIT_REPOSITORY https://github.com/yhirose/cpp-httplib.git

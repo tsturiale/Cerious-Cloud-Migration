@@ -356,7 +356,7 @@ function ChartPanel({ asset, interval, label, liveBars, strikePrice }: PanelProp
   }, [liveBars, interval, paint])
 
   // ── 1-second live candle heartbeat ───────────────────────────────────────
-  // Pushes the freshest Coinbase tick into the forming candle every second so
+  // Pushes the freshest tick into the forming candle every second so
   // all panel TFs stream live even when WS bar updates are ~60 s apart.
   useEffect(() => {
     const tfSec = interval * 60
@@ -566,7 +566,7 @@ function VolumeProfileOverlay({
       }
 
       ctx.fillStyle = 'rgba(148, 163, 184, 0.85)'
-      ctx.font = '8px JetBrains Mono, monospace'
+      ctx.font = '8px Cascadia Mono, Consolas, monospace'
       ctx.textAlign = 'left'
       const tfLabel = interval < 1 ? '20s' : `${interval}m`
       ctx.fillText(`VP All Bars • ${tfLabel}`, xLeft + 2, 10)

@@ -20,7 +20,7 @@ The terminal saves the active layout locally and posts a server-side workspace s
 CME currently uses Databento through the price-services layer. REST backfill establishes baseline chart/study state, while live market data updates last traded price, top of book, DOM, and rolling OHLCV state. The UI consumes normalized service output and does not introduce product-specific pricing rules.
 
 6. Production Direction
-The thin client remains deliberately thin. It should authenticate, launch the terminal, restore workspace state, and connect to service APIs. Market-data plugins, product definitions, study calculations, order state, fills, alerts, and PnL remain service-layer responsibilities so future exchanges such as Kalshi, Polymarket, and Coinbase can be added without rewriting the workspace UI.
+The thin client remains deliberately thin. It should authenticate, launch the terminal, restore workspace state, and connect to service APIs. Market-data plugins, product definitions, study calculations, order state, fills, alerts, and PnL remain service-layer responsibilities so future exchanges can be added without rewriting the workspace UI.
 
 Immediate Test Workflow
 1. Launch the local browser portal.

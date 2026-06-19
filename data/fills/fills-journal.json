@@ -1,4 +1,45 @@
 {
-  "updatedAt": "2026-06-11T06:47:10.000Z",
-  "fills": []
+  "fills": [
+    {
+      "algoId": "algo-1781872811359",
+      "algoName": "YM_ES Mean Reversion",
+      "algoRole": "entry",
+      "displaySide": "BUY",
+      "exchange": "Sim Exchange",
+      "instrumentId": "YM_ES",
+      "layer": 1,
+      "legId": "YM_ES-bid-d26d0cfb",
+      "leg_id": "YM_ES-bid-d26d0cfb",
+      "limitPrice": 1551.0,
+      "marketKey": "YM_ES",
+      "marketSide": "buy",
+      "market_key": "YM_ES",
+      "matchContraId": "best-ask-YM_ES-1781874608098",
+      "matchContraPrice": 1550.0,
+      "matchEventTs": 1781874608098,
+      "matchSource": "book",
+      "multiplier": 15.0,
+      "operator": "Acme Trader",
+      "orderId": "algo-algo-1781872811359-bid-L1-3d057f12",
+      "orderSide": "bid",
+      "orderTag": "ALGO ENTRY",
+      "order_id": "algo-algo-1781872811359-bid-L1-3d057f12",
+      "parentOrderId": null,
+      "price": 1551.0,
+      "qty": 1.0,
+      "quantity": 1.0,
+      "realizedPnl": 0.0,
+      "side": "BUY",
+      "size": 1.0,
+      "source": "algo",
+      "strategy": "YM_ES Mean Reversion",
+      "symbol": "YM_ES",
+      "tickSize": 1.0,
+      "tickValue": 15.0,
+      "timestamp": "2026-06-19T13:10:08.098000Z",
+      "trigger": "Server LR27 30m -2"
+    }
+  ],
+  "source": "sim exchange matching backend",
+  "updatedAt": "2026-06-19T13:10:07.559641Z"
 }

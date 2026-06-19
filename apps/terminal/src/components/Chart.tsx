@@ -213,7 +213,7 @@ export function Chart({ asset }: Props) {
   // Fires every second and pushes the freshest price into the forming candle.
   // Uses displayBarsRef (already aggregated to the selected TF) for open/high/low
   // so the bucket open is always correct regardless of which raw 1m bars arrived.
-  // Falls back to last bar close when no Coinbase ticks are present.
+  // Falls back to last bar close when no fresh ticks are present.
   useEffect(() => {
     if (tf === 'tick') return
     const tfSec = (tf as number) * 60
@@ -833,7 +833,7 @@ function VolumeProfileOverlay({
 
       // Small label for context.
       ctx.fillStyle = 'rgba(148, 163, 184, 0.9)'
-      ctx.font = '10px JetBrains Mono, monospace'
+      ctx.font = '10px Cascadia Mono, Consolas, monospace'
       ctx.textAlign = 'left'
       ctx.fillText('VP All Bars', xLeft + 2, 12)
     }

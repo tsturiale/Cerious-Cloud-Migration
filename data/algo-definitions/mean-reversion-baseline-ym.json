@@ -96,5 +96,7 @@
     "doNotCrossSelf": true,
     "liveOrderEntryEnabled": false
   },
-  "notes": ""
+  "notes": "",
+  "symbol": "YM_ES",
+  "marketKey": "YM_ES"
 }

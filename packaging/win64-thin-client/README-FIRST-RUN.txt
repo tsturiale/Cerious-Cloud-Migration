@@ -10,9 +10,9 @@ CeriousSystemsThinClient.cmd -InstallShortcut
 
 What it does:
 1. Finds the local Cerious Systems project root.
-2. Starts the same deterministic service launcher used by the toolbar.
-3. Opens the terminal in a desktop-style app window with the desktop-client flag.
-4. Shows the Cerious Desktop toolbar, which opens individual workspace widgets as floating windows outside the canvas.
+2. Starts the backend services hidden.
+3. Opens one Cerious Systems app window.
+4. Shuts the local services down automatically when that app window closes.
 5. Uses the same login portal and workspace persistence as the browser portal.
 
 Install layout:

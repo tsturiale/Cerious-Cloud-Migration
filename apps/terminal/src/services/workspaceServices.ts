@@ -76,8 +76,8 @@ export const SERVICE_BLUEPRINT = [
   {
     key: 'orders',
     label: 'Order Service',
-    role: 'Routes order tickets through RiskGate and the execution agent, then returns fills and position events.',
-    dependsOn: ['risk gate', 'venue router', 'journal service'],
+    role: 'Owns canonical order state, applies risk, routes to the selected destination exchange, then returns fills and position events.',
+    dependsOn: ['risk gate', 'routing gateway', 'journal service'],
   },
   {
     key: 'algo-engine',
@@ -99,9 +99,9 @@ export const SERVICE_BLUEPRINT = [
   },
   {
     key: 'fix-engine',
-    label: 'FIX Engine Service',
-    role: 'Manages the FIX 4.4 session, constructs/parses FIX messages, and routes orders to the TT FIX gateway.',
-    dependsOn: ['order service', 'price service', 'session state'],
+    label: 'FIX Route Gateway',
+    role: 'Manages FIX 4.4 transport sessions below the order service. It is a route hop to exchanges, not the trader-facing destination.',
+    dependsOn: ['order service', 'audit trail', 'session state'],
   },
 ]
 

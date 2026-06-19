@@ -1,0 +1,851 @@
+{
+  "name": "Ted S",
+  "operator": "Operator 1",
+  "windows": [
+    {
+      "id": "marketData-1",
+      "kind": "marketData",
+      "title": "Market Data",
+      "x": 43.51488494873047,
+      "y": 531.787841796875,
+      "w": 1091.1213760375977,
+      "h": 362.48956298828125,
+      "z": 2630,
+      "collapsed": false,
+      "provider": "cme",
+      "poppedOut": true,
+      "floatingBounds": {
+        "x": 4,
+        "y": 40,
+        "w": 739,
+        "h": 279
+      }
+    },
+    {
+      "id": "algoManager-13",
+      "kind": "algoManager",
+      "title": "Algo Manager",
+      "x": 2781.9163818359375,
+      "y": 48,
+      "w": 975.8265380859375,
+      "h": 489.4725570678711,
+      "z": 2909,
+      "collapsed": false,
+      "provider": "cme",
+      "poppedOut": true,
+      "floatingBounds": {
+        "x": 78,
+        "y": 437,
+        "w": 1103,
+        "h": 317
+      }
+    },
+    {
+      "id": "charts-1781151513478",
+      "kind": "charts",
+      "title": "Charts",
+      "x": 1327.3336791992188,
+      "y": 1097.7222442626953,
+      "w": 432.111328125,
+      "h": 512.9165802001953,
+      "z": 2815,
+      "collapsed": false,
+      "provider": "cme",
+      "symbol": "ES_NQ",
+      "chartSettings": {
+        "mode": "candles",
+        "timeframe": "30m",
+        "displayPreset": "clean",
+        "compressBlankSessions": true,
+        "showGrid": false,
+        "solidCandles": true,
+        "studies": [
+          {
+            "id": "study-mqem6hzc-ju81",
+            "type": "regression-channel",
+            "lookback": 27,
+            "upperDeviation": 2,
+            "lowerDeviation": 2
+          },
+          {
+            "id": "study-mqgsdvmh-fatb",
+            "type": "regression-channel",
+            "lookback": 200,
+            "upperDeviation": 2,
+            "lowerDeviation": 2
+          }
+        ],
+        "studyType": "regression-channel",
+        "studyLookback": 200,
+        "upperDeviation": 2,
+        "lowerDeviation": 2,
+        "atrMultiplier": 2,
+        "volumePriceBins": 28
+      },
+      "poppedOut": true,
+      "floatingBounds": {
+        "x": 807,
+        "y": 283,
+        "w": 595,
+        "h": 358
+      }
+    },
+    {
+      "id": "depthLadder-1781152253814",
+      "kind": "depthLadder",
+      "title": "Depth Ladder",
+      "x": 2264.8885498046875,
+      "y": 53,
+      "w": 389.8333740234375,
+      "h": 1038.5000305175781,
+      "z": 2671,
+      "collapsed": false,
+      "provider": "cme",
+      "symbol": "RTY_ES",
+      "depthLadderSettings": {
+        "columnOrder": [
+          "bid",
+          "price",
+          "ask",
+          "orders"
+        ],
+        "columnWidths": {
+          "orders": 102.71201061599086,
+          "bid": 96.29352047418284,
+          "price": 88.86098782307388,
+          "ask": 104.13348108675243
+        },
+        "density": "medium",
+        "priceMultiplier": 1,
+        "softGrid": true,
+        "actionMode": "market",
+        "fastTrade": true
+      },
+      "poppedOut": true,
+      "floatingBounds": {
+        "x": 775,
+        "y": 29,
+        "w": 346,
+        "h": 778
+      }
+    },
+    {
+      "id": "depthLadder-1781152264510",
+      "kind": "depthLadder",
+      "title": "Depth Ladder 2",
+      "x": 1787.7775573730469,
+      "y": 48,
+      "w": 407.000244140625,
+      "h": 1045.9999389648438,
+      "z": 2662,
+      "collapsed": false,
+      "provider": "cme",
+      "symbol": "YM_ES",
+      "depthLadderSettings": {
+        "columnOrder": [
+          "bid",
+          "price",
+          "ask",
+          "orders"
+        ],
+        "columnWidths": {
+          "orders": 90.10436502260558,
+          "bid": 101.11499306596352,
+          "price": 97.28899695897414,
+          "ask": 103.49164495245677
+        },
+        "density": "medium",
+        "priceMultiplier": 1,
+        "softGrid": true,
+        "actionMode": "limit",
+        "fastTrade": true
+      },
+      "poppedOut": true,
+      "floatingBounds": {
+        "x": 433,
+        "y": 26,
+        "w": 345,
+        "h": 779
+      }
+    },
+    {
+      "id": "depthLadder-1781152276525",
+      "kind": "depthLadder",
+      "title": "Depth Ladder 3",
+      "x": 1341,
+      "y": 48,
+      "w": 402.6555480957031,
+      "h": 1043.8333740234375,
+      "z": 2709,
+      "collapsed": false,
+      "provider": "cme",
+      "symbol": "ES_NQ",
+      "depthLadderSettings": {
+        "columnOrder": [
+          "bid",
+          "price",
+          "ask",
+          "orders"
+        ],
+        "columnWidths": {
+          "orders": 85.3447305672856,
+          "bid": 107.44376808257563,
+          "price": 94.1853281249733,
+          "ask": 105.02617322516548
+        },
+        "density": "medium",
+        "priceMultiplier": 2,
+        "softGrid": true,
+        "actionMode": "limit",
+        "fastTrade": true
+      },
+      "poppedOut": true,
+      "floatingBounds": {
+        "x": 94,
+        "y": 25,
+        "w": 345,
+        "h": 780
+      }
+    },
+    {
+      "id": "streamingNews-1781152627793",
+      "kind": "streamingNews",
+      "title": "Streaming News",
+      "x": 42.64369869232178,
+      "y": 894.5299224853516,
+      "w": 1099.9999237060547,
+      "h": 527.5000305175781,
+      "z": 2475,
+      "collapsed": false,
+      "provider": "cme",
+      "symbol": "RTY_ES",
+      "poppedOut": true,
+      "floatingBounds": {
+        "x": 5,
+        "y": 584,
+        "w": 743,
+        "h": 309
+      }
+    },
+    {
+      "id": "goose-1781152718417",
+      "kind": "goose",
+      "title": "GOOSE",
+      "x": 36.954681396484375,
+      "y": 48,
+      "w": 1098.8499145507812,
+      "h": 471.14996337890625,
+      "z": 2872,
+      "collapsed": false,
+      "provider": "cme",
+      "symbol": "RTY_ES",
+      "poppedOut": true,
+      "floatingBounds": {
+        "x": 272,
+        "y": 246,
+        "w": 1094,
+        "h": 368
+      }
+    },
+    {
+      "id": "fills-1781160451136",
+      "kind": "fills",
+      "title": "Fills",
+      "x": 2786,
+      "y": 541.166748046875,
+      "w": 971,
+      "h": 461,
+      "z": 2822,
+      "collapsed": false,
+      "provider": "cme",
+      "symbol": "ES_NQ",
+      "poppedOut": true,
+      "floatingBounds": {
+        "x": 24,
+        "y": 617,
+        "w": 818,
+        "h": 287
+      }
+    },
+    {
+      "id": "charts-1781182723413",
+      "kind": "charts",
+      "title": "Charts 4",
+      "x": 2253.25244140625,
+      "y": 1097.8494873046875,
+      "w": 461,
+      "h": 498,
+      "z": 2819,
+      "collapsed": false,
+      "provider": "cme",
+      "symbol": "RTY_ES",
+      "chartSettings": {
+        "mode": "candles",
+        "timeframe": "30m",
+        "displayPreset": "clean",
+        "compressBlankSessions": true,
+        "showGrid": false,
+        "solidCandles": true,
+        "studies": [
+          {
+            "id": "study-mqbfnval-9642",
+            "type": "regression-channel",
+            "lookback": 27,
+            "upperDeviation": 2,
+            "lowerDeviation": 2
+          },
+          {
+            "id": "study-mqbfoi24-0qx8",
+            "type": "regression-channel",
+            "lookback": 200,
+            "upperDeviation": 2,
+            "lowerDeviation": 2
+          }
+        ],
+        "studyType": "regression-channel",
+        "studyLookback": 200,
+        "upperDeviation": 2,
+        "lowerDeviation": 2,
+        "atrMultiplier": 2,
+        "volumePriceBins": 28
+      },
+      "poppedOut": true,
+      "floatingBounds": {
+        "x": 804,
+        "y": 29,
+        "w": 597,
+        "h": 343
+      }
+    },
+    {
+      "id": "liveSpreadSignals-1781490759398",
+      "kind": "liveSpreadSignals",
+      "title": "Live Spread Signals",
+      "x": 145.96061786852374,
+      "y": 2090.4725189208984,
+      "w": 641.1666870117188,
+      "h": 312.4722900390625,
+      "z": 2307,
+      "collapsed": true,
+      "provider": "cme",
+      "symbol": "YM",
+      "poppedOut": true,
+      "floatingBounds": {
+        "x": 8,
+        "y": 328,
+        "w": 740,
+        "h": 251
+      }
+    },
+    {
+      "id": "charts-1781508714171",
+      "kind": "charts",
+      "title": "Charts 3",
+      "x": 1769.1110534667969,
+      "y": 1098.9359455108643,
+      "w": 468.444580078125,
+      "h": 499.53450996093727,
+      "z": 2820,
+      "collapsed": false,
+      "provider": "cme",
+      "symbol": "YM_ES",
+      "chartSettings": {
+        "mode": "candles",
+        "timeframe": "30m",
+        "displayPreset": "clean",
+        "compressBlankSessions": true,
+        "showGrid": false,
+        "solidCandles": true,
+        "studies": [
+          {
+            "id": "regch-default-27",
+            "type": "regression-channel",
+            "lookback": 27,
+            "upperDeviation": 2,
+            "lowerDeviation": 2
+          },
+          {
+            "id": "study-mqh3t8ak-teck",
+            "type": "regression-channel",
+            "lookback": 200,
+            "upperDeviation": 2,
+            "lowerDeviation": 2
+          }
+        ],
+        "studyType": "regression-channel",
+        "studyLookback": 200,
+        "upperDeviation": 2,
+        "lowerDeviation": 2,
+        "atrMultiplier": 2,
+        "volumePriceBins": 28
+      },
+      "poppedOut": true,
+      "floatingBounds": {
+        "x": 811,
+        "y": 541,
+        "w": 588,
+        "h": 371
+      }
+    },
+    {
+      "id": "atrZScoreEngine-1781640240212",
+      "kind": "atrZScoreEngine",
+      "title": "ATR and Z-Score Engine",
+      "x": 145,
+      "y": 1990.9775999999997,
+      "w": 700,
+      "h": 562,
+      "z": 2383,
+      "collapsed": true,
+      "provider": "cme",
+      "symbol": "YM_ES"
+    },
+    {
+      "id": "macroRegimeSummary-1781640249249",
+      "kind": "macroRegimeSummary",
+      "title": "Macro Regime Summary",
+      "x": 146,
+      "y": 2041,
+      "w": 961,
+      "h": 783,
+      "z": 2382,
+      "collapsed": true,
+      "provider": "cme",
+      "symbol": "YM_ES"
+    },
+    {
+      "id": "relativeSpreadCharts-1781640327956",
+      "kind": "relativeSpreadCharts",
+      "title": "Relative Spread Charts",
+      "x": 150,
+      "y": 2195,
+      "w": 752,
+      "h": 886,
+      "z": 2400,
+      "collapsed": true,
+      "provider": "cme",
+      "symbol": "YM_ES"
+    },
+    {
+      "id": "relativeSpreadVisuals-1781640335163",
+      "kind": "relativeSpreadVisuals",
+      "title": "Relative Spread Visuals",
+      "x": 149,
+      "y": 2141,
+      "w": 540,
+      "h": 610,
+      "z": 2384,
+      "collapsed": true,
+      "provider": "cme",
+      "symbol": "YM_ES"
+    },
+    {
+      "id": "crossSpreadOpportunityMap-1781641746351",
+      "kind": "crossSpreadOpportunityMap",
+      "title": "Cross-Spread Opportunity Map",
+      "x": 60,
+      "y": 70,
+      "w": 520,
+      "h": 360,
+      "z": 2350,
+      "collapsed": false,
+      "provider": "cme",
+      "symbol": "YM_ES"
+    },
+    {
+      "id": "modelResearchGovernance-1781642023110",
+      "kind": "modelResearchGovernance",
+      "title": "Model Research & Governance",
+      "x": 150,
+      "y": 1944.096,
+      "w": 1161,
+      "h": 890,
+      "z": 2385,
+      "collapsed": true,
+      "provider": "cme",
+      "symbol": "YM_ES"
+    },
+    {
+      "id": "tradeAnalytics-1781642124647",
+      "kind": "tradeAnalytics",
+      "title": "Trade Analytics",
+      "x": 156,
+      "y": 1893.6783999999998,
+      "w": 794,
+      "h": 1460.4320000000002,
+      "z": 2398,
+      "collapsed": true,
+      "provider": "cme",
+      "symbol": "YM_ES"
+    },
+    {
+      "id": "order-1781750580383",
+      "kind": "order",
+      "title": "Order Book",
+      "x": 2786.8629199218744,
+      "y": 1017.5407999999995,
+      "w": 953.8800000000006,
+      "h": 490.568,
+      "z": 2793,
+      "collapsed": false,
+      "provider": "cme",
+      "symbol": "YM_ES"
+    }
+  ],
+  "rows": [
+    {
+      "id": "row-1781140213621-cme-NQ",
+      "provider": "cme",
+      "symbol": "NQ"
+    },
+    {
+      "id": "row-1781140251556-cme-RTY",
+      "provider": "cme",
+      "symbol": "RTY"
+    },
+    {
+      "id": "row-1781140285154-cme-YM",
+      "provider": "cme",
+      "symbol": "YM"
+    },
+    {
+      "id": "row-1781140292801-cme-ES",
+      "provider": "cme",
+      "symbol": "ES"
+    }
+  ],
+  "alerts": [],
+  "algoLibrary": [
+    {
+      "id": "algo-1781756303668",
+      "name": "ES_NQ Mean Reversion",
+      "template": "mean-reversion-v2",
+      "templateId": "mean-reversion-v2",
+      "version": "2.0",
+      "instruments": [
+        "RTY_ES"
+      ],
+      "signalRules": [
+        {
+          "id": "regression-bands-ready",
+          "field": "linearRegression27Bands",
+          "operator": "=",
+          "value": true,
+          "action": "pegEntryBands",
+          "enabled": true
+        },
+        {
+          "id": "entry-touch",
+          "field": "marketCanTradeTarget",
+          "operator": "=",
+          "value": true,
+          "action": "releaseSniperEntry",
+          "enabled": true
+        },
+        {
+          "id": "oco-cover",
+          "field": "entryFilled",
+          "operator": "=",
+          "value": true,
+          "action": "attachOcoCover",
+          "enabled": true
+        }
+      ],
+      "risk": {
+        "maxPosition": 5,
+        "maxLossAtr": 88,
+        "clipSchedule": "layered",
+        "requireMarketOpen": true
+      },
+      "midpointPeg": {
+        "enabled": false,
+        "source": "30m-vwap",
+        "label": "Peg VWAP for midpoint",
+        "previousClose": false
+      },
+      "entryPeg": {
+        "source": "27-period-linear-regression",
+        "period": 27,
+        "standardDeviations": 2,
+        "pegSellSideToPlus2": true,
+        "pegBuySideToMinus2": true
+      },
+      "layerPlan": {
+        "ticksOffMidpoint": 0,
+        "buyTicksOffMidpoint": 0,
+        "sellTicksOffMidpoint": 0,
+        "layerCount": 3,
+        "layerSpacingTicks": 2,
+        "maxLayers": 5,
+        "applySymmetrically": true,
+        "workBuySide": true,
+        "workSellSide": true
+      },
+      "syntheticOrderManager": {
+        "enabled": true,
+        "containerizedOrders": true,
+        "entryTechnique": "sniper-market-if-target-price-achievable",
+        "holdUntilTriggered": true,
+        "releaseDestination": "exchange-gateway"
+      },
+      "exitPolicy": {
+        "attachOnEntryFill": true,
+        "oco": true,
+        "coverTicksFromFill": 4,
+        "profitTicksFromEntry": 6,
+        "stopTicksFromEntry": 88,
+        "stopType": "market",
+        "coverLimitPlacement": "above-bid-or-below-offer"
+      },
+      "orderPolicy": {
+        "mode": "synthetic-sniper",
+        "orderType": "synthetic-held-market-release",
+        "priceReference": "27-lr-regression-bands",
+        "doNotCrossInside": true,
+        "doNotCrossSelf": true,
+        "liveOrderEntryEnabled": false
+      },
+      "provider": "cme",
+      "symbol": "ES_NQ",
+      "marketKey": "ES_NQ",
+      "outcome": "yes",
+      "side": "both",
+      "orderType": "limit",
+      "quoteModel": "market-mid",
+      "quoteWidth": 0,
+      "edgeThreshold": 0,
+      "clipSize": 1,
+      "maxPosition": 5,
+      "operator": "Operator 1",
+      "status": "quoting",
+      "updatedAt": 1781756432470,
+      "notes": ""
+    },
+    {
+      "id": "algo-1781756454736",
+      "name": "RTY_ES Mean Reversion",
+      "template": "mean-reversion-v2",
+      "templateId": "mean-reversion-v2",
+      "version": "2.0",
+      "instruments": [
+        "RTY_ES"
+      ],
+      "signalRules": [
+        {
+          "id": "regression-bands-ready",
+          "field": "linearRegression27Bands",
+          "operator": "=",
+          "value": true,
+          "action": "pegEntryBands",
+          "enabled": true
+        },
+        {
+          "id": "entry-touch",
+          "field": "marketCanTradeTarget",
+          "operator": "=",
+          "value": true,
+          "action": "releaseSniperEntry",
+          "enabled": true
+        },
+        {
+          "id": "oco-cover",
+          "field": "entryFilled",
+          "operator": "=",
+          "value": true,
+          "action": "attachOcoCover",
+          "enabled": true
+        }
+      ],
+      "risk": {
+        "maxPosition": 1,
+        "maxLossAtr": 88,
+        "clipSchedule": "layered",
+        "requireMarketOpen": true
+      },
+      "midpointPeg": {
+        "enabled": false,
+        "source": "30m-vwap",
+        "label": "Peg VWAP for midpoint",
+        "previousClose": false
+      },
+      "entryPeg": {
+        "source": "27-period-linear-regression",
+        "period": 27,
+        "standardDeviations": 2,
+        "pegSellSideToPlus2": true,
+        "pegBuySideToMinus2": true
+      },
+      "layerPlan": {
+        "ticksOffMidpoint": 0,
+        "buyTicksOffMidpoint": 0,
+        "sellTicksOffMidpoint": 0,
+        "layerCount": 3,
+        "layerSpacingTicks": 2,
+        "maxLayers": 5,
+        "applySymmetrically": true,
+        "workBuySide": true,
+        "workSellSide": true
+      },
+      "syntheticOrderManager": {
+        "enabled": true,
+        "containerizedOrders": true,
+        "entryTechnique": "sniper-market-if-target-price-achievable",
+        "holdUntilTriggered": true,
+        "releaseDestination": "exchange-gateway"
+      },
+      "exitPolicy": {
+        "attachOnEntryFill": true,
+        "oco": true,
+        "coverTicksFromFill": 6,
+        "profitTicksFromEntry": 6,
+        "stopTicksFromEntry": 88,
+        "stopType": "market",
+        "coverLimitPlacement": "above-bid-or-below-offer"
+      },
+      "orderPolicy": {
+        "mode": "synthetic-sniper",
+        "orderType": "synthetic-held-market-release",
+        "priceReference": "27-lr-regression-bands",
+        "doNotCrossInside": true,
+        "doNotCrossSelf": true,
+        "liveOrderEntryEnabled": false
+      },
+      "provider": "cme",
+      "symbol": "RTY_ES",
+      "marketKey": "RTY_ES",
+      "outcome": "yes",
+      "side": "both",
+      "orderType": "limit",
+      "quoteModel": "market-mid",
+      "quoteWidth": 2,
+      "edgeThreshold": 2,
+      "clipSize": 1,
+      "maxPosition": 1,
+      "operator": "Operator 1",
+      "status": "quoting",
+      "updatedAt": 1781756470441,
+      "notes": ""
+    },
+    {
+      "id": "algo-1781756364657",
+      "name": "YM_ES Mean Reversion",
+      "template": "mean-reversion-v2",
+      "templateId": "mean-reversion-v2",
+      "version": "2.0",
+      "instruments": [
+        "ES_NQ"
+      ],
+      "signalRules": [
+        {
+          "id": "regression-bands-ready",
+          "field": "linearRegression27Bands",
+          "operator": "=",
+          "value": true,
+          "action": "pegEntryBands",
+          "enabled": true
+        },
+        {
+          "id": "entry-touch",
+          "field": "marketCanTradeTarget",
+          "operator": "=",
+          "value": true,
+          "action": "releaseSniperEntry",
+          "enabled": true
+        },
+        {
+          "id": "oco-cover",
+          "field": "entryFilled",
+          "operator": "=",
+          "value": true,
+          "action": "attachOcoCover",
+          "enabled": true
+        }
+      ],
+      "risk": {
+        "maxPosition": 1,
+        "maxLossAtr": 88,
+        "clipSchedule": "layered",
+        "requireMarketOpen": true
+      },
+      "midpointPeg": {
+        "enabled": false,
+        "source": "30m-vwap",
+        "label": "Peg VWAP for midpoint",
+        "previousClose": false
+      },
+      "entryPeg": {
+        "source": "27-period-linear-regression",
+        "period": 27,
+        "standardDeviations": 2,
+        "pegSellSideToPlus2": true,
+        "pegBuySideToMinus2": true
+      },
+      "layerPlan": {
+        "ticksOffMidpoint": 0,
+        "buyTicksOffMidpoint": 0,
+        "sellTicksOffMidpoint": 0,
+        "layerCount": 3,
+        "layerSpacingTicks": 2,
+        "maxLayers": 5,
+        "applySymmetrically": true,
+        "workBuySide": true,
+        "workSellSide": true
+      },
+      "syntheticOrderManager": {
+        "enabled": true,
+        "containerizedOrders": true,
+        "entryTechnique": "sniper-market-if-target-price-achievable",
+        "holdUntilTriggered": true,
+        "releaseDestination": "exchange-gateway"
+      },
+      "exitPolicy": {
+        "attachOnEntryFill": true,
+        "oco": true,
+        "coverTicksFromFill": 6,
+        "profitTicksFromEntry": 6,
+        "stopTicksFromEntry": 88,
+        "stopType": "market",
+        "coverLimitPlacement": "above-bid-or-below-offer"
+      },
+      "orderPolicy": {
+        "mode": "synthetic-sniper",
+        "orderType": "synthetic-held-market-release",
+        "priceReference": "27-lr-regression-bands",
+        "doNotCrossInside": true,
+        "doNotCrossSelf": true,
+        "liveOrderEntryEnabled": false
+      },
+      "provider": "cme",
+      "symbol": "YM_ES",
+      "marketKey": "YM_ES",
+      "outcome": "yes",
+      "side": "both",
+      "orderType": "limit",
+      "quoteModel": "market-mid",
+      "quoteWidth": 2,
+      "edgeThreshold": 2,
+      "clipSize": 1,
+      "maxPosition": 1,
+      "operator": "Operator 1",
+      "status": "quoting",
+      "updatedAt": 1781756425239,
+      "notes": ""
+    }
+  ],
+  "algoManager": {
+    "stagedAlgoIds": [
+      "algo-1781756364657"
+    ],
+    "selectedDeployIds": [
+      "algo-1781756364657"
+    ],
+    "statusFilter": "all",
+    "deployStatus": "",
+    "updatedAt": 1781756414839
+  },
+  "selectedProvider": "cme",
+  "selectedSymbol": "RTY_ES",
+  "updatedAt": 1781756604471,
+  "serverSavedAt": "2026-06-18T04:23:24.471534Z",
+  "serverReason": "manual save default"
+}

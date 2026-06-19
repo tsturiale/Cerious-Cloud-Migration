@@ -1,0 +1,129 @@
+{
+  "id": "mean-joe-brown",
+  "name": "Mean Joe Brown YM",
+  "templateId": "mean-reversion-v2",
+  "status": "draft",
+  "version": "2.0",
+  "createdAt": "2026-06-04T02:51:28.629Z",
+  "updatedAt": "2026-06-07T21:44:50.788Z",
+  "engineContract": {
+    "version": "acme.algo-definition.v1",
+    "executionHome": "server-near-exchange",
+    "orderRouting": "disabled-until-deployed",
+    "marketDataSource": "server-subscription",
+    "savedBy": "acme-trader-ui"
+  },
+  "instruments": [
+    "YM_ES"
+  ],
+  "signalRules": [
+    {
+      "id": "regression-bands-ready",
+      "field": "recursiveLeastSquares27Bands",
+      "operator": "=",
+      "value": true,
+      "action": "pegEntryBands",
+      "enabled": true
+    },
+    {
+      "id": "entry-touch",
+      "field": "marketCanTradeTarget",
+      "operator": "=",
+      "value": true,
+      "action": "releaseSniperEntry",
+      "enabled": true
+    },
+    {
+      "id": "oco-cover",
+      "field": "entryFilled",
+      "operator": "=",
+      "value": true,
+      "action": "attachOcoCover",
+      "enabled": true
+    }
+  ],
+  "risk": {
+    "maxPosition": 1,
+    "maxLossAtr": 0,
+    "clipSchedule": "layered",
+    "requireMarketOpen": true
+  },
+  "midpointPeg": {
+    "enabled": false,
+    "source": "30m-vwap",
+    "label": "Peg VWAP for midpoint",
+    "previousClose": false
+  },
+  "entryPeg": {
+    "source": "recursive-least-squares",
+    "period": 27,
+    "standardDeviations": 2,
+    "pegSellSideToPlus2": true,
+    "pegBuySideToMinus2": true
+  },
+  "layerPlan": {
+    "ticksOffMidpoint": 0,
+    "buyTicksOffMidpoint": 0,
+    "sellTicksOffMidpoint": 0,
+    "layerCount": 3,
+    "layerSpacingTicks": 4,
+    "maxLayers": 5,
+    "applySymmetrically": true,
+    "workBuySide": true,
+    "workSellSide": true
+  },
+  "syntheticOrderManager": {
+    "enabled": true,
+    "containerizedOrders": true,
+    "entryTechnique": "sniper-market-if-target-price-achievable",
+    "holdUntilTriggered": true,
+    "releaseDestination": "exchange-gateway"
+  },
+  "exitPolicy": {
+    "attachOnEntryFill": true,
+    "oco": true,
+    "coverTicksFromFill": 6,
+    "profitTicksFromEntry": 6,
+    "stopTicksFromEntry": 1099,
+    "stopType": "market",
+    "coverLimitPlacement": "above-bid-or-below-offer"
+  },
+  "orderPolicy": {
+    "mode": "synthetic-sniper",
+    "orderType": "synthetic-held-market-release",
+    "priceReference": "27-rls-regression-bands",
+    "doNotCrossInside": false,
+    "doNotCrossSelf": false,
+    "liveOrderEntryEnabled": false
+  },
+  "notes": "",
+  "productMetadata": [
+    {
+      "id": "YM_ES",
+      "label": "YM / ES",
+      "marketType": "synthetic-spread",
+      "symbol": null,
+      "nativeSymbol": "YM_ES",
+      "exchange": "CME",
+      "venue": "cme-globex",
+      "assetClass": "synthetic",
+      "productType": "spread",
+      "legs": [
+        "YM",
+        "ES"
+      ],
+      "legQty": [
+        3,
+        -2
+      ],
+      "coef": -6.666666666666667,
+      "formula": "YM - 6.6667 * ES",
+      "tickSize": 1,
+      "sizeIncrement": null,
+      "multiplier": 15,
+      "tickValue": 15,
+      "tickValueFormula": "1 * (3 * YM multiplier 5)",
+      "ratio": "3 YM / -2 ES"
+    }
+  ]
+}

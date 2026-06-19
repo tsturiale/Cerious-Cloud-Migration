@@ -3,7 +3,7 @@
 ///
 /// The journal is the single source of truth for all FIX messages (sent and
 /// received) visible to the FIX Monitor UI. Each entry is emitted to stdout
-/// as a JSON line that the Python bridge adapter reads and relays to WebSocket.
+/// as a JSON line for native gateway or monitoring consumers.
 
 #include "fix_message.hpp"
 
@@ -141,7 +141,7 @@ public:
   static constexpr int CAPACITY = 2000;
 
   void append(JournalEntry entry) {
-    // Publish to stdout (Python bridge reads this)
+    // Publish to stdout (native gateway may consume this)
     auto json = entry_to_json(entry);
     {
       std::lock_guard lock(stdout_mutex_);

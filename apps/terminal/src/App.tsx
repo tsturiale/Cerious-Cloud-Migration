@@ -7,8 +7,6 @@ import { useWebSocket } from './hooks/useWebSocket'
 import { useBroadcastSync } from './hooks/useBroadcastSync'
 import { useStore } from './store'
 
-const ASSETS = ['ES', 'NQ', 'YM', 'RTY', 'CL', 'GC', 'ZM', 'ZS'] as const
-
 /** Opens one WebSocket for the currently active asset. */
 function AssetConnector() {
   const asset = useStore(s => s.activeAsset)
@@ -19,19 +17,21 @@ function AssetConnector() {
 /** Auto-rotates the active asset every 8 s when autoRotate is enabled.
  *  Only active in the primary window (no ?panel= param). */
 function MarketRotator() {
-  const { autoRotate, activeAsset, setActiveAsset } = useStore()
+  const { autoRotate, activeAsset, setActiveAsset, markets } = useStore()
 
   useEffect(() => {
     if (!autoRotate) return
+    const assets = Array.from(new Set(markets.map(market => market.asset).filter(Boolean))) as typeof activeAsset[]
+    if (!assets.length) return
 
     const id = setInterval(() => {
-      const idx = ASSETS.indexOf(activeAsset as any)
-      const nextIdx = (idx + 1) % ASSETS.length
-      setActiveAsset(ASSETS[nextIdx])
+      const idx = assets.indexOf(activeAsset)
+      const nextIdx = (idx + 1) % assets.length
+      setActiveAsset(assets[nextIdx])
     }, 8000)
 
     return () => clearInterval(id)
-  }, [autoRotate, activeAsset, setActiveAsset])
+  }, [autoRotate, activeAsset, markets, setActiveAsset])
 
   return null
 }
@@ -43,11 +43,11 @@ function BroadcastSyncProvider() {
 }
 
 const toasterStyle = {
-  background: '#0f1629',
-  color: '#e2e8f0',
-  border: '1px solid #1e2d4e',
+  background: '#1f242b',
+  color: '#e8edf3',
+  border: '1px solid #525a66',
   fontSize: '12px',
-  fontFamily: 'JetBrains Mono, monospace',
+  fontFamily: 'Helvetica Neue, Helvetica, Arial, system-ui, sans-serif',
 }
 
 export default function App() {

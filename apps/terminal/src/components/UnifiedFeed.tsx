@@ -17,7 +17,6 @@ const PROVIDER_DOT: Record<MarketProvider, string> = {
   polymarket:     'bg-blue-400',
   kalshi:         'bg-violet-400',
   forecasttrader: 'bg-emerald-400',
-  coinbase:       'bg-sky-400',
   hyperliquid:    'bg-fuchsia-400',
   coingecko:      'bg-lime-400',
 }
@@ -27,7 +26,6 @@ const PROVIDER_LABEL: Record<MarketProvider, string> = {
   polymarket:     'Poly',
   kalshi:         'Kalshi',
   forecasttrader: 'IBKR',
-  coinbase:       'Coinbase',
   hyperliquid:    'Hyperliquid',
   coingecko:      'CoinGecko',
 }

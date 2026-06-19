@@ -1,2 +1,0 @@
-"""Alert service boundary."""
-

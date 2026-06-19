@@ -22,7 +22,12 @@ export interface KeltnerBands {
   lower: number
 }
 
-export interface OrderBookLevel { price: number; size: number }
+export interface OrderBookLevel {
+  price: number
+  size: number
+  count?: number
+  ct?: number
+}
 export interface OrderBook {
   market_id: string
   bids: OrderBookLevel[]
@@ -75,10 +80,12 @@ export interface SimOrder {
   source: 'manual' | 'algo'
   strategy: string
   legId: string
+  entryOrderId?: string
   orderTag?: string
   algoRole?: SimAlgoRole
   algoId?: string
   algoName?: string
+  deployIntentId?: string
   parentOrderId?: string
   layer?: number
   trigger?: string
@@ -108,10 +115,12 @@ export interface SimPosition {
   source: 'manual' | 'algo'
   strategy: string
   legId: string
+  entryOrderId?: string
   orderTag?: string
   algoRole?: SimAlgoRole
   algoId?: string
   algoName?: string
+  deployIntentId?: string
   parentOrderId?: string
   layer?: number
   trigger?: string
@@ -133,6 +142,7 @@ export interface SimFill extends PolyTradeTick {
   algoRole?: SimAlgoRole
   algoId?: string
   algoName?: string
+  deployIntentId?: string
   parentOrderId?: string
   layer?: number
   trigger?: string
@@ -332,6 +342,8 @@ export interface MarketInfo {
 export interface PolyBookLevel {
   price: number   // probability 0.01–0.99 (e.g. 0.52 = 52¢ = 52% chance YES)
   size:  number   // shares (1 share pays $1 if outcome is YES)
+  count?: number
+  ct?: number
 }
 
 export interface PolyBook {
@@ -367,6 +379,8 @@ export interface CmeBook {
   bestAsk?: number
   bidSize?: number
   askSize?: number
+  bidCount?: number
+  askCount?: number
   mid?: number
   ltp?: number
   ltpSize?: number
@@ -488,7 +502,7 @@ export const TIMEFRAME_LABELS: Record<TimeFrame, string> = {
 
 // ── Market Provider ──────────────────────────────────────────────────────────
 
-export type MarketProvider = 'cme' | 'polymarket' | 'kalshi' | 'forecasttrader' | 'coinbase' | 'hyperliquid' | 'coingecko'
+export type MarketProvider = 'cme' | 'polymarket' | 'kalshi' | 'forecasttrader' | 'hyperliquid' | 'coingecko'
 
 // ── Kalshi market ────────────────────────────────────────────────────────────
 

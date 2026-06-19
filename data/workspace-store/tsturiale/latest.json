@@ -22,33 +22,14 @@
       }
     },
     {
-      "id": "algoManager-13",
-      "kind": "algoManager",
-      "title": "Algo Manager",
-      "x": 2781.9163818359375,
-      "y": 48,
-      "w": 975.8265380859375,
-      "h": 489.4725570678711,
-      "z": 2631,
-      "collapsed": false,
-      "provider": "cme",
-      "poppedOut": true,
-      "floatingBounds": {
-        "x": 78,
-        "y": 437,
-        "w": 1103,
-        "h": 317
-      }
-    },
-    {
       "id": "charts-1781151513478",
       "kind": "charts",
       "title": "Charts",
-      "x": 1327.3336791992188,
-      "y": 1097.7222442626953,
-      "w": 424.361328125,
-      "h": 463.6665802001953,
-      "z": 2609,
+      "x": 1246.5836791992188,
+      "y": 1057.9722442626953,
+      "w": 467.111328125,
+      "h": 469.1597802001954,
+      "z": 3290,
       "collapsed": false,
       "provider": "cme",
       "symbol": "ES_NQ",
@@ -94,11 +75,11 @@
       "id": "depthLadder-1781152253814",
       "kind": "depthLadder",
       "title": "Depth Ladder",
-      "x": 2264.8885498046875,
-      "y": 53,
+      "x": 2229.86417720995,
+      "y": 48,
       "w": 389.8333740234375,
-      "h": 1038.5000305175781,
-      "z": 2634,
+      "h": 1003.7500305175781,
+      "z": 3589,
       "collapsed": false,
       "provider": "cme",
       "symbol": "RTY_ES",
@@ -112,11 +93,11 @@
         "columnWidths": {
           "orders": 102.71201061599086,
           "bid": 96.29352047418284,
-          "price": 88.86098782307388,
-          "ask": 104.13348108675243
+          "price": 83.8589038275169,
+          "ask": 109.13556508230941
         },
         "density": "medium",
-        "priceMultiplier": 1,
+        "priceMultiplier": 2,
         "softGrid": true,
         "actionMode": "market",
         "fastTrade": true
@@ -133,11 +114,11 @@
       "id": "depthLadder-1781152264510",
       "kind": "depthLadder",
       "title": "Depth Ladder 2",
-      "x": 1787.7775573730469,
+      "x": 1751.6664123535156,
       "y": 48,
       "w": 407.000244140625,
-      "h": 1045.9999389648438,
-      "z": 2627,
+      "h": 1000.9999389648438,
+      "z": 3537,
       "collapsed": false,
       "provider": "cme",
       "symbol": "YM_ES",
@@ -149,10 +130,10 @@
           "orders"
         ],
         "columnWidths": {
-          "orders": 90.10436502260558,
+          "orders": 100.86167089786186,
           "bid": 101.11499306596352,
-          "price": 97.28899695897414,
-          "ask": 103.49164495245677
+          "price": 79.75496547824972,
+          "ask": 110.2683705579249
         },
         "density": "medium",
         "priceMultiplier": 1,
@@ -172,11 +153,11 @@
       "id": "depthLadder-1781152276525",
       "kind": "depthLadder",
       "title": "Depth Ladder 3",
-      "x": 1341,
+      "x": 1288.2727661132812,
       "y": 48,
-      "w": 402.6555480957031,
-      "h": 1043.8333740234375,
-      "z": 2626,
+      "w": 395.9888610839844,
+      "h": 1004.8333740234375,
+      "z": 3580,
       "collapsed": false,
       "provider": "cme",
       "symbol": "ES_NQ",
@@ -188,13 +169,13 @@
           "orders"
         ],
         "columnWidths": {
-          "orders": 85.3447305672856,
-          "bid": 107.44376808257563,
-          "price": 94.1853281249733,
-          "ask": 105.02617322516548
+          "orders": 102.50706676918435,
+          "bid": 101.53527679591474,
+          "price": 86.46714410338781,
+          "ask": 101.4905123315131
         },
         "density": "medium",
-        "priceMultiplier": 2,
+        "priceMultiplier": 1,
         "softGrid": true,
         "actionMode": "limit",
         "fastTrade": true
@@ -235,7 +216,7 @@
       "y": 48,
       "w": 1098.8499145507812,
       "h": 471.14996337890625,
-      "z": 2476,
+      "z": 3292,
       "collapsed": false,
       "provider": "cme",
       "symbol": "RTY_ES",
@@ -251,11 +232,11 @@
       "id": "fills-1781160451136",
       "kind": "fills",
       "title": "Fills",
-      "x": 2786,
-      "y": 541.166748046875,
+      "x": 2780,
+      "y": 543.416748046875,
       "w": 971,
-      "h": 461,
-      "z": 2462,
+      "h": 462.5,
+      "z": 3263,
       "collapsed": false,
       "provider": "cme",
       "symbol": "ES_NQ",
@@ -271,11 +252,11 @@
       "id": "charts-1781182723413",
       "kind": "charts",
       "title": "Charts 4",
-      "x": 2238.25244140625,
-      "y": 1097.8494873046875,
+      "x": 2202.25244140625,
+      "y": 1065.8494873046875,
       "w": 460,
-      "h": 457,
-      "z": 2612,
+      "h": 463,
+      "z": 3291,
       "collapsed": false,
       "provider": "cme",
       "symbol": "RTY_ES",
@@ -341,11 +322,11 @@
       "id": "charts-1781508714171",
       "kind": "charts",
       "title": "Charts 3",
-      "x": 1769.1110534667969,
-      "y": 1098.9359455108643,
-      "w": 444.444580078125,
-      "h": 457.7777099609375,
-      "z": 2608,
+      "x": 1733.3610534667969,
+      "y": 1061.9359455108643,
+      "w": 445.444580078125,
+      "h": 465.53450996093727,
+      "z": 3286,
       "collapsed": false,
       "provider": "cme",
       "symbol": "YM_ES",
@@ -370,10 +351,17 @@
             "lookback": 200,
             "upperDeviation": 2,
             "lowerDeviation": 2
+          },
+          {
+            "id": "study-mqj2qfor-7haq",
+            "type": "regression-channel",
+            "lookback": 27,
+            "upperDeviation": 2,
+            "lowerDeviation": 2
           }
         ],
         "studyType": "regression-channel",
-        "studyLookback": 200,
+        "studyLookback": 27,
         "upperDeviation": 2,
         "lowerDeviation": 2,
         "atrMultiplier": 2,
@@ -477,6 +465,58 @@
       "collapsed": true,
       "provider": "cme",
       "symbol": "YM_ES"
+    },
+    {
+      "id": "order-1781750580383",
+      "kind": "order",
+      "title": "Order Book",
+      "x": 2790.612919921874,
+      "y": 986.0407999999998,
+      "w": 953.8800000000006,
+      "h": 490.568,
+      "z": 3531,
+      "collapsed": false,
+      "provider": "cme",
+      "symbol": "YM_ES"
+    },
+    {
+      "id": "algoManager-1781758847121",
+      "kind": "algoManager",
+      "title": "Algo Manager",
+      "x": 2773.977294921875,
+      "y": 51,
+      "w": 977.772705078125,
+      "h": 479.3738000000001,
+      "z": 3542,
+      "collapsed": false,
+      "provider": "cme",
+      "symbol": "YM_ES"
+    },
+    {
+      "id": "alerts-1781858137308",
+      "kind": "alerts",
+      "title": "Alert Manager",
+      "x": 1520.816083417934,
+      "y": 90.39999389648438,
+      "w": 923.9570940429808,
+      "h": 310,
+      "z": 3361,
+      "collapsed": true,
+      "provider": "cme",
+      "symbol": "RTY_ES"
+    },
+    {
+      "id": "alerts-1781858609427",
+      "kind": "alerts",
+      "title": "Alert Manager 2",
+      "x": 286,
+      "y": 1797,
+      "w": 1244,
+      "h": 889.6512000000001,
+      "z": 3541,
+      "collapsed": true,
+      "provider": "cme",
+      "symbol": "RTY_ES"
     }
   ],
   "rows": [
@@ -501,10 +541,2218 @@
       "symbol": "ES"
     }
   ],
-  "alerts": [],
+  "alerts": [
+    {
+      "id": "alert-1781758837924",
+      "symbol": "RTY_ES",
+      "provider": "cme",
+      "productSymbol": "RTY_ES",
+      "field": "fill",
+      "op": ">=",
+      "value": 7544,
+      "valueMode": "price",
+      "enabled": true,
+      "delivery": {
+        "audio": true,
+        "desktop": true,
+        "sms": true,
+        "sound": "system-chime",
+        "phone": "3124015554"
+      }
+    },
+    {
+      "id": "alert-1781858631230",
+      "symbol": "YM_ES",
+      "provider": "cme",
+      "productSymbol": "YM_ES",
+      "field": "fill",
+      "op": ">=",
+      "value": 7557.25,
+      "valueMode": "price",
+      "enabled": true,
+      "delivery": {
+        "audio": true,
+        "desktop": true,
+        "sms": true,
+        "sound": "system-chime",
+        "phone": "3124915554"
+      }
+    },
+    {
+      "id": "alert-1781858641288",
+      "symbol": "ES_NQ",
+      "provider": "cme",
+      "productSymbol": "ES_NQ",
+      "field": "fill",
+      "op": ">=",
+      "value": 7557.75,
+      "valueMode": "price",
+      "enabled": true,
+      "delivery": {
+        "audio": true,
+        "desktop": true,
+        "sms": true,
+        "sound": "system-chime",
+        "phone": "3124015554"
+      }
+    }
+  ],
+  "algoLibrary": [
+    {
+      "templateId": "mean-reversion-v2",
+      "version": "2.0",
+      "instruments": [
+        "ES_NQ"
+      ],
+      "signalRules": [
+        {
+          "id": "regression-bands-ready",
+          "field": "linearRegression27Bands",
+          "operator": "=",
+          "value": true,
+          "action": "pegEntryBands",
+          "enabled": true
+        },
+        {
+          "id": "entry-touch",
+          "field": "marketCanTradeTarget",
+          "operator": "=",
+          "value": true,
+          "action": "releaseSniperEntry",
+          "enabled": true
+        },
+        {
+          "id": "oco-cover",
+          "field": "entryFilled",
+          "operator": "=",
+          "value": true,
+          "action": "attachOcoCover",
+          "enabled": true
+        }
+      ],
+      "risk": {
+        "maxPosition": 7,
+        "maxLossAtr": 88,
+        "clipSchedule": "layered",
+        "requireMarketOpen": true
+      },
+      "midpointPeg": {
+        "enabled": false,
+        "source": "30m-vwap",
+        "label": "Peg VWAP for midpoint",
+        "previousClose": false
+      },
+      "entryPeg": {
+        "source": "27-period-linear-regression",
+        "period": 27,
+        "standardDeviations": 2,
+        "pegSellSideToPlus2": true,
+        "pegBuySideToMinus2": true
+      },
+      "layerPlan": {
+        "ticksOffMidpoint": 0,
+        "buyTicksOffMidpoint": 0,
+        "sellTicksOffMidpoint": 0,
+        "layerCount": 4,
+        "layerSpacingTicks": 2,
+        "maxLayers": 5,
+        "applySymmetrically": true,
+        "workBuySide": true,
+        "workSellSide": true
+      },
+      "syntheticOrderManager": {
+        "enabled": true,
+        "containerizedOrders": true,
+        "entryTechnique": "sniper-market-if-target-price-achievable",
+        "holdUntilTriggered": true,
+        "releaseDestination": "exchange-gateway"
+      },
+      "exitPolicy": {
+        "attachOnEntryFill": true,
+        "oco": true,
+        "coverTicksFromFill": 4,
+        "profitTicksFromEntry": 6,
+        "stopTicksFromEntry": 88,
+        "stopType": "market",
+        "coverLimitPlacement": "above-bid-or-below-offer"
+      },
+      "orderPolicy": {
+        "mode": "synthetic-sniper",
+        "orderType": "synthetic-held-market-release",
+        "priceReference": "27-lr-regression-bands",
+        "doNotCrossInside": true,
+        "doNotCrossSelf": true,
+        "liveOrderEntryEnabled": false
+      },
+      "notes": "",
+      "id": "algo-1781758888908",
+      "name": "ES_NQ Mean Reversion",
+      "template": "mean-reversion-v2",
+      "provider": "cme",
+      "symbol": "ES_NQ",
+      "marketKey": "ES_NQ",
+      "side": "both",
+      "orderType": "limit",
+      "clipSize": 1,
+      "maxPosition": 7,
+      "operator": "Acme Trader",
+      "status": "paused",
+      "updatedAt": 0
+    },
+    {
+      "templateId": "mean-reversion-v2",
+      "version": "2.0",
+      "instruments": [
+        "ES_NQ"
+      ],
+      "signalRules": [
+        {
+          "id": "regression-bands-ready",
+          "field": "linearRegression27Bands",
+          "operator": "=",
+          "value": true,
+          "action": "pegEntryBands",
+          "enabled": true
+        },
+        {
+          "id": "entry-touch",
+          "field": "marketCanTradeTarget",
+          "operator": "=",
+          "value": true,
+          "action": "releaseSniperEntry",
+          "enabled": true
+        },
+        {
+          "id": "oco-cover",
+          "field": "entryFilled",
+          "operator": "=",
+          "value": true,
+          "action": "attachOcoCover",
+          "enabled": true
+        }
+      ],
+      "risk": {
+        "maxPosition": 5,
+        "maxLossAtr": 88,
+        "clipSchedule": "layered",
+        "requireMarketOpen": true
+      },
+      "midpointPeg": {
+        "enabled": false,
+        "source": "30m-vwap",
+        "label": "Peg VWAP for midpoint",
+        "previousClose": false
+      },
+      "entryPeg": {
+        "source": "27-period-linear-regression",
+        "period": 27,
+        "standardDeviations": 2,
+        "pegSellSideToPlus2": true,
+        "pegBuySideToMinus2": true
+      },
+      "layerPlan": {
+        "ticksOffMidpoint": 0,
+        "buyTicksOffMidpoint": 0,
+        "sellTicksOffMidpoint": 0,
+        "layerCount": 4,
+        "layerSpacingTicks": 2,
+        "maxLayers": 5,
+        "applySymmetrically": true,
+        "workBuySide": true,
+        "workSellSide": true
+      },
+      "syntheticOrderManager": {
+        "enabled": true,
+        "containerizedOrders": true,
+        "entryTechnique": "sniper-market-if-target-price-achievable",
+        "holdUntilTriggered": true,
+        "releaseDestination": "exchange-gateway"
+      },
+      "exitPolicy": {
+        "attachOnEntryFill": true,
+        "oco": true,
+        "coverTicksFromFill": 6,
+        "profitTicksFromEntry": 6,
+        "stopTicksFromEntry": 88,
+        "stopType": "market",
+        "coverLimitPlacement": "above-bid-or-below-offer"
+      },
+      "orderPolicy": {
+        "mode": "synthetic-sniper",
+        "orderType": "synthetic-held-market-release",
+        "priceReference": "27-lr-regression-bands",
+        "doNotCrossInside": true,
+        "doNotCrossSelf": true,
+        "liveOrderEntryEnabled": false
+      },
+      "notes": "",
+      "id": "algo-1781761502337",
+      "name": "ES_NQ Mean Reversion",
+      "template": "mean-reversion-v2",
+      "provider": "cme",
+      "symbol": "ES_NQ",
+      "marketKey": "ES_NQ",
+      "side": "both",
+      "orderType": "limit",
+      "clipSize": 1,
+      "maxPosition": 5,
+      "operator": "Acme Trader",
+      "status": "paused",
+      "updatedAt": 0
+    },
+    {
+      "templateId": "mean-reversion-v2",
+      "version": "2.0",
+      "instruments": [
+        "ES_NQ"
+      ],
+      "signalRules": [
+        {
+          "id": "regression-bands-ready",
+          "field": "linearRegression27Bands",
+          "operator": "=",
+          "value": true,
+          "action": "pegEntryBands",
+          "enabled": true
+        },
+        {
+          "id": "entry-touch",
+          "field": "marketCanTradeTarget",
+          "operator": "=",
+          "value": true,
+          "action": "releaseSniperEntry",
+          "enabled": true
+        },
+        {
+          "id": "oco-cover",
+          "field": "entryFilled",
+          "operator": "=",
+          "value": true,
+          "action": "attachOcoCover",
+          "enabled": true
+        }
+      ],
+      "risk": {
+        "maxPosition": 1,
+        "maxLossAtr": 88,
+        "clipSchedule": "layered",
+        "requireMarketOpen": true
+      },
+      "midpointPeg": {
+        "enabled": false,
+        "source": "30m-vwap",
+        "label": "Peg VWAP for midpoint",
+        "previousClose": false
+      },
+      "entryPeg": {
+        "source": "27-period-linear-regression",
+        "period": 27,
+        "standardDeviations": 2,
+        "pegSellSideToPlus2": true,
+        "pegBuySideToMinus2": true
+      },
+      "layerPlan": {
+        "ticksOffMidpoint": 0,
+        "buyTicksOffMidpoint": 0,
+        "sellTicksOffMidpoint": 0,
+        "layerCount": 3,
+        "layerSpacingTicks": 2,
+        "maxLayers": 5,
+        "applySymmetrically": true,
+        "workBuySide": true,
+        "workSellSide": true
+      },
+      "syntheticOrderManager": {
+        "enabled": true,
+        "containerizedOrders": true,
+        "entryTechnique": "sniper-market-if-target-price-achievable",
+        "holdUntilTriggered": true,
+        "releaseDestination": "exchange-gateway"
+      },
+      "exitPolicy": {
+        "attachOnEntryFill": true,
+        "oco": true,
+        "coverTicksFromFill": 6,
+        "profitTicksFromEntry": 6,
+        "stopTicksFromEntry": 88,
+        "stopType": "market",
+        "coverLimitPlacement": "above-bid-or-below-offer"
+      },
+      "orderPolicy": {
+        "mode": "synthetic-sniper",
+        "orderType": "synthetic-held-market-release",
+        "priceReference": "27-lr-regression-bands",
+        "doNotCrossInside": true,
+        "doNotCrossSelf": true,
+        "liveOrderEntryEnabled": false
+      },
+      "notes": "",
+      "id": "algo-1781785537734",
+      "name": "ES_NQ Mean Reversion",
+      "template": "mean-reversion-v2",
+      "provider": "cme",
+      "symbol": "ES_NQ",
+      "marketKey": "ES_NQ",
+      "side": "both",
+      "orderType": "limit",
+      "clipSize": 1,
+      "maxPosition": 1,
+      "operator": "Acme Trader",
+      "status": "paused",
+      "updatedAt": 0
+    },
+    {
+      "templateId": "mean-reversion-v2",
+      "version": "2.0",
+      "instruments": [
+        "ES_NQ"
+      ],
+      "signalRules": [
+        {
+          "id": "regression-bands-ready",
+          "field": "linearRegression27Bands",
+          "operator": "=",
+          "value": true,
+          "action": "pegEntryBands",
+          "enabled": true
+        },
+        {
+          "id": "entry-touch",
+          "field": "marketCanTradeTarget",
+          "operator": "=",
+          "value": true,
+          "action": "releaseSniperEntry",
+          "enabled": true
+        },
+        {
+          "id": "oco-cover",
+          "field": "entryFilled",
+          "operator": "=",
+          "value": true,
+          "action": "attachOcoCover",
+          "enabled": true
+        }
+      ],
+      "risk": {
+        "maxPosition": 1,
+        "maxLossAtr": 88,
+        "clipSchedule": "layered",
+        "requireMarketOpen": true
+      },
+      "midpointPeg": {
+        "enabled": false,
+        "source": "30m-vwap",
+        "label": "Peg VWAP for midpoint",
+        "previousClose": false
+      },
+      "entryPeg": {
+        "source": "27-period-linear-regression",
+        "period": 27,
+        "standardDeviations": 2,
+        "pegSellSideToPlus2": true,
+        "pegBuySideToMinus2": true
+      },
+      "layerPlan": {
+        "ticksOffMidpoint": 0,
+        "buyTicksOffMidpoint": 0,
+        "sellTicksOffMidpoint": 0,
+        "layerCount": 3,
+        "layerSpacingTicks": 2,
+        "maxLayers": 5,
+        "applySymmetrically": true,
+        "workBuySide": true,
+        "workSellSide": true
+      },
+      "syntheticOrderManager": {
+        "enabled": true,
+        "containerizedOrders": true,
+        "entryTechnique": "sniper-market-if-target-price-achievable",
+        "holdUntilTriggered": true,
+        "releaseDestination": "exchange-gateway"
+      },
+      "exitPolicy": {
+        "attachOnEntryFill": true,
+        "oco": true,
+        "coverTicksFromFill": 6,
+        "profitTicksFromEntry": 6,
+        "stopTicksFromEntry": 88,
+        "stopType": "market",
+        "coverLimitPlacement": "above-bid-or-below-offer"
+      },
+      "orderPolicy": {
+        "mode": "synthetic-sniper",
+        "orderType": "synthetic-held-market-release",
+        "priceReference": "27-lr-regression-bands",
+        "doNotCrossInside": true,
+        "doNotCrossSelf": true,
+        "liveOrderEntryEnabled": false
+      },
+      "notes": "",
+      "id": "algo-1781785599400",
+      "name": "ES_NQ Mean Reversion",
+      "template": "mean-reversion-v2",
+      "provider": "cme",
+      "symbol": "ES_NQ",
+      "marketKey": "ES_NQ",
+      "side": "both",
+      "orderType": "limit",
+      "clipSize": 1,
+      "maxPosition": 1,
+      "operator": "Acme Trader",
+      "status": "paused",
+      "updatedAt": 0
+    },
+    {
+      "templateId": "mean-reversion-v2",
+      "version": "2.0",
+      "instruments": [
+        "ES_NQ"
+      ],
+      "signalRules": [
+        {
+          "id": "regression-bands-ready",
+          "field": "linearRegression27Bands",
+          "operator": "=",
+          "value": true,
+          "action": "pegEntryBands",
+          "enabled": true
+        },
+        {
+          "id": "entry-touch",
+          "field": "marketCanTradeTarget",
+          "operator": "=",
+          "value": true,
+          "action": "releaseSniperEntry",
+          "enabled": true
+        },
+        {
+          "id": "oco-cover",
+          "field": "entryFilled",
+          "operator": "=",
+          "value": true,
+          "action": "attachOcoCover",
+          "enabled": true
+        }
+      ],
+      "risk": {
+        "maxPosition": 10,
+        "maxLossAtr": 88,
+        "clipSchedule": "layered",
+        "requireMarketOpen": true
+      },
+      "midpointPeg": {
+        "enabled": false,
+        "source": "30m-vwap",
+        "label": "Peg VWAP for midpoint",
+        "previousClose": false
+      },
+      "entryPeg": {
+        "source": "27-period-linear-regression",
+        "period": 27,
+        "standardDeviations": 2,
+        "pegSellSideToPlus2": true,
+        "pegBuySideToMinus2": true
+      },
+      "layerPlan": {
+        "ticksOffMidpoint": 0,
+        "buyTicksOffMidpoint": 0,
+        "sellTicksOffMidpoint": 0,
+        "layerCount": 4,
+        "layerSpacingTicks": 3,
+        "maxLayers": 5,
+        "applySymmetrically": true,
+        "workBuySide": true,
+        "workSellSide": true
+      },
+      "syntheticOrderManager": {
+        "enabled": true,
+        "containerizedOrders": true,
+        "entryTechnique": "sniper-market-if-target-price-achievable",
+        "holdUntilTriggered": true,
+        "releaseDestination": "exchange-gateway"
+      },
+      "exitPolicy": {
+        "attachOnEntryFill": true,
+        "oco": true,
+        "coverTicksFromFill": 6,
+        "profitTicksFromEntry": 6,
+        "stopTicksFromEntry": 88,
+        "stopType": "market",
+        "coverLimitPlacement": "above-bid-or-below-offer"
+      },
+      "orderPolicy": {
+        "mode": "synthetic-sniper",
+        "orderType": "synthetic-held-market-release",
+        "priceReference": "27-lr-regression-bands",
+        "doNotCrossInside": true,
+        "doNotCrossSelf": true,
+        "liveOrderEntryEnabled": false
+      },
+      "notes": "",
+      "id": "algo-1781872853846",
+      "name": "ES_NQ Mean Reversion",
+      "template": "mean-reversion-v2",
+      "provider": "cme",
+      "symbol": "ES_NQ",
+      "marketKey": "ES_NQ",
+      "side": "both",
+      "orderType": "limit",
+      "clipSize": 1,
+      "maxPosition": 10,
+      "operator": "Acme Trader",
+      "status": "paused",
+      "updatedAt": 0
+    },
+    {
+      "templateId": "mean-reversion-v2",
+      "version": "2.0",
+      "instruments": [
+        "ES_NQ"
+      ],
+      "signalRules": [
+        {
+          "id": "regression-bands-ready",
+          "field": "linearRegression27Bands",
+          "operator": "=",
+          "value": true,
+          "action": "pegEntryBands",
+          "enabled": true
+        },
+        {
+          "id": "entry-touch",
+          "field": "marketCanTradeTarget",
+          "operator": "=",
+          "value": true,
+          "action": "releaseSniperEntry",
+          "enabled": true
+        },
+        {
+          "id": "oco-cover",
+          "field": "entryFilled",
+          "operator": "=",
+          "value": true,
+          "action": "attachOcoCover",
+          "enabled": true
+        }
+      ],
+      "risk": {
+        "maxPosition": 10,
+        "maxLossAtr": 88,
+        "clipSchedule": "layered",
+        "requireMarketOpen": true
+      },
+      "midpointPeg": {
+        "enabled": false,
+        "source": "30m-vwap",
+        "label": "Peg VWAP for midpoint",
+        "previousClose": false
+      },
+      "entryPeg": {
+        "source": "27-period-linear-regression",
+        "period": 27,
+        "standardDeviations": 2,
+        "pegSellSideToPlus2": true,
+        "pegBuySideToMinus2": true
+      },
+      "layerPlan": {
+        "ticksOffMidpoint": 0,
+        "buyTicksOffMidpoint": 0,
+        "sellTicksOffMidpoint": 0,
+        "layerCount": 3,
+        "layerSpacingTicks": 2,
+        "maxLayers": 5,
+        "applySymmetrically": true,
+        "workBuySide": true,
+        "workSellSide": true
+      },
+      "syntheticOrderManager": {
+        "enabled": true,
+        "containerizedOrders": true,
+        "entryTechnique": "sniper-market-if-target-price-achievable",
+        "holdUntilTriggered": true,
+        "releaseDestination": "exchange-gateway"
+      },
+      "exitPolicy": {
+        "attachOnEntryFill": true,
+        "oco": true,
+        "coverTicksFromFill": 6,
+        "profitTicksFromEntry": 6,
+        "stopTicksFromEntry": 88,
+        "stopType": "market",
+        "coverLimitPlacement": "above-bid-or-below-offer"
+      },
+      "orderPolicy": {
+        "mode": "synthetic-sniper",
+        "orderType": "synthetic-held-market-release",
+        "priceReference": "27-lr-regression-bands",
+        "doNotCrossInside": true,
+        "doNotCrossSelf": true,
+        "liveOrderEntryEnabled": false
+      },
+      "notes": "",
+      "id": "algo-1781872969276",
+      "name": "ES_NQ Mean Reversion 101",
+      "template": "mean-reversion-v2",
+      "provider": "cme",
+      "symbol": "ES_NQ",
+      "marketKey": "ES_NQ",
+      "side": "both",
+      "orderType": "limit",
+      "clipSize": 1,
+      "maxPosition": 10,
+      "operator": "Acme Trader",
+      "status": "paused",
+      "updatedAt": 0
+    },
+    {
+      "templateId": "mean-reversion-v2",
+      "version": "2.0",
+      "instruments": [
+        "ES_NQ"
+      ],
+      "signalRules": [
+        {
+          "id": "regression-bands-ready",
+          "field": "linearRegression27Bands",
+          "operator": "=",
+          "value": true,
+          "action": "pegEntryBands",
+          "enabled": true
+        },
+        {
+          "id": "entry-touch",
+          "field": "marketCanTradeTarget",
+          "operator": "=",
+          "value": true,
+          "action": "releaseSniperEntry",
+          "enabled": true
+        },
+        {
+          "id": "oco-cover",
+          "field": "entryFilled",
+          "operator": "=",
+          "value": true,
+          "action": "attachOcoCover",
+          "enabled": true
+        }
+      ],
+      "risk": {
+        "maxPosition": 10,
+        "maxLossAtr": 88,
+        "clipSchedule": "layered",
+        "requireMarketOpen": true
+      },
+      "midpointPeg": {
+        "enabled": false,
+        "source": "30m-vwap",
+        "label": "Peg VWAP for midpoint",
+        "previousClose": false
+      },
+      "entryPeg": {
+        "source": "27-period-linear-regression",
+        "period": 27,
+        "standardDeviations": 2,
+        "pegSellSideToPlus2": true,
+        "pegBuySideToMinus2": true
+      },
+      "layerPlan": {
+        "ticksOffMidpoint": 0,
+        "buyTicksOffMidpoint": 0,
+        "sellTicksOffMidpoint": 0,
+        "layerCount": 4,
+        "layerSpacingTicks": 4,
+        "maxLayers": 5,
+        "applySymmetrically": true,
+        "workBuySide": true,
+        "workSellSide": true
+      },
+      "syntheticOrderManager": {
+        "enabled": true,
+        "containerizedOrders": true,
+        "entryTechnique": "sniper-market-if-target-price-achievable",
+        "holdUntilTriggered": true,
+        "releaseDestination": "exchange-gateway"
+      },
+      "exitPolicy": {
+        "attachOnEntryFill": true,
+        "oco": true,
+        "coverTicksFromFill": 6,
+        "profitTicksFromEntry": 6,
+        "stopTicksFromEntry": 88,
+        "stopType": "market",
+        "coverLimitPlacement": "above-bid-or-below-offer"
+      },
+      "orderPolicy": {
+        "mode": "synthetic-sniper",
+        "orderType": "synthetic-held-market-release",
+        "priceReference": "27-lr-regression-bands",
+        "doNotCrossInside": true,
+        "doNotCrossSelf": true,
+        "liveOrderEntryEnabled": false
+      },
+      "notes": "",
+      "id": "algo-1781873191346",
+      "name": "ES_NQ Mean Reversion 101",
+      "template": "mean-reversion-v2",
+      "provider": "cme",
+      "symbol": "ES_NQ",
+      "marketKey": "ES_NQ",
+      "side": "both",
+      "orderType": "limit",
+      "clipSize": 1,
+      "maxPosition": 10,
+      "operator": "Acme Trader",
+      "status": "paused",
+      "updatedAt": 0
+    },
+    {
+      "templateId": "mean-reversion-v2",
+      "version": "2.0",
+      "instruments": [
+        "ES_NQ"
+      ],
+      "signalRules": [
+        {
+          "id": "regression-bands-ready",
+          "field": "linearRegression27Bands",
+          "operator": "=",
+          "value": true,
+          "action": "pegEntryBands",
+          "enabled": true
+        },
+        {
+          "id": "entry-touch",
+          "field": "marketCanTradeTarget",
+          "operator": "=",
+          "value": true,
+          "action": "releaseSniperEntry",
+          "enabled": true
+        },
+        {
+          "id": "oco-cover",
+          "field": "entryFilled",
+          "operator": "=",
+          "value": true,
+          "action": "attachOcoCover",
+          "enabled": true
+        }
+      ],
+      "risk": {
+        "maxPosition": 1,
+        "maxLossAtr": 88,
+        "clipSchedule": "layered",
+        "requireMarketOpen": true
+      },
+      "midpointPeg": {
+        "enabled": false,
+        "source": "30m-vwap",
+        "label": "Peg VWAP for midpoint",
+        "previousClose": false
+      },
+      "entryPeg": {
+        "source": "27-period-linear-regression",
+        "period": 200,
+        "standardDeviations": 2,
+        "pegSellSideToPlus2": true,
+        "pegBuySideToMinus2": true
+      },
+      "layerPlan": {
+        "ticksOffMidpoint": 0,
+        "buyTicksOffMidpoint": 0,
+        "sellTicksOffMidpoint": 0,
+        "layerCount": 3,
+        "layerSpacingTicks": 3,
+        "maxLayers": 5,
+        "applySymmetrically": true,
+        "workBuySide": true,
+        "workSellSide": true
+      },
+      "syntheticOrderManager": {
+        "enabled": true,
+        "containerizedOrders": true,
+        "entryTechnique": "sniper-market-if-target-price-achievable",
+        "holdUntilTriggered": true,
+        "releaseDestination": "exchange-gateway"
+      },
+      "exitPolicy": {
+        "attachOnEntryFill": true,
+        "oco": true,
+        "coverTicksFromFill": 5,
+        "profitTicksFromEntry": 6,
+        "stopTicksFromEntry": 88,
+        "stopType": "market",
+        "coverLimitPlacement": "above-bid-or-below-offer"
+      },
+      "orderPolicy": {
+        "mode": "synthetic-sniper",
+        "orderType": "synthetic-held-market-release",
+        "priceReference": "27-lr-regression-bands",
+        "doNotCrossInside": true,
+        "doNotCrossSelf": true,
+        "liveOrderEntryEnabled": false
+      },
+      "notes": "",
+      "id": "algo-1781785483625",
+      "name": "ES_NQ Mean Reversion WIDE",
+      "template": "mean-reversion-v2",
+      "provider": "cme",
+      "symbol": "ES_NQ",
+      "marketKey": "ES_NQ",
+      "side": "both",
+      "orderType": "limit",
+      "clipSize": 1,
+      "maxPosition": 1,
+      "operator": "Acme Trader",
+      "status": "paused",
+      "updatedAt": 0
+    },
+    {
+      "templateId": "mean-reversion-v2",
+      "version": "2.0",
+      "instruments": [
+        "ES_NQ"
+      ],
+      "signalRules": [
+        {
+          "id": "regression-bands-ready",
+          "field": "linearRegression27Bands",
+          "operator": "=",
+          "value": true,
+          "action": "pegEntryBands",
+          "enabled": true
+        },
+        {
+          "id": "entry-touch",
+          "field": "marketCanTradeTarget",
+          "operator": "=",
+          "value": true,
+          "action": "releaseSniperEntry",
+          "enabled": true
+        },
+        {
+          "id": "oco-cover",
+          "field": "entryFilled",
+          "operator": "=",
+          "value": true,
+          "action": "attachOcoCover",
+          "enabled": true
+        }
+      ],
+      "risk": {
+        "maxPosition": 5,
+        "maxLossAtr": 88,
+        "clipSchedule": "layered",
+        "requireMarketOpen": true
+      },
+      "midpointPeg": {
+        "enabled": false,
+        "source": "30m-vwap",
+        "label": "Peg VWAP for midpoint",
+        "previousClose": false
+      },
+      "entryPeg": {
+        "source": "27-period-linear-regression",
+        "period": 200,
+        "standardDeviations": 2,
+        "pegSellSideToPlus2": true,
+        "pegBuySideToMinus2": true
+      },
+      "layerPlan": {
+        "ticksOffMidpoint": 0,
+        "buyTicksOffMidpoint": 0,
+        "sellTicksOffMidpoint": 0,
+        "layerCount": 3,
+        "layerSpacingTicks": 2,
+        "maxLayers": 5,
+        "applySymmetrically": true,
+        "workBuySide": true,
+        "workSellSide": true
+      },
+      "syntheticOrderManager": {
+        "enabled": true,
+        "containerizedOrders": true,
+        "entryTechnique": "sniper-market-if-target-price-achievable",
+        "holdUntilTriggered": true,
+        "releaseDestination": "exchange-gateway"
+      },
+      "exitPolicy": {
+        "attachOnEntryFill": true,
+        "oco": true,
+        "coverTicksFromFill": 6,
+        "profitTicksFromEntry": 6,
+        "stopTicksFromEntry": 88,
+        "stopType": "market",
+        "coverLimitPlacement": "above-bid-or-below-offer"
+      },
+      "orderPolicy": {
+        "mode": "synthetic-sniper",
+        "orderType": "synthetic-held-market-release",
+        "priceReference": "27-lr-regression-bands",
+        "doNotCrossInside": true,
+        "doNotCrossSelf": true,
+        "liveOrderEntryEnabled": false
+      },
+      "notes": "",
+      "id": "algo-1781785567259",
+      "name": "ES_NQ Mean Reversion WIDE",
+      "template": "mean-reversion-v2",
+      "provider": "cme",
+      "symbol": "ES_NQ",
+      "marketKey": "ES_NQ",
+      "side": "both",
+      "orderType": "limit",
+      "clipSize": 1,
+      "maxPosition": 5,
+      "operator": "Acme Trader",
+      "status": "paused",
+      "updatedAt": 0
+    },
+    {
+      "templateId": "mean-reversion-v2",
+      "version": "2.0",
+      "instruments": [
+        "RTY_ES"
+      ],
+      "signalRules": [
+        {
+          "id": "regression-bands-ready",
+          "field": "linearRegression27Bands",
+          "operator": "=",
+          "value": true,
+          "action": "pegEntryBands",
+          "enabled": true
+        },
+        {
+          "id": "entry-touch",
+          "field": "marketCanTradeTarget",
+          "operator": "=",
+          "value": true,
+          "action": "releaseSniperEntry",
+          "enabled": true
+        },
+        {
+          "id": "oco-cover",
+          "field": "entryFilled",
+          "operator": "=",
+          "value": true,
+          "action": "attachOcoCover",
+          "enabled": true
+        }
+      ],
+      "risk": {
+        "maxPosition": 6,
+        "maxLossAtr": 88,
+        "clipSchedule": "layered",
+        "requireMarketOpen": true
+      },
+      "midpointPeg": {
+        "enabled": false,
+        "source": "30m-vwap",
+        "label": "Peg VWAP for midpoint",
+        "previousClose": false
+      },
+      "entryPeg": {
+        "source": "27-period-linear-regression",
+        "period": 27,
+        "standardDeviations": 2,
+        "pegSellSideToPlus2": false,
+        "pegBuySideToMinus2": true
+      },
+      "layerPlan": {
+        "ticksOffMidpoint": 0,
+        "buyTicksOffMidpoint": 0,
+        "sellTicksOffMidpoint": 0,
+        "layerCount": 4,
+        "layerSpacingTicks": 2,
+        "maxLayers": 5,
+        "applySymmetrically": true,
+        "workBuySide": true,
+        "workSellSide": false
+      },
+      "syntheticOrderManager": {
+        "enabled": true,
+        "containerizedOrders": true,
+        "entryTechnique": "sniper-market-if-target-price-achievable",
+        "holdUntilTriggered": true,
+        "releaseDestination": "exchange-gateway"
+      },
+      "exitPolicy": {
+        "attachOnEntryFill": true,
+        "oco": true,
+        "coverTicksFromFill": 4,
+        "profitTicksFromEntry": 6,
+        "stopTicksFromEntry": 88,
+        "stopType": "market",
+        "coverLimitPlacement": "above-bid-or-below-offer"
+      },
+      "orderPolicy": {
+        "mode": "synthetic-sniper",
+        "orderType": "synthetic-held-market-release",
+        "priceReference": "27-lr-regression-bands",
+        "doNotCrossInside": true,
+        "doNotCrossSelf": true,
+        "liveOrderEntryEnabled": false
+      },
+      "notes": "",
+      "id": "algo-1781783009611",
+      "name": "ES_NQ BUYSIDE Mean Reversion",
+      "template": "mean-reversion-v2",
+      "provider": "cme",
+      "symbol": "RTY_ES",
+      "marketKey": "RTY_ES",
+      "side": "bid",
+      "orderType": "limit",
+      "clipSize": 1,
+      "maxPosition": 6,
+      "operator": "Acme Trader",
+      "status": "paused",
+      "updatedAt": 0
+    },
+    {
+      "templateId": "mean-reversion-v2",
+      "version": "2.0",
+      "instruments": [
+        "RTY_ES"
+      ],
+      "signalRules": [
+        {
+          "id": "regression-bands-ready",
+          "field": "linearRegression27Bands",
+          "operator": "=",
+          "value": true,
+          "action": "pegEntryBands",
+          "enabled": true
+        },
+        {
+          "id": "entry-touch",
+          "field": "marketCanTradeTarget",
+          "operator": "=",
+          "value": true,
+          "action": "releaseSniperEntry",
+          "enabled": true
+        },
+        {
+          "id": "oco-cover",
+          "field": "entryFilled",
+          "operator": "=",
+          "value": true,
+          "action": "attachOcoCover",
+          "enabled": true
+        }
+      ],
+      "risk": {
+        "maxPosition": 7,
+        "maxLossAtr": 88,
+        "clipSchedule": "layered",
+        "requireMarketOpen": true
+      },
+      "midpointPeg": {
+        "enabled": false,
+        "source": "30m-vwap",
+        "label": "Peg VWAP for midpoint",
+        "previousClose": false
+      },
+      "entryPeg": {
+        "source": "27-period-linear-regression",
+        "period": 27,
+        "standardDeviations": 2,
+        "pegSellSideToPlus2": true,
+        "pegBuySideToMinus2": true
+      },
+      "layerPlan": {
+        "ticksOffMidpoint": 0,
+        "buyTicksOffMidpoint": 0,
+        "sellTicksOffMidpoint": 0,
+        "layerCount": 6,
+        "layerSpacingTicks": 2,
+        "maxLayers": 5,
+        "applySymmetrically": true,
+        "workBuySide": true,
+        "workSellSide": true
+      },
+      "syntheticOrderManager": {
+        "enabled": true,
+        "containerizedOrders": true,
+        "entryTechnique": "sniper-market-if-target-price-achievable",
+        "holdUntilTriggered": true,
+        "releaseDestination": "exchange-gateway"
+      },
+      "exitPolicy": {
+        "attachOnEntryFill": true,
+        "oco": true,
+        "coverTicksFromFill": 6,
+        "profitTicksFromEntry": 6,
+        "stopTicksFromEntry": 88,
+        "stopType": "market",
+        "coverLimitPlacement": "above-bid-or-below-offer"
+      },
+      "orderPolicy": {
+        "mode": "synthetic-sniper",
+        "orderType": "synthetic-held-market-release",
+        "priceReference": "27-lr-regression-bands",
+        "doNotCrossInside": true,
+        "doNotCrossSelf": true,
+        "liveOrderEntryEnabled": false
+      },
+      "notes": "",
+      "id": "algo-1781758312346",
+      "name": "RTY_ES Mean Reversion",
+      "template": "mean-reversion-v2",
+      "provider": "cme",
+      "symbol": "RTY_ES",
+      "marketKey": "RTY_ES",
+      "side": "both",
+      "orderType": "limit",
+      "clipSize": 1,
+      "maxPosition": 7,
+      "operator": "Acme Trader",
+      "status": "paused",
+      "updatedAt": 0
+    },
+    {
+      "templateId": "mean-reversion-v2",
+      "version": "2.0",
+      "instruments": [
+        "RTY_ES"
+      ],
+      "signalRules": [
+        {
+          "id": "regression-bands-ready",
+          "field": "linearRegression27Bands",
+          "operator": "=",
+          "value": true,
+          "action": "pegEntryBands",
+          "enabled": true
+        },
+        {
+          "id": "entry-touch",
+          "field": "marketCanTradeTarget",
+          "operator": "=",
+          "value": true,
+          "action": "releaseSniperEntry",
+          "enabled": true
+        },
+        {
+          "id": "oco-cover",
+          "field": "entryFilled",
+          "operator": "=",
+          "value": true,
+          "action": "attachOcoCover",
+          "enabled": true
+        }
+      ],
+      "risk": {
+        "maxPosition": 1,
+        "maxLossAtr": 88,
+        "clipSchedule": "layered",
+        "requireMarketOpen": true
+      },
+      "midpointPeg": {
+        "enabled": false,
+        "source": "30m-vwap",
+        "label": "Peg VWAP for midpoint",
+        "previousClose": false
+      },
+      "entryPeg": {
+        "source": "27-period-linear-regression",
+        "period": 27,
+        "standardDeviations": 2,
+        "pegSellSideToPlus2": true,
+        "pegBuySideToMinus2": true
+      },
+      "layerPlan": {
+        "ticksOffMidpoint": 0,
+        "buyTicksOffMidpoint": 0,
+        "sellTicksOffMidpoint": 0,
+        "layerCount": 3,
+        "layerSpacingTicks": 2,
+        "maxLayers": 5,
+        "applySymmetrically": true,
+        "workBuySide": true,
+        "workSellSide": true
+      },
+      "syntheticOrderManager": {
+        "enabled": true,
+        "containerizedOrders": true,
+        "entryTechnique": "sniper-market-if-target-price-achievable",
+        "holdUntilTriggered": true,
+        "releaseDestination": "exchange-gateway"
+      },
+      "exitPolicy": {
+        "attachOnEntryFill": true,
+        "oco": true,
+        "coverTicksFromFill": 6,
+        "profitTicksFromEntry": 6,
+        "stopTicksFromEntry": 88,
+        "stopType": "market",
+        "coverLimitPlacement": "above-bid-or-below-offer"
+      },
+      "orderPolicy": {
+        "mode": "synthetic-sniper",
+        "orderType": "synthetic-held-market-release",
+        "priceReference": "27-lr-regression-bands",
+        "doNotCrossInside": true,
+        "doNotCrossSelf": true,
+        "liveOrderEntryEnabled": false
+      },
+      "notes": "",
+      "id": "algo-1781761573364",
+      "name": "RTY_ES Mean Reversion",
+      "template": "mean-reversion-v2",
+      "provider": "cme",
+      "symbol": "RTY_ES",
+      "marketKey": "RTY_ES",
+      "side": "both",
+      "orderType": "limit",
+      "clipSize": 1,
+      "maxPosition": 1,
+      "operator": "Acme Trader",
+      "status": "paused",
+      "updatedAt": 0
+    },
+    {
+      "templateId": "mean-reversion-v2",
+      "version": "2.0",
+      "instruments": [
+        "RTY_ES"
+      ],
+      "signalRules": [
+        {
+          "id": "regression-bands-ready",
+          "field": "linearRegression27Bands",
+          "operator": "=",
+          "value": true,
+          "action": "pegEntryBands",
+          "enabled": true
+        },
+        {
+          "id": "entry-touch",
+          "field": "marketCanTradeTarget",
+          "operator": "=",
+          "value": true,
+          "action": "releaseSniperEntry",
+          "enabled": true
+        },
+        {
+          "id": "oco-cover",
+          "field": "entryFilled",
+          "operator": "=",
+          "value": true,
+          "action": "attachOcoCover",
+          "enabled": true
+        }
+      ],
+      "risk": {
+        "maxPosition": 1,
+        "maxLossAtr": 88,
+        "clipSchedule": "layered",
+        "requireMarketOpen": true
+      },
+      "midpointPeg": {
+        "enabled": false,
+        "source": "30m-vwap",
+        "label": "Peg VWAP for midpoint",
+        "previousClose": false
+      },
+      "entryPeg": {
+        "source": "27-period-linear-regression",
+        "period": 27,
+        "standardDeviations": 2,
+        "pegSellSideToPlus2": true,
+        "pegBuySideToMinus2": true
+      },
+      "layerPlan": {
+        "ticksOffMidpoint": 0,
+        "buyTicksOffMidpoint": 0,
+        "sellTicksOffMidpoint": 0,
+        "layerCount": 3,
+        "layerSpacingTicks": 2,
+        "maxLayers": 5,
+        "applySymmetrically": true,
+        "workBuySide": true,
+        "workSellSide": true
+      },
+      "syntheticOrderManager": {
+        "enabled": true,
+        "containerizedOrders": true,
+        "entryTechnique": "sniper-market-if-target-price-achievable",
+        "holdUntilTriggered": true,
+        "releaseDestination": "exchange-gateway"
+      },
+      "exitPolicy": {
+        "attachOnEntryFill": true,
+        "oco": true,
+        "coverTicksFromFill": 4,
+        "profitTicksFromEntry": 6,
+        "stopTicksFromEntry": 88,
+        "stopType": "market",
+        "coverLimitPlacement": "above-bid-or-below-offer"
+      },
+      "orderPolicy": {
+        "mode": "synthetic-sniper",
+        "orderType": "synthetic-held-market-release",
+        "priceReference": "27-lr-regression-bands",
+        "doNotCrossInside": true,
+        "doNotCrossSelf": true,
+        "liveOrderEntryEnabled": false
+      },
+      "notes": "",
+      "id": "algo-1781761786045",
+      "name": "RTY_ES Mean Reversion",
+      "template": "mean-reversion-v2",
+      "provider": "cme",
+      "symbol": "RTY_ES",
+      "marketKey": "RTY_ES",
+      "side": "both",
+      "orderType": "limit",
+      "clipSize": 1,
+      "maxPosition": 1,
+      "operator": "Acme Trader",
+      "status": "paused",
+      "updatedAt": 0
+    },
+    {
+      "templateId": "mean-reversion-v2",
+      "version": "2.0",
+      "instruments": [
+        "RTY_ES"
+      ],
+      "signalRules": [
+        {
+          "id": "regression-bands-ready",
+          "field": "linearRegression27Bands",
+          "operator": "=",
+          "value": true,
+          "action": "pegEntryBands",
+          "enabled": true
+        },
+        {
+          "id": "entry-touch",
+          "field": "marketCanTradeTarget",
+          "operator": "=",
+          "value": true,
+          "action": "releaseSniperEntry",
+          "enabled": true
+        },
+        {
+          "id": "oco-cover",
+          "field": "entryFilled",
+          "operator": "=",
+          "value": true,
+          "action": "attachOcoCover",
+          "enabled": true
+        }
+      ],
+      "risk": {
+        "maxPosition": 10,
+        "maxLossAtr": 88,
+        "clipSchedule": "layered",
+        "requireMarketOpen": true
+      },
+      "midpointPeg": {
+        "enabled": false,
+        "source": "30m-vwap",
+        "label": "Peg VWAP for midpoint",
+        "previousClose": false
+      },
+      "entryPeg": {
+        "source": "27-period-linear-regression",
+        "period": 27,
+        "standardDeviations": 2,
+        "pegSellSideToPlus2": true,
+        "pegBuySideToMinus2": true
+      },
+      "layerPlan": {
+        "ticksOffMidpoint": 0,
+        "buyTicksOffMidpoint": 0,
+        "sellTicksOffMidpoint": 0,
+        "layerCount": 4,
+        "layerSpacingTicks": 4,
+        "maxLayers": 5,
+        "applySymmetrically": true,
+        "workBuySide": true,
+        "workSellSide": true
+      },
+      "syntheticOrderManager": {
+        "enabled": true,
+        "containerizedOrders": true,
+        "entryTechnique": "sniper-market-if-target-price-achievable",
+        "holdUntilTriggered": true,
+        "releaseDestination": "exchange-gateway"
+      },
+      "exitPolicy": {
+        "attachOnEntryFill": true,
+        "oco": true,
+        "coverTicksFromFill": 6,
+        "profitTicksFromEntry": 6,
+        "stopTicksFromEntry": 88,
+        "stopType": "market",
+        "coverLimitPlacement": "above-bid-or-below-offer"
+      },
+      "orderPolicy": {
+        "mode": "synthetic-sniper",
+        "orderType": "synthetic-held-market-release",
+        "priceReference": "27-lr-regression-bands",
+        "doNotCrossInside": true,
+        "doNotCrossSelf": true,
+        "liveOrderEntryEnabled": false
+      },
+      "notes": "",
+      "id": "algo-1781873059409",
+      "name": "RTY_ES Mean Reversion",
+      "template": "mean-reversion-v2",
+      "provider": "cme",
+      "symbol": "RTY_ES",
+      "marketKey": "RTY_ES",
+      "side": "both",
+      "orderType": "limit",
+      "clipSize": 1,
+      "maxPosition": 10,
+      "operator": "Acme Trader",
+      "status": "paused",
+      "updatedAt": 0
+    },
+    {
+      "templateId": "mean-reversion-v2",
+      "version": "2.0",
+      "instruments": [
+        "RTY_ES"
+      ],
+      "signalRules": [
+        {
+          "id": "regression-bands-ready",
+          "field": "linearRegression27Bands",
+          "operator": "=",
+          "value": true,
+          "action": "pegEntryBands",
+          "enabled": true
+        },
+        {
+          "id": "entry-touch",
+          "field": "marketCanTradeTarget",
+          "operator": "=",
+          "value": true,
+          "action": "releaseSniperEntry",
+          "enabled": true
+        },
+        {
+          "id": "oco-cover",
+          "field": "entryFilled",
+          "operator": "=",
+          "value": true,
+          "action": "attachOcoCover",
+          "enabled": true
+        }
+      ],
+      "risk": {
+        "maxPosition": 10,
+        "maxLossAtr": 88,
+        "clipSchedule": "layered",
+        "requireMarketOpen": true
+      },
+      "midpointPeg": {
+        "enabled": false,
+        "source": "30m-vwap",
+        "label": "Peg VWAP for midpoint",
+        "previousClose": false
+      },
+      "entryPeg": {
+        "source": "27-period-linear-regression",
+        "period": 27,
+        "standardDeviations": 2,
+        "pegSellSideToPlus2": true,
+        "pegBuySideToMinus2": true
+      },
+      "layerPlan": {
+        "ticksOffMidpoint": 0,
+        "buyTicksOffMidpoint": 0,
+        "sellTicksOffMidpoint": 0,
+        "layerCount": 4,
+        "layerSpacingTicks": 4,
+        "maxLayers": 5,
+        "applySymmetrically": true,
+        "workBuySide": true,
+        "workSellSide": true
+      },
+      "syntheticOrderManager": {
+        "enabled": true,
+        "containerizedOrders": true,
+        "entryTechnique": "sniper-market-if-target-price-achievable",
+        "holdUntilTriggered": true,
+        "releaseDestination": "exchange-gateway"
+      },
+      "exitPolicy": {
+        "attachOnEntryFill": true,
+        "oco": true,
+        "coverTicksFromFill": 6,
+        "profitTicksFromEntry": 6,
+        "stopTicksFromEntry": 88,
+        "stopType": "market",
+        "coverLimitPlacement": "above-bid-or-below-offer"
+      },
+      "orderPolicy": {
+        "mode": "synthetic-sniper",
+        "orderType": "synthetic-held-market-release",
+        "priceReference": "27-lr-regression-bands",
+        "doNotCrossInside": true,
+        "doNotCrossSelf": true,
+        "liveOrderEntryEnabled": false
+      },
+      "notes": "",
+      "id": "algo-1781873089860",
+      "name": "RTY_ES Mean Reversion 101",
+      "template": "mean-reversion-v2",
+      "provider": "cme",
+      "symbol": "RTY_ES",
+      "marketKey": "RTY_ES",
+      "side": "both",
+      "orderType": "limit",
+      "clipSize": 1,
+      "maxPosition": 10,
+      "operator": "Acme Trader",
+      "status": "paused",
+      "updatedAt": 0
+    },
+    {
+      "templateId": "mean-reversion-v2",
+      "version": "2.0",
+      "instruments": [
+        "YM_ES"
+      ],
+      "signalRules": [
+        {
+          "id": "regression-bands-ready",
+          "field": "linearRegression27Bands",
+          "operator": "=",
+          "value": true,
+          "action": "pegEntryBands",
+          "enabled": true
+        },
+        {
+          "id": "entry-touch",
+          "field": "marketCanTradeTarget",
+          "operator": "=",
+          "value": true,
+          "action": "releaseSniperEntry",
+          "enabled": true
+        },
+        {
+          "id": "oco-cover",
+          "field": "entryFilled",
+          "operator": "=",
+          "value": true,
+          "action": "attachOcoCover",
+          "enabled": true
+        }
+      ],
+      "risk": {
+        "maxPosition": 1,
+        "maxLossAtr": 88,
+        "clipSchedule": "layered",
+        "requireMarketOpen": true
+      },
+      "midpointPeg": {
+        "enabled": false,
+        "source": "30m-vwap",
+        "label": "Peg VWAP for midpoint",
+        "previousClose": false
+      },
+      "entryPeg": {
+        "source": "27-period-linear-regression",
+        "period": 27,
+        "standardDeviations": 2,
+        "pegSellSideToPlus2": true,
+        "pegBuySideToMinus2": true
+      },
+      "layerPlan": {
+        "ticksOffMidpoint": 0,
+        "buyTicksOffMidpoint": 0,
+        "sellTicksOffMidpoint": 0,
+        "layerCount": 3,
+        "layerSpacingTicks": 2,
+        "maxLayers": 5,
+        "applySymmetrically": true,
+        "workBuySide": true,
+        "workSellSide": true
+      },
+      "syntheticOrderManager": {
+        "enabled": true,
+        "containerizedOrders": true,
+        "entryTechnique": "sniper-market-if-target-price-achievable",
+        "holdUntilTriggered": true,
+        "releaseDestination": "exchange-gateway"
+      },
+      "exitPolicy": {
+        "attachOnEntryFill": true,
+        "oco": true,
+        "coverTicksFromFill": 6,
+        "profitTicksFromEntry": 6,
+        "stopTicksFromEntry": 88,
+        "stopType": "market",
+        "coverLimitPlacement": "above-bid-or-below-offer"
+      },
+      "orderPolicy": {
+        "mode": "synthetic-sniper",
+        "orderType": "synthetic-held-market-release",
+        "priceReference": "27-lr-regression-bands",
+        "doNotCrossInside": true,
+        "doNotCrossSelf": true,
+        "liveOrderEntryEnabled": false
+      },
+      "notes": "",
+      "id": "algo-1781761542261",
+      "name": "YM_ES Mean Reversion",
+      "template": "mean-reversion-v2",
+      "provider": "cme",
+      "symbol": "YM_ES",
+      "marketKey": "YM_ES",
+      "side": "both",
+      "orderType": "limit",
+      "clipSize": 1,
+      "maxPosition": 1,
+      "operator": "Acme Trader",
+      "status": "paused",
+      "updatedAt": 0
+    },
+    {
+      "templateId": "mean-reversion-v2",
+      "version": "2.0",
+      "instruments": [
+        "YM_ES"
+      ],
+      "signalRules": [
+        {
+          "id": "regression-bands-ready",
+          "field": "linearRegression27Bands",
+          "operator": "=",
+          "value": true,
+          "action": "pegEntryBands",
+          "enabled": true
+        },
+        {
+          "id": "entry-touch",
+          "field": "marketCanTradeTarget",
+          "operator": "=",
+          "value": true,
+          "action": "releaseSniperEntry",
+          "enabled": true
+        },
+        {
+          "id": "oco-cover",
+          "field": "entryFilled",
+          "operator": "=",
+          "value": true,
+          "action": "attachOcoCover",
+          "enabled": true
+        }
+      ],
+      "risk": {
+        "maxPosition": 5,
+        "maxLossAtr": 88,
+        "clipSchedule": "layered",
+        "requireMarketOpen": true
+      },
+      "midpointPeg": {
+        "enabled": false,
+        "source": "30m-vwap",
+        "label": "Peg VWAP for midpoint",
+        "previousClose": false
+      },
+      "entryPeg": {
+        "source": "27-period-linear-regression",
+        "period": 27,
+        "standardDeviations": 2,
+        "pegSellSideToPlus2": true,
+        "pegBuySideToMinus2": true
+      },
+      "layerPlan": {
+        "ticksOffMidpoint": 0,
+        "buyTicksOffMidpoint": 0,
+        "sellTicksOffMidpoint": 0,
+        "layerCount": 3,
+        "layerSpacingTicks": 2,
+        "maxLayers": 5,
+        "applySymmetrically": true,
+        "workBuySide": true,
+        "workSellSide": true
+      },
+      "syntheticOrderManager": {
+        "enabled": true,
+        "containerizedOrders": true,
+        "entryTechnique": "sniper-market-if-target-price-achievable",
+        "holdUntilTriggered": true,
+        "releaseDestination": "exchange-gateway"
+      },
+      "exitPolicy": {
+        "attachOnEntryFill": true,
+        "oco": true,
+        "coverTicksFromFill": 4,
+        "profitTicksFromEntry": 6,
+        "stopTicksFromEntry": 88,
+        "stopType": "market",
+        "coverLimitPlacement": "above-bid-or-below-offer"
+      },
+      "orderPolicy": {
+        "mode": "synthetic-sniper",
+        "orderType": "synthetic-held-market-release",
+        "priceReference": "27-lr-regression-bands",
+        "doNotCrossInside": true,
+        "doNotCrossSelf": true,
+        "liveOrderEntryEnabled": false
+      },
+      "notes": "",
+      "id": "algo-1781761626775",
+      "name": "YM_ES Mean Reversion",
+      "template": "mean-reversion-v2",
+      "provider": "cme",
+      "symbol": "YM_ES",
+      "marketKey": "YM_ES",
+      "side": "both",
+      "orderType": "limit",
+      "clipSize": 1,
+      "maxPosition": 5,
+      "operator": "Acme Trader",
+      "status": "paused",
+      "updatedAt": 0
+    },
+    {
+      "templateId": "mean-reversion-v2",
+      "version": "2.0",
+      "instruments": [
+        "YM_ES"
+      ],
+      "signalRules": [
+        {
+          "id": "regression-bands-ready",
+          "field": "linearRegression27Bands",
+          "operator": "=",
+          "value": true,
+          "action": "pegEntryBands",
+          "enabled": true
+        },
+        {
+          "id": "entry-touch",
+          "field": "marketCanTradeTarget",
+          "operator": "=",
+          "value": true,
+          "action": "releaseSniperEntry",
+          "enabled": true
+        },
+        {
+          "id": "oco-cover",
+          "field": "entryFilled",
+          "operator": "=",
+          "value": true,
+          "action": "attachOcoCover",
+          "enabled": true
+        }
+      ],
+      "risk": {
+        "maxPosition": 5,
+        "maxLossAtr": 88,
+        "clipSchedule": "layered",
+        "requireMarketOpen": true
+      },
+      "midpointPeg": {
+        "enabled": false,
+        "source": "30m-vwap",
+        "label": "Peg VWAP for midpoint",
+        "previousClose": false
+      },
+      "entryPeg": {
+        "source": "27-period-linear-regression",
+        "period": 27,
+        "standardDeviations": 2,
+        "pegSellSideToPlus2": true,
+        "pegBuySideToMinus2": true
+      },
+      "layerPlan": {
+        "ticksOffMidpoint": 0,
+        "buyTicksOffMidpoint": 0,
+        "sellTicksOffMidpoint": 0,
+        "layerCount": 3,
+        "layerSpacingTicks": 2,
+        "maxLayers": 5,
+        "applySymmetrically": true,
+        "workBuySide": true,
+        "workSellSide": true
+      },
+      "syntheticOrderManager": {
+        "enabled": true,
+        "containerizedOrders": true,
+        "entryTechnique": "sniper-market-if-target-price-achievable",
+        "holdUntilTriggered": true,
+        "releaseDestination": "exchange-gateway"
+      },
+      "exitPolicy": {
+        "attachOnEntryFill": true,
+        "oco": true,
+        "coverTicksFromFill": 4,
+        "profitTicksFromEntry": 6,
+        "stopTicksFromEntry": 88,
+        "stopType": "market",
+        "coverLimitPlacement": "above-bid-or-below-offer"
+      },
+      "orderPolicy": {
+        "mode": "synthetic-sniper",
+        "orderType": "synthetic-held-market-release",
+        "priceReference": "27-lr-regression-bands",
+        "doNotCrossInside": true,
+        "doNotCrossSelf": true,
+        "liveOrderEntryEnabled": false
+      },
+      "notes": "",
+      "id": "algo-1781761752035",
+      "name": "YM_ES Mean Reversion",
+      "template": "mean-reversion-v2",
+      "provider": "cme",
+      "symbol": "YM_ES",
+      "marketKey": "YM_ES",
+      "side": "both",
+      "orderType": "limit",
+      "clipSize": 1,
+      "maxPosition": 5,
+      "operator": "Acme Trader",
+      "status": "paused",
+      "updatedAt": 0
+    },
+    {
+      "templateId": "mean-reversion-v2",
+      "version": "2.0",
+      "instruments": [
+        "YM_ES"
+      ],
+      "signalRules": [
+        {
+          "id": "regression-bands-ready",
+          "field": "linearRegression27Bands",
+          "operator": "=",
+          "value": true,
+          "action": "pegEntryBands",
+          "enabled": true
+        },
+        {
+          "id": "entry-touch",
+          "field": "marketCanTradeTarget",
+          "operator": "=",
+          "value": true,
+          "action": "releaseSniperEntry",
+          "enabled": true
+        },
+        {
+          "id": "oco-cover",
+          "field": "entryFilled",
+          "operator": "=",
+          "value": true,
+          "action": "attachOcoCover",
+          "enabled": true
+        }
+      ],
+      "risk": {
+        "maxPosition": 10,
+        "maxLossAtr": 880,
+        "clipSchedule": "layered",
+        "requireMarketOpen": true
+      },
+      "midpointPeg": {
+        "enabled": false,
+        "source": "30m-vwap",
+        "label": "Peg VWAP for midpoint",
+        "previousClose": false
+      },
+      "entryPeg": {
+        "source": "27-period-linear-regression",
+        "period": 27,
+        "standardDeviations": 2,
+        "pegSellSideToPlus2": true,
+        "pegBuySideToMinus2": true
+      },
+      "layerPlan": {
+        "ticksOffMidpoint": 0,
+        "buyTicksOffMidpoint": 0,
+        "sellTicksOffMidpoint": 0,
+        "layerCount": 4,
+        "layerSpacingTicks": 4,
+        "maxLayers": 5,
+        "applySymmetrically": true,
+        "workBuySide": true,
+        "workSellSide": true
+      },
+      "syntheticOrderManager": {
+        "enabled": true,
+        "containerizedOrders": true,
+        "entryTechnique": "sniper-market-if-target-price-achievable",
+        "holdUntilTriggered": true,
+        "releaseDestination": "exchange-gateway"
+      },
+      "exitPolicy": {
+        "attachOnEntryFill": true,
+        "oco": true,
+        "coverTicksFromFill": 6,
+        "profitTicksFromEntry": 6,
+        "stopTicksFromEntry": 88,
+        "stopType": "market",
+        "coverLimitPlacement": "above-bid-or-below-offer"
+      },
+      "orderPolicy": {
+        "mode": "synthetic-sniper",
+        "orderType": "synthetic-held-market-release",
+        "priceReference": "27-lr-regression-bands",
+        "doNotCrossInside": true,
+        "doNotCrossSelf": true,
+        "liveOrderEntryEnabled": false
+      },
+      "notes": "",
+      "id": "algo-1781872811359",
+      "name": "YM_ES Mean Reversion",
+      "template": "mean-reversion-v2",
+      "provider": "cme",
+      "symbol": "YM_ES",
+      "marketKey": "YM_ES",
+      "side": "both",
+      "orderType": "limit",
+      "clipSize": 1,
+      "maxPosition": 10,
+      "operator": "Acme Trader",
+      "status": "paused",
+      "updatedAt": 0
+    },
+    {
+      "templateId": "mean-reversion-v2",
+      "version": "2.0",
+      "instruments": [
+        "YM_ES"
+      ],
+      "signalRules": [
+        {
+          "id": "regression-bands-ready",
+          "field": "linearRegression27Bands",
+          "operator": "=",
+          "value": true,
+          "action": "pegEntryBands",
+          "enabled": true
+        },
+        {
+          "id": "entry-touch",
+          "field": "marketCanTradeTarget",
+          "operator": "=",
+          "value": true,
+          "action": "releaseSniperEntry",
+          "enabled": true
+        },
+        {
+          "id": "oco-cover",
+          "field": "entryFilled",
+          "operator": "=",
+          "value": true,
+          "action": "attachOcoCover",
+          "enabled": true
+        }
+      ],
+      "risk": {
+        "maxPosition": 10,
+        "maxLossAtr": 88,
+        "clipSchedule": "layered",
+        "requireMarketOpen": true
+      },
+      "midpointPeg": {
+        "enabled": false,
+        "source": "30m-vwap",
+        "label": "Peg VWAP for midpoint",
+        "previousClose": false
+      },
+      "entryPeg": {
+        "source": "27-period-linear-regression",
+        "period": 27,
+        "standardDeviations": 2,
+        "pegSellSideToPlus2": true,
+        "pegBuySideToMinus2": true
+      },
+      "layerPlan": {
+        "ticksOffMidpoint": 0,
+        "buyTicksOffMidpoint": 0,
+        "sellTicksOffMidpoint": 0,
+        "layerCount": 3,
+        "layerSpacingTicks": 4,
+        "maxLayers": 5,
+        "applySymmetrically": true,
+        "workBuySide": true,
+        "workSellSide": true
+      },
+      "syntheticOrderManager": {
+        "enabled": true,
+        "containerizedOrders": true,
+        "entryTechnique": "sniper-market-if-target-price-achievable",
+        "holdUntilTriggered": true,
+        "releaseDestination": "exchange-gateway"
+      },
+      "exitPolicy": {
+        "attachOnEntryFill": true,
+        "oco": true,
+        "coverTicksFromFill": 6,
+        "profitTicksFromEntry": 6,
+        "stopTicksFromEntry": 88,
+        "stopType": "market",
+        "coverLimitPlacement": "above-bid-or-below-offer"
+      },
+      "orderPolicy": {
+        "mode": "synthetic-sniper",
+        "orderType": "synthetic-held-market-release",
+        "priceReference": "27-lr-regression-bands",
+        "doNotCrossInside": true,
+        "doNotCrossSelf": true,
+        "liveOrderEntryEnabled": false
+      },
+      "notes": "",
+      "id": "algo-1781873021219",
+      "name": "YM_ES Mean Reversion 101",
+      "template": "mean-reversion-v2",
+      "provider": "cme",
+      "symbol": "YM_ES",
+      "marketKey": "YM_ES",
+      "side": "both",
+      "orderType": "limit",
+      "clipSize": 1,
+      "maxPosition": 10,
+      "operator": "Acme Trader",
+      "status": "paused",
+      "updatedAt": 0
+    },
+    {
+      "templateId": "mean-reversion-v2",
+      "version": "2.0",
+      "instruments": [
+        "YM_ES"
+      ],
+      "signalRules": [
+        {
+          "id": "regression-bands-ready",
+          "field": "linearRegression27Bands",
+          "operator": "=",
+          "value": true,
+          "action": "pegEntryBands",
+          "enabled": true
+        },
+        {
+          "id": "entry-touch",
+          "field": "marketCanTradeTarget",
+          "operator": "=",
+          "value": true,
+          "action": "releaseSniperEntry",
+          "enabled": true
+        },
+        {
+          "id": "oco-cover",
+          "field": "entryFilled",
+          "operator": "=",
+          "value": true,
+          "action": "attachOcoCover",
+          "enabled": true
+        }
+      ],
+      "risk": {
+        "maxPosition": 1,
+        "maxLossAtr": 88,
+        "clipSchedule": "layered",
+        "requireMarketOpen": true
+      },
+      "midpointPeg": {
+        "enabled": false,
+        "source": "30m-vwap",
+        "label": "Peg VWAP for midpoint",
+        "previousClose": false
+      },
+      "entryPeg": {
+        "source": "27-period-linear-regression",
+        "period": 27,
+        "standardDeviations": 2,
+        "pegSellSideToPlus2": true,
+        "pegBuySideToMinus2": true
+      },
+      "layerPlan": {
+        "ticksOffMidpoint": 0,
+        "buyTicksOffMidpoint": 0,
+        "sellTicksOffMidpoint": 0,
+        "layerCount": 3,
+        "layerSpacingTicks": 2,
+        "maxLayers": 5,
+        "applySymmetrically": true,
+        "workBuySide": true,
+        "workSellSide": true
+      },
+      "syntheticOrderManager": {
+        "enabled": true,
+        "containerizedOrders": true,
+        "entryTechnique": "sniper-market-if-target-price-achievable",
+        "holdUntilTriggered": true,
+        "releaseDestination": "exchange-gateway"
+      },
+      "exitPolicy": {
+        "attachOnEntryFill": true,
+        "oco": true,
+        "coverTicksFromFill": 6,
+        "profitTicksFromEntry": 6,
+        "stopTicksFromEntry": 88,
+        "stopType": "market",
+        "coverLimitPlacement": "above-bid-or-below-offer"
+      },
+      "orderPolicy": {
+        "mode": "synthetic-sniper",
+        "orderType": "synthetic-held-market-release",
+        "priceReference": "27-lr-regression-bands",
+        "doNotCrossInside": true,
+        "doNotCrossSelf": true,
+        "liveOrderEntryEnabled": false
+      },
+      "notes": "",
+      "id": "algo-1781758341826",
+      "name": "YMES Mean Reversion",
+      "template": "mean-reversion-v2",
+      "provider": "cme",
+      "symbol": "YM_ES",
+      "marketKey": "YM_ES",
+      "side": "both",
+      "orderType": "limit",
+      "clipSize": 1,
+      "maxPosition": 1,
+      "operator": "Acme Trader",
+      "status": "paused",
+      "updatedAt": 0
+    }
+  ],
+  "algoManager": {
+    "stagedAlgoIds": [],
+    "selectedDeployIds": [],
+    "statusFilter": "all",
+    "deployStatus": "",
+    "updatedAt": 1781882722854
+  },
   "selectedProvider": "cme",
-  "selectedSymbol": "YM_ES",
-  "updatedAt": 1781734296303,
-  "serverSavedAt": "2026-06-17T22:11:36.303655Z",
+  "selectedSymbol": "ES_NQ",
+  "updatedAt": 1781882849425,
+  "algoLibraryIds": [
+    "algo-1781758888908",
+    "algo-1781761502337",
+    "algo-1781785537734",
+    "algo-1781785599400",
+    "algo-1781872853846",
+    "algo-1781872969276",
+    "algo-1781873191346",
+    "algo-1781785483625",
+    "algo-1781785567259",
+    "algo-1781783009611",
+    "algo-1781758312346",
+    "algo-1781761573364",
+    "algo-1781761786045",
+    "algo-1781873059409",
+    "algo-1781873089860",
+    "algo-1781761542261",
+    "algo-1781761626775",
+    "algo-1781761752035",
+    "algo-1781872811359",
+    "algo-1781873021219",
+    "algo-1781758341826"
+  ],
+  "serverSavedAt": "2026-06-19T15:27:33.739645Z",
   "serverReason": "manual save default"
 }

@@ -6,6 +6,7 @@
 #include <databento/historical.hpp>
 #include <databento/record.hpp>
 #include <databento/symbol_map.hpp>
+#include <exception>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -171,6 +172,7 @@ void publish_trade_json(const std::string& symbol, const db::TradeMsg& msg) {
 }  // namespace
 
 int main(int argc, char** argv) {
+  try {
   if (std::getenv("DATABENTO_API_KEY") == nullptr) {
     std::cerr << "DATABENTO_API_KEY is required." << std::endl;
     return 2;
@@ -209,17 +211,24 @@ int main(int argc, char** argv) {
       stype,
       db::SType::InstrumentId,
       limit);
-  auto symbol_map = store.GetMetadata().CreateSymbolMap();
+  const auto output_symbol = symbols.empty() ? std::string{} : symbols.front();
 
   while (const auto* record = store.NextRecord()) {
     if (schema == db::Schema::Trades) {
       const auto& trade = record->Get<db::TradeMsg>();
-      publish_trade_json(symbol_map.At(trade), trade);
+      publish_trade_json(output_symbol, trade);
       continue;
     }
     const auto& bar = record->Get<db::OhlcvMsg>();
-    publish_ohlcv_json(normalized_schema, symbol_map.At(bar), bar);
+    publish_ohlcv_json(normalized_schema, output_symbol, bar);
   }
 
   return 0;
+  } catch (const std::exception& error) {
+    std::cerr << "cerious_price_history error: " << error.what() << std::endl;
+    return 1;
+  } catch (...) {
+    std::cerr << "cerious_price_history error: unknown exception" << std::endl;
+    return 1;
+  }
 }

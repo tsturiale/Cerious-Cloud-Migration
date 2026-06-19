@@ -10,10 +10,7 @@ import {
   Filter,
   Pause,
   Play,
-  RotateCcw,
   Search,
-  Send,
-  Trash2,
   Wifi,
   WifiOff,
   Zap,
@@ -62,6 +59,18 @@ type FixStatus = {
   uptimeSeconds: number
   dryRun: boolean
   fixVersion: string
+}
+
+const WORKSPACE_SESSION_TOKEN_KEY = 'cerious.workspace.sessionToken.v1'
+
+function ceriousSessionHeaders(init?: HeadersInit): Headers {
+  const headers = new Headers(init)
+  const token = window.localStorage.getItem(WORKSPACE_SESSION_TOKEN_KEY) || ''
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`)
+    headers.set('X-Cerious-Session', token)
+  }
+  return headers
 }
 
 type DirectionFilter = 'all' | 'sent' | 'received'
@@ -159,7 +168,9 @@ export function FixMonitor() {
   const fetchJournal = useCallback(async () => {
     if (paused) return
     try {
-      const res = await fetch('/api/fix/journal?limit=500')
+      const res = await fetch('/api/fix/journal?limit=500', {
+        headers: ceriousSessionHeaders(),
+      })
       if (!res.ok) return
       const data = await res.json()
       setEntries(data.entries ?? [])
@@ -195,6 +206,7 @@ export function FixMonitor() {
     // Attach to any open WebSocket (the asset connector creates one)
     const origAddEventListener = WebSocket.prototype.addEventListener
     // We'll just poll — WS integration happens naturally through the journal refetch
+    void handleWsMessage
     void origAddEventListener
   }, [paused])
 
@@ -249,7 +261,7 @@ export function FixMonitor() {
     try {
       await fetch('/api/fix/send', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: ceriousSessionHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ symbol: 'ES', side: 'bid', price: 6000.00, qty: 1 }),
       })
       setTimeout(fetchJournal, 200)
@@ -262,7 +274,7 @@ export function FixMonitor() {
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', height: '100%',
-      background: '#080c14', color: '#c8d6e5', fontFamily: "'JetBrains Mono', monospace",
+      background: '#11151b', color: '#dbe3ec', fontFamily: "'Helvetica Neue', Helvetica, Arial, system-ui, sans-serif",
       fontSize: 11, overflow: 'hidden', borderRadius: 4,
     }}>
       {/* ---- SESSION HEADER ---- */}
@@ -587,7 +599,7 @@ export function FixMonitor() {
                       padding: '4px 8px', borderRadius: 3, background: '#0a1020',
                       border: '1px solid #1a2744', color: '#6a8aae',
                       wordBreak: 'break-all', whiteSpace: 'pre-wrap',
-                      fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
+                      fontFamily: "'Cascadia Mono', Consolas, monospace", fontSize: 10,
                     }}>
                       {escapeForDisplay(entry.raw)}
                     </div>

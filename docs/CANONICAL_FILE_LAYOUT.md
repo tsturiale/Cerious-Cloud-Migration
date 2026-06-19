@@ -8,11 +8,11 @@ Canonical local root:
 
 `Cerious local`
 
-The complete local application build. This folder contains the gateway, market data/studies/order services, React terminal, preserved Acme intelligence/assets, workspace state, local `.env`, `.venv`, `apps/terminal/node_modules`, and `.tools`.
+The complete local application build. This folder contains the native C++ gateway, native market data/studies/order services, Tauri terminal client assets, preserved Acme intelligence/assets, workspace state, local `.env`, `apps/terminal/node_modules`, and `.tools`.
 
 `Cerious Desktop`
 
-The Windows thin-client launcher package. It resolves the sibling `Cerious local` folder and starts `Start-CeriousTerminal.ps1 -DesktopClient`.
+The Windows thin-client launcher package. It resolves the sibling `Cerious local` folder and starts `Start-CeriousApp.ps1`.
 
 ## Launch Safety
 

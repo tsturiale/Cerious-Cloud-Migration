@@ -172,9 +172,9 @@ export function HealthTab() {
         </div>
       </div>
 
-      {/* Spot Market (Coinbase) */}
+      {/* Spot Market */}
       <div className="border-t border-surface-border pt-2 space-y-1">
-        <div className="font-semibold text-slate-300">Spot Market (Coinbase)</div>
+        <div className="font-semibold text-slate-300">Spot Market</div>
         <div className="pl-2 space-y-0.5">
           <div className="flex justify-between">
             <span className="text-muted">Last Update:</span>

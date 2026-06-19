@@ -3,6 +3,8 @@
   "private": true,
   "scripts": {
     "dev:frontend": "npm --prefix apps/terminal run dev",
-    "build:frontend": "npm --prefix apps/terminal run build"
+    "build:frontend": "npm --prefix apps/terminal run build",
+    "desktop:dev": "npm --prefix apps/terminal run desktop:dev",
+    "desktop:build": "npm --prefix apps/terminal run desktop:build"
   }
 }

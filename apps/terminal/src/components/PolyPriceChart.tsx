@@ -26,7 +26,7 @@ const PRICE_COL   = '#f97316'
 const LABEL_COL   = '#4a5568'
 const CURSOR_COL  = 'rgba(255,255,255,0.15)'
 const EXPIRY_COL  = '#ff4757'
-const FONT        = 'JetBrains Mono, monospace'
+const FONT        = 'Cascadia Mono, Consolas, monospace'
 const MAX_POINTS  = 72_000
 const SAMPLE_MS   = 100
 

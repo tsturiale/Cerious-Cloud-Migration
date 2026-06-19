@@ -40,12 +40,13 @@ function setWorkspaceSessionToken(token: string | null) {
 
 type LoginPortalProps = {
   onAuthenticated: (session: PortalSession) => void
+  initialStatus?: string
 }
 
-function LoginPortal({ onAuthenticated }: LoginPortalProps) {
+function LoginPortal({ onAuthenticated, initialStatus = '' }: LoginPortalProps) {
   const [username, setUsername] = useState('tsturiale')
   const [password, setPassword] = useState('')
-  const [status, setStatus] = useState('')
+  const [status, setStatus] = useState(initialStatus)
   const [submitting, setSubmitting] = useState(false)
 
   const submit = async (event: FormEvent) => {
@@ -135,6 +136,7 @@ function LoginPortal({ onAuthenticated }: LoginPortalProps) {
 export function PortalGate({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<PortalSession | null>(() => getStoredPortalSession())
   const [checking, setChecking] = useState(() => Boolean(getStoredPortalSession()))
+  const [portalMessage, setPortalMessage] = useState('')
 
   useEffect(() => {
     const existing = getStoredPortalSession()
@@ -208,6 +210,19 @@ export function PortalGate({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  useEffect(() => {
+    const handleLock = (event: Event) => {
+      const detail = (event as CustomEvent<{ reason?: string }>).detail
+      storePortalSession(null)
+      setWorkspaceSessionToken(null)
+      setSession(null)
+      setChecking(false)
+      setPortalMessage(detail?.reason || 'Workspace locked. Log in to unlock.')
+    }
+    window.addEventListener('cerious-auth-lock', handleLock as EventListener)
+    return () => window.removeEventListener('cerious-auth-lock', handleLock as EventListener)
+  }, [])
+
   if (checking) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#050911] text-slate-100">
@@ -220,7 +235,7 @@ export function PortalGate({ children }: { children: ReactNode }) {
   }
 
   if (!session) {
-    return <LoginPortal onAuthenticated={setSession} />
+    return <LoginPortal onAuthenticated={(next) => { setPortalMessage(''); setSession(next) }} initialStatus={portalMessage} />
   }
 
   return <>{children}</>

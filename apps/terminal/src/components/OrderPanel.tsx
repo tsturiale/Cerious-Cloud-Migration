@@ -152,7 +152,7 @@ export function OrderPanel({ asset }: Props) {
             style: {
               background: '#0a1628', color: '#e2e8f0',
               border: `2px solid ${fillCol}`,
-              fontSize: '13px', fontFamily: 'JetBrains Mono, monospace',
+              fontSize: '13px', fontFamily: 'Cascadia Mono, Consolas, monospace',
               padding: '12px 20px', minWidth: '260px', whiteSpace: 'pre-line',
             },
             iconTheme: { primary: fillCol, secondary: '#0a1628' },
@@ -200,7 +200,7 @@ export function OrderPanel({ asset }: Props) {
             style: {
               background: '#0a1628', color: '#e2e8f0',
               border: `2px solid ${fillCol}`, fontSize: '13px',
-              fontFamily: 'JetBrains Mono, monospace',
+              fontFamily: 'Cascadia Mono, Consolas, monospace',
               padding: '12px 20px', minWidth: '260px', whiteSpace: 'pre-line',
             },
             iconTheme: { primary: fillCol, secondary: '#0a1628' },

@@ -13,7 +13,7 @@ function Resolve-CeriousRoot {
   ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
 
   foreach ($candidate in $candidates) {
-    $launcher = Join-Path $candidate "Start-CeriousTerminal.ps1"
+    $launcher = Join-Path $candidate "Start-CeriousApp.ps1"
     if (Test-Path -LiteralPath $launcher) {
       return (Resolve-Path -LiteralPath $candidate).Path
     }
@@ -26,18 +26,31 @@ function Install-DesktopShortcut {
   param([string]$ScriptPath)
   $desktop = [Environment]::GetFolderPath("DesktopDirectory")
   $shortcutPath = Join-Path $desktop "Cerious Systems.lnk"
+  $root = Resolve-CeriousRoot
+  $launcher = Join-Path $root "Launch-Cerious.vbs"
   $shell = New-Object -ComObject WScript.Shell
   $shortcut = $shell.CreateShortcut($shortcutPath)
-  $shortcut.TargetPath = "powershell.exe"
-  $shortcut.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$ScriptPath`""
-  $shortcut.WorkingDirectory = Split-Path -Parent $ScriptPath
+  $shortcut.TargetPath = (Join-Path $env:WINDIR "System32\wscript.exe")
+  $shortcut.Arguments = "`"$launcher`""
+  $shortcut.WorkingDirectory = $root
   $shortcut.Description = "Launch Cerious Systems Terminal"
+  $ico = Join-Path $root "assets\branding\cerious-logo.ico"
+  if (!(Test-Path -LiteralPath $ico)) {
+    $ico = Join-Path $root "apps\terminal\public\branding\cerious-logo.ico"
+  }
+  if (!(Test-Path -LiteralPath $ico)) {
+    $ico = Join-Path $root "cerious.ico"
+  }
+  if (Test-Path -LiteralPath $ico) {
+    $shortcut.IconLocation = "$ico, 0"
+  }
+  $shortcut.WindowStyle = 7
   $shortcut.Save()
   Write-Host "Shortcut installed: $shortcutPath"
 }
 
 $root = Resolve-CeriousRoot
-$launcher = Join-Path $root "Start-CeriousTerminal.ps1"
+$launcher = Join-Path $root "Start-CeriousApp.ps1"
 
 if ($InstallShortcut) {
   Install-DesktopShortcut -ScriptPath $PSCommandPath
@@ -46,7 +59,8 @@ if ($InstallShortcut) {
 Start-Process -FilePath "powershell.exe" -WorkingDirectory $root -ArgumentList @(
   "-NoProfile",
   "-ExecutionPolicy", "Bypass",
+  "-WindowStyle", "Hidden",
   "-File", "`"$launcher`""
 ) -WindowStyle Hidden
 
-Write-Host "Cerious Systems cloud/canvas launch requested."
+Write-Host "Cerious Systems app launch requested."

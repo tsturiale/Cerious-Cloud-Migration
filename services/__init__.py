@@ -1,2 +1,0 @@
-"""Cerious Systems service packages."""
-

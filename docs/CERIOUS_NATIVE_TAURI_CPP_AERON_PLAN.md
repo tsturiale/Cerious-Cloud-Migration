@@ -23,7 +23,7 @@ flowchart LR
   Databento["Databento Live MBP-1"]
   Feed["C++ Price Feed Handler"]
   Aeron["Aeron IPC / UDP Streams"]
-  Services["C++ / Python Services During Migration"]
+  Services["C++ Native Services"]
   Gateway["Terminal Gateway"]
   UI["React + Zustand View Cache"]
 
@@ -120,16 +120,16 @@ The desktop shell should not:
 
 ## Migration Order
 
-1. Keep the current Python gateway operational.
+1. Keep the current UI operational while native services become the authoritative backend.
 2. Add C++ Databento feed handler under `native/price-feed-cpp`.
 3. Add C++ Databento historical backfill under `native/price-feed-cpp`.
 4. Publish normalized quote/trade/definition/OHLCV events in a test harness.
-5. Build parity tests against the current Python price adapter.
+5. Build parity tests against known-good market data, chart, and algo outputs.
 6. Add Aeron publisher/subscriber adapters.
-7. Introduce a Python bridge subscriber so the existing gateway can consume native events.
-8. Move sim exchange to C++.
-9. Move order service to C++.
-10. Move studies service to C++ only after chart/algo parity is locked.
+7. Add the native bridge/read model so the terminal consumes native events without owning trading state.
+8. Bring Simulex online as the local simulation exchange.
+9. Bring the native order service online.
+10. Bring the native studies service online only after chart/algo parity is locked.
 11. Add Tauri desktop shell.
 
 ## Toolchain Requirements

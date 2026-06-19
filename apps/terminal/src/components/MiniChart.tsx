@@ -42,7 +42,7 @@ function calcKC(bars: Bar[], period = 20, mult = 2.5) {
 }
 
 // Aggregate 1m bars into a higher interval client-side (fallback for assets
-// without Coinbase native multi-interval data, e.g. HYPE, BNB).
+// without native multi-interval data, e.g. HYPE, BNB).
 function aggregateToInterval(bars1m: Bar[], targetMin: number): Bar[] {
   const bucketMs = targetMin * 60_000
   const map = new Map<number, Bar>()
@@ -164,7 +164,7 @@ export function MiniChart({ asset, interval, label, staticBars, fallbackBars }: 
           barsRef.current = bars
           applyBars(bars)
         } else if (fallbackBars?.length) {
-          // Asset has no native Coinbase data at this interval — aggregate from 1m
+          // Asset has no native data at this interval; aggregate from 1m.
           const agg = aggregateToInterval(fallbackBars, interval).slice(-120)
           barsRef.current = agg
           applyBars(agg)

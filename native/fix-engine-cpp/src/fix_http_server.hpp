@@ -2,8 +2,7 @@
 /// Cerious FIX Engine — Embedded REST API Server.
 ///
 /// The FIX engine runs as a standalone daemon and exposes its own local
-/// HTTP API on a configurable port (default 8010). The Python gateway
-/// only proxies UI traffic here — Python never touches FIX messages.
+/// HTTP API on a configurable port (default 8010). The native gateway can proxy UI command/status traffic here while FIX messages remain owned by this process.
 ///
 /// Endpoints:
 ///   GET  /status           → session state, seq nums, uptime

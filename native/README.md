@@ -1,13 +1,15 @@
 # Cerious Native Services
 
-This folder is the migration lane for native service code.
+This folder is the native backend lane for Cerious service code.
 
-The current production-safe rule is simple: native services may be added beside the Python services, but they do not replace Python services until contract parity tests pass.
+The current production-safe rule is simple: native services must pass contract parity tests before they become active execution paths.
 
 ## Folders
 
 - `price-feed-cpp`: Databento C++ feed handler — live CME MBP-1 and historical OHLCV.
 - `fix-engine-cpp`: FIX 4.4 order sending daemon — standalone C++ service with embedded REST API, Aeron IPC, and sim/loopback mode.
+
+- `simulex-cpp`: clean native local simulation exchange destination - deterministic FIFO matching, latency/slippage accounting, and synthetic leg-fill reporting.
 
 ## Contract Rule
 

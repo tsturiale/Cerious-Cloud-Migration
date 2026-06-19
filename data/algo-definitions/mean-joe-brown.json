@@ -125,5 +125,7 @@
       "tickValueFormula": "1 * (3 * YM multiplier 5)",
       "ratio": "3 YM / -2 ES"
     }
-  ]
+  ],
+  "symbol": "YM_ES",
+  "marketKey": "YM_ES"
 }

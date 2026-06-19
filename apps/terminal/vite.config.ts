@@ -12,6 +12,7 @@ const gatewayHttp = process.env.CERIOUS_GATEWAY_HTTP || 'http://127.0.0.1:8000'
 const gatewayWs = process.env.CERIOUS_GATEWAY_WS || gatewayHttp.replace(/^http/, 'ws')
 
 export default defineConfig({
+  base: './',
   plugins: [react()],
   css: {
     postcss: {

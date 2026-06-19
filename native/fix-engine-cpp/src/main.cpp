@@ -1,16 +1,16 @@
 /// Cerious FIX 4.4 Engine — standalone C++ daemon.
 ///
-/// This is NOT a subprocess of Python. It runs independently and exposes
-/// its own REST API on localhost:8010 (configurable). The Python gateway
-/// is UI-only — it proxies browser traffic to this daemon's API.
+/// This daemon runs independently and exposes its own REST API on
+/// localhost:8010 (configurable). UI adapters may proxy browser traffic to
+/// this daemon's API, but they do not own order state or routing.
 ///
-/// Critical paths (all C++, no Python):
+/// Critical paths (all C++):
 ///   Order flow:    C++ FIX engine → TCP FIX wire → TT gateway
 ///   Market data:   C++ price feed → Aeron IPC → C++ FIX engine
 ///   Service comms: Aeron IPC (sub-microsecond shared memory)
 ///
-/// Non-critical UI path (Python permitted):
-///   Browser → Python gateway REST → C++ FIX engine HTTP → response
+/// Non-critical UI path:
+///   Browser/client adapter → C++ FIX engine HTTP → response
 
 #include "fix_message.hpp"
 #include "fix_journal.hpp"
@@ -157,8 +157,7 @@ int main(int argc, char** argv) {
   }
 
   // ── Start embedded HTTP API ─────────────────────────────────────
-  // This is the ONLY way the Python gateway talks to us.
-  // Python is UI-only — it proxies /api/fix/* to this server.
+  // Control/read API for non-critical UI adapters.
   cerious::fix::FixHttpServer http_server(session, journal, sim, g_running);
   http_server.start(http_host, http_port);
 

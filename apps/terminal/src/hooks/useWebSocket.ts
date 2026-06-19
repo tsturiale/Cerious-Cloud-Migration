@@ -1,10 +1,11 @@
 import { useEffect, useRef } from 'react'
 import { useStore } from '../store'
+import { ceriousWsBase } from '../platform/transport'
 import type { Asset, ExecutionPosition, ExecutionRisk, WsMsg } from '../types'
 
-const DEFAULT_WS_BASE = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`
 const CONFIGURED_WS_BASE = (import.meta.env.VITE_CERIOUS_WS_BASE as string | undefined)?.trim()
-const WS_BASE = CONFIGURED_WS_BASE || DEFAULT_WS_BASE
+const WS_BASE = CONFIGURED_WS_BASE || ceriousWsBase()
+const WORKSPACE_SESSION_TOKEN_KEY = 'cerious.workspace.sessionToken.v1'
 
 export function useWebSocket(asset: Asset) {
   const wsRef = useRef<WebSocket | null>(null)
@@ -12,7 +13,7 @@ export function useWebSocket(asset: Asset) {
   const marketProvider = useStore(s => s.marketProvider)
   const { pushBar, setBands, setBook, pushTick, setZscore,
           pushSignal, setPositions, setMetrics, setCopyStatus,
-          setMarkets, loadSnapshot, setConnected, setSettlements,
+          setMarkets, loadSnapshot, setSettlements,
           setPolyBook, pushPolyTick, pushPolyFill,
           setExecutionPositions, setExecutionRisk, setSimTradingState } = useStore.getState()
 
@@ -24,11 +25,13 @@ export function useWebSocket(asset: Asset) {
     function connect() {
       if (!alive) return
       const base = endpoints[endpointIndex] ?? WS_BASE
-      const ws = new WebSocket(`${base}/${asset}?provider=${marketProvider}`)
+      const params = new URLSearchParams({ provider: marketProvider })
+      const token = window.localStorage.getItem(WORKSPACE_SESSION_TOKEN_KEY) || ''
+      if (token) params.set('token', token)
+      const ws = new WebSocket(`${base}/${asset}?${params.toString()}`)
       wsRef.current = ws
 
       ws.onopen = () => {
-        setConnected(true)
         endpointIndex = 0
       }
 
@@ -82,7 +85,6 @@ export function useWebSocket(asset: Asset) {
       }
 
       ws.onclose = () => {
-        setConnected(false)
         endpointIndex = (endpointIndex + 1) % endpoints.length
         if (alive) {
           retryRef.current = setTimeout(connect, 2000)

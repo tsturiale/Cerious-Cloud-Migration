@@ -1,0 +1,10 @@
+C:\Users\tstur\Documents\Codex\Cerious Systems\Cerious local\apps\terminal\src-tauri\target\release\deps\cargo_toml-df868088a50a9ece.d: C:\Users\tstur\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\cargo_toml-0.22.3\src\cargo_toml.rs C:\Users\tstur\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\cargo_toml-0.22.3\src\afs.rs C:\Users\tstur\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\cargo_toml-0.22.3\src\error.rs C:\Users\tstur\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\cargo_toml-0.22.3\src\inheritable.rs
+
+C:\Users\tstur\Documents\Codex\Cerious Systems\Cerious local\apps\terminal\src-tauri\target\release\deps\libcargo_toml-df868088a50a9ece.rlib: C:\Users\tstur\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\cargo_toml-0.22.3\src\cargo_toml.rs C:\Users\tstur\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\cargo_toml-0.22.3\src\afs.rs C:\Users\tstur\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\cargo_toml-0.22.3\src\error.rs C:\Users\tstur\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\cargo_toml-0.22.3\src\inheritable.rs
+
+C:\Users\tstur\Documents\Codex\Cerious Systems\Cerious local\apps\terminal\src-tauri\target\release\deps\libcargo_toml-df868088a50a9ece.rmeta: C:\Users\tstur\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\cargo_toml-0.22.3\src\cargo_toml.rs C:\Users\tstur\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\cargo_toml-0.22.3\src\afs.rs C:\Users\tstur\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\cargo_toml-0.22.3\src\error.rs C:\Users\tstur\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\cargo_toml-0.22.3\src\inheritable.rs
+
+C:\Users\tstur\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\cargo_toml-0.22.3\src\cargo_toml.rs:
+C:\Users\tstur\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\cargo_toml-0.22.3\src\afs.rs:
+C:\Users\tstur\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\cargo_toml-0.22.3\src\error.rs:
+C:\Users\tstur\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\cargo_toml-0.22.3\src\inheritable.rs:

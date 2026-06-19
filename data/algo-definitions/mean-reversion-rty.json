@@ -116,8 +116,8 @@
         7,
         -3
       ],
-      "coef": -0.4265,
-      "formula": "RTY - 0.4265 * ES",
+      "coef": -0.4285714286,
+      "formula": "RTY - 0.4285714 * ES",
       "tickSize": 0.1,
       "sizeIncrement": null,
       "multiplier": 350,
@@ -125,5 +125,7 @@
       "tickValueFormula": "0.1 * (7 * RTY multiplier 50)",
       "ratio": "7 RTY / -3 ES"
     }
-  ]
+  ],
+  "symbol": "RTY_ES",
+  "marketKey": "RTY_ES"
 }
