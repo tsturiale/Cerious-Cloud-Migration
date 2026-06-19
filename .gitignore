@@ -7,6 +7,7 @@ node_modules/
 .tools/
 dist/
 build/
+target/
 *.log
 *.tmp
 .DS_Store
