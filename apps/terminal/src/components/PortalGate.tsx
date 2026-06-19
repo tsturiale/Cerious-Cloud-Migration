@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import ceriousLogo from '../assets/branding/cerious-logo.png'
+import { isCeriousDesktopRuntime } from '../platform/transport'
 
 export type PortalSession = {
   username: string
@@ -36,6 +37,18 @@ function storePortalSession(session: PortalSession | null) {
 function setWorkspaceSessionToken(token: string | null) {
   if (token) window.localStorage.setItem('cerious.workspace.sessionToken.v1', token)
   else window.localStorage.removeItem('cerious.workspace.sessionToken.v1')
+}
+
+async function requestAutoSession(): Promise<PortalSession | null> {
+  const response = await fetch('/api/auth/auto', { method: 'POST', cache: 'no-store' })
+  if (!response.ok) return null
+  const payload = await response.json().catch(() => ({}))
+  if (!payload.sessionToken) return null
+  return {
+    username: String(payload.username || 'local'),
+    sessionToken: String(payload.sessionToken),
+    expiresAt: Number(payload.expiresAt || 0) || undefined,
+  }
 }
 
 type LoginPortalProps = {
@@ -135,15 +148,41 @@ function LoginPortal({ onAuthenticated, initialStatus = '' }: LoginPortalProps) 
 
 export function PortalGate({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<PortalSession | null>(() => getStoredPortalSession())
-  const [checking, setChecking] = useState(() => Boolean(getStoredPortalSession()))
+  const [checking, setChecking] = useState(() => Boolean(getStoredPortalSession()) || isCeriousDesktopRuntime())
   const [portalMessage, setPortalMessage] = useState('')
 
   useEffect(() => {
     const existing = getStoredPortalSession()
     if (!existing) {
-      setChecking(false)
-      return
+      if (!isCeriousDesktopRuntime()) {
+        setChecking(false)
+        return
+      }
+
+      let cancelled = false
+      const autoLogin = async () => {
+        try {
+          const autoSession = await requestAutoSession()
+          if (cancelled) return
+          if (autoSession) {
+            storePortalSession(autoSession)
+            setWorkspaceSessionToken(autoSession.sessionToken)
+            setSession(autoSession)
+          } else {
+            setPortalMessage('Desktop auth is not configured. Log in to continue.')
+          }
+        } catch {
+          if (!cancelled) setPortalMessage('Desktop auth is not reachable. Log in to continue.')
+        } finally {
+          if (!cancelled) setChecking(false)
+        }
+      }
+      autoLogin()
+      return () => {
+        cancelled = true
+      }
     }
+
     let cancelled = false
     const validate = async () => {
       try {
@@ -178,21 +217,13 @@ export function PortalGate({ children }: { children: ReactNode }) {
         // (uses portal credentials from .env so you never get locked out locally)
         if (cancelled) return
         try {
-          const autoResp = await fetch('/api/auth/auto', { method: 'POST', cache: 'no-store' })
-          if (autoResp.ok) {
-            const payload = await autoResp.json()
-            if (payload.sessionToken) {
-              const autoSession: PortalSession = {
-                username: String(payload.username || 'local'),
-                sessionToken: String(payload.sessionToken),
-                expiresAt: Number(payload.expiresAt || 0) || undefined,
-              }
-              if (cancelled) return
-              storePortalSession(autoSession)
-              setWorkspaceSessionToken(autoSession.sessionToken)
-              setSession(autoSession)
-              return
-            }
+          const autoSession = await requestAutoSession()
+          if (autoSession) {
+            if (cancelled) return
+            storePortalSession(autoSession)
+            setWorkspaceSessionToken(autoSession.sessionToken)
+            setSession(autoSession)
+            return
           }
         } catch { /* auto-login not available */ }
 

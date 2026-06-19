@@ -1,12 +1,18 @@
 const DEFAULT_DESKTOP_HTTP_BASE = 'http://127.0.0.1:8000'
 const DESKTOP_PROTOCOLS = new Set(['tauri:', 'file:', 'asset:'])
+const DESKTOP_HOSTS = new Set(['tauri.localhost'])
 
 function trimTrailingSlash(value: string): string {
   return value.replace(/\/+$/, '')
 }
 
 export function isCeriousDesktopRuntime(): boolean {
-  return DESKTOP_PROTOCOLS.has(window.location.protocol) || window.location.host.length === 0
+  return (
+    DESKTOP_PROTOCOLS.has(window.location.protocol)
+    || DESKTOP_HOSTS.has(window.location.hostname)
+    || window.location.host.length === 0
+    || window.location.search.includes('cerious_app=desktop')
+  )
 }
 
 export function ceriousHttpBase(): string {
