@@ -51,6 +51,15 @@ async function requestAutoSession(): Promise<PortalSession | null> {
   }
 }
 
+function sleep(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+function loginErrorMessage(error: unknown): string {
+  if (error instanceof TypeError) return 'Cerious gateway is starting. Retry in a moment.'
+  return error instanceof Error ? error.message : 'Login failed'
+}
+
 type LoginPortalProps = {
   onAuthenticated: (session: PortalSession) => void
   initialStatus?: string
@@ -86,7 +95,7 @@ function LoginPortal({ onAuthenticated, initialStatus = '' }: LoginPortalProps) 
       setWorkspaceSessionToken(session.sessionToken)
       onAuthenticated(session)
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Login failed')
+      setStatus(loginErrorMessage(error))
     } finally {
       setSubmitting(false)
     }
@@ -150,6 +159,7 @@ export function PortalGate({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<PortalSession | null>(() => getStoredPortalSession())
   const [checking, setChecking] = useState(() => Boolean(getStoredPortalSession()) || isCeriousDesktopRuntime())
   const [portalMessage, setPortalMessage] = useState('')
+  const [checkingMessage, setCheckingMessage] = useState('Preparing Cerious Terminal')
 
   useEffect(() => {
     const existing = getStoredPortalSession()
@@ -161,21 +171,29 @@ export function PortalGate({ children }: { children: ReactNode }) {
 
       let cancelled = false
       const autoLogin = async () => {
-        try {
-          const autoSession = await requestAutoSession()
-          if (cancelled) return
-          if (autoSession) {
-            storePortalSession(autoSession)
-            setWorkspaceSessionToken(autoSession.sessionToken)
-            setSession(autoSession)
-          } else {
-            setPortalMessage('Desktop auth is not configured. Log in to continue.')
+        const deadline = Date.now() + 90000
+        let attempt = 0
+        while (!cancelled && Date.now() < deadline) {
+          attempt += 1
+          try {
+            setCheckingMessage(attempt < 3 ? 'Starting Cerious services' : 'Waiting for Cerious gateway')
+            const autoSession = await requestAutoSession()
+            if (cancelled) return
+            if (autoSession) {
+              storePortalSession(autoSession)
+              setWorkspaceSessionToken(autoSession.sessionToken)
+              setSession(autoSession)
+              setChecking(false)
+              return
+            }
+          } catch {
+            if (cancelled) return
           }
-        } catch {
-          if (!cancelled) setPortalMessage('Desktop auth is not reachable. Log in to continue.')
-        } finally {
-          if (!cancelled) setChecking(false)
+          await sleep(1000)
         }
+        if (cancelled) return
+        setPortalMessage('Cerious gateway is still starting. Retry when the tray shows ready.')
+        setChecking(false)
       }
       autoLogin()
       return () => {
@@ -187,8 +205,12 @@ export function PortalGate({ children }: { children: ReactNode }) {
     const validate = async () => {
       try {
         // Try validating stored session, with retry on network errors
-        for (let attempt = 0; attempt < 3; attempt++) {
+        const maxAttempts = isCeriousDesktopRuntime() ? 90 : 3
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
           try {
+            if (isCeriousDesktopRuntime()) {
+              setCheckingMessage(attempt < 3 ? 'Starting Cerious services' : 'Waiting for Cerious gateway')
+            }
             const response = await fetch(`/api/auth/session?token=${encodeURIComponent(existing.sessionToken)}`, { cache: 'no-store' })
             if (response.ok) {
               if (cancelled) return
@@ -201,12 +223,12 @@ export function PortalGate({ children }: { children: ReactNode }) {
               break
             }
             // Other error (503, etc) — backend might be starting, retry
-            await new Promise(r => setTimeout(r, 2000))
+            await sleep(isCeriousDesktopRuntime() ? 1000 : 2000)
             continue
           } catch {
             // Network error — backend is probably restarting, retry
-            if (attempt < 2) {
-              await new Promise(r => setTimeout(r, 2000))
+            if (attempt < maxAttempts - 1) {
+              await sleep(isCeriousDesktopRuntime() ? 1000 : 2000)
               continue
             }
             break
@@ -259,7 +281,7 @@ export function PortalGate({ children }: { children: ReactNode }) {
       <main className="flex min-h-screen items-center justify-center bg-[#050911] text-slate-100">
         <div className="flex items-center gap-4 font-mono text-sm text-blue-100">
           <img src={ceriousLogo} alt="Cerious Systems" className="h-14 w-14 rounded border border-blue-400/30 object-cover" />
-          Preparing Cerious Terminal
+          {checkingMessage}
         </div>
       </main>
     )
