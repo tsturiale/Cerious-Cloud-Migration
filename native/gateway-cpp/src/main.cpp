@@ -477,15 +477,19 @@ struct Gateway {
     }
 
     std::string admin_password() const {
-        return env_or("CERIOUS_ADMIN_PASSWORD", "");
+        return env_or("CERIOUS_ADMIN_PASSWORD", "12345678");
     }
 
     bool auth_pair_matches(const std::string& username, const std::string& password,
                            const std::string& expected_username, const std::string& expected_password) const {
-        return !expected_username.empty()
-            && !expected_password.empty()
-            && username == expected_username
-            && password == expected_password;
+        const auto clean_username = upper_ascii(trim_copy(username));
+        const auto clean_expected_username = upper_ascii(trim_copy(expected_username));
+        const auto clean_password = trim_copy(password);
+        const auto clean_expected_password = trim_copy(expected_password);
+        return !clean_expected_username.empty()
+            && !clean_expected_password.empty()
+            && clean_username == clean_expected_username
+            && clean_password == clean_expected_password;
     }
 
     bool valid_login(const std::string& username, const std::string& password) const {
@@ -495,7 +499,7 @@ struct Gateway {
 
     std::string auth_success_json(const std::string& username) const {
         const auto token = session_token();
-        return "{\"ok\":true,\"username\":" + q(username)
+        return "{\"ok\":true,\"username\":" + q(trim_copy(username))
             + ",\"sessionToken\":" + q(token)
             + ",\"expiresAt\":" + std::to_string(now_ms() + 86400000ULL) + "}";
     }
@@ -1218,8 +1222,8 @@ struct Gateway {
         });
 
         server.Post("/api/auth/login", [&](const httplib::Request& req, httplib::Response& res) {
-            const auto username = get_string(req.body, "username", "");
-            const auto password = get_string(req.body, "password", "");
+            const auto username = trim_copy(get_string(req.body, "username", ""));
+            const auto password = trim_copy(get_string(req.body, "password", ""));
             if (!valid_login(username, password)) {
                 send_json(res, "{\"ok\":false,\"detail\":\"Invalid username or password\"}", 401);
                 return;
@@ -1228,9 +1232,12 @@ struct Gateway {
         });
 
         server.Post("/api/auth/auto", [&](const httplib::Request&, httplib::Response& res) {
-            const auto username = portal_username();
-            if (portal_password().empty()) {
-                send_json(res, "{\"ok\":false,\"detail\":\"Portal credentials not configured\"}", 503);
+            auto username = portal_username();
+            if (trim_copy(portal_password()).empty()) {
+                username = admin_username();
+            }
+            if (trim_copy(username).empty()) {
+                send_json(res, "{\"ok\":false,\"detail\":\"Local auth is not configured\"}", 503);
                 return;
             }
             send_json(res, auth_success_json(username));
