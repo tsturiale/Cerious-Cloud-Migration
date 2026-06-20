@@ -1205,7 +1205,40 @@ struct Gateway {
         res.set_content(body, "application/json");
     }
 
+    bool is_allowed_cors_origin(const std::string& origin) const {
+        if (origin.empty()) return false;
+        return origin == "http://127.0.0.1:8000"
+            || origin == "http://localhost:8000"
+            || origin == "http://127.0.0.1:5173"
+            || origin == "http://localhost:5173"
+            || origin == "http://tauri.localhost"
+            || origin == "https://tauri.localhost"
+            || origin == "tauri://localhost"
+            || origin == "asset://localhost";
+    }
+
+    void apply_cors(const httplib::Request& req, httplib::Response& res) const {
+        const auto origin_it = req.headers.find("Origin");
+        const auto origin = origin_it == req.headers.end() ? std::string{} : origin_it->second;
+        if (is_allowed_cors_origin(origin)) {
+            res.set_header("Access-Control-Allow-Origin", origin);
+            res.set_header("Vary", "Origin");
+        }
+        res.set_header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+        res.set_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Cerious-Session");
+        res.set_header("Access-Control-Max-Age", "600");
+    }
+
     void register_routes(httplib::Server& server) {
+        server.set_pre_routing_handler([&](const httplib::Request& req, httplib::Response& res) {
+            apply_cors(req, res);
+            if (req.method == "OPTIONS") {
+                res.status = 204;
+                return httplib::Server::HandlerResponse::Handled;
+            }
+            return httplib::Server::HandlerResponse::Unhandled;
+        });
+
         server.Get("/api/health", [&](const httplib::Request&, httplib::Response& res) {
             const auto sim = sim_get("/health");
             const bool sim_ok = sim && sim->status >= 200 && sim->status < 300;
