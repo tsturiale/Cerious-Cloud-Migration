@@ -6,6 +6,8 @@ const MAX_ZOOM = 2
 const ZOOM_STEP = 0.1
 
 let currentZoom = 1
+let nativeWebviewPromise: Promise<{ setZoom: (scaleFactor: number) => Promise<void> } | null> | null = null
+let zoomSequence = 0
 
 function clampZoom(value: number): number {
   if (!Number.isFinite(value)) return 1
@@ -17,13 +19,48 @@ function storedZoom(): number {
   return clampZoom(raw ? Number(raw) : 1)
 }
 
-function applyZoom(value: number) {
-  currentZoom = clampZoom(value)
-  window.localStorage.setItem(DESKTOP_ZOOM_KEY, String(currentZoom))
-  document.documentElement.style.setProperty('zoom', String(currentZoom))
-  document.documentElement.dataset.ceriousDesktopZoom = String(currentZoom)
+function cssFallbackZoom(value: number) {
+  document.documentElement.style.setProperty('zoom', String(value))
+}
+
+async function currentNativeWebview() {
+  if (!nativeWebviewPromise) {
+    nativeWebviewPromise = import('@tauri-apps/api/webview')
+      .then(module => module.getCurrentWebview())
+      .catch(() => null)
+  }
+  return nativeWebviewPromise
+}
+
+function broadcastZoomChanged() {
+  window.dispatchEvent(new CustomEvent('cerious-desktop-zoom', { detail: { zoom: currentZoom } }))
   window.dispatchEvent(new Event('resize'))
   window.setTimeout(() => window.dispatchEvent(new Event('resize')), 80)
+  window.setTimeout(() => window.dispatchEvent(new Event('resize')), 220)
+}
+
+function applyZoom(value: number) {
+  currentZoom = clampZoom(value)
+  const sequence = ++zoomSequence
+  window.localStorage.setItem(DESKTOP_ZOOM_KEY, String(currentZoom))
+  document.documentElement.dataset.ceriousDesktopZoom = String(currentZoom)
+  void currentNativeWebview()
+    .then(async webview => {
+      if (sequence !== zoomSequence) return
+      if (!webview) {
+        cssFallbackZoom(currentZoom)
+        broadcastZoomChanged()
+        return
+      }
+      await webview.setZoom(currentZoom)
+      document.documentElement.style.removeProperty('zoom')
+      broadcastZoomChanged()
+    })
+    .catch(() => {
+      if (sequence !== zoomSequence) return
+      cssFallbackZoom(currentZoom)
+      broadcastZoomChanged()
+    })
 }
 
 function changeZoom(direction: number) {
