@@ -1,11 +1,10 @@
-# Cerious Systems Target Product Architecture
+﻿# Cerious Systems Target Product Architecture
 
-Cerious has one product surface with two containers:
+Cerious has one active product surface:
 
-- Cloud / web canvas: the default authenticated terminal that runs in the browser.
-- Desktop client: a later native container that runs the same terminal application with native windowing and local hardware access.
+- Browser terminal: the default authenticated terminal at `http://127.0.0.1:8000/`.
 
-The cloud client and desktop client must share the same backend contracts, session state, market data, order state, risk rules, algo definitions, studies, fills, positions, alerts, and workspace persistence. The UI is not the source of trading truth.
+The browser terminal talks to native C++ services through the gateway. The UI is not the source of trading truth.
 
 ## Non-Negotiable Rules
 
@@ -27,7 +26,7 @@ This is the current supported workflow while the backend remains local:
 3. Terminal loads the saved server workspace, with local cache as a fast fallback.
 4. The web canvas is the primary workspace.
 5. The browser client has full functionality and does not depend on desktop popout behavior.
-6. A Download Desktop Client button is visible but belongs to the future desktop workflow.
+6. Browser install/bookmark behavior is handled by the browser itself, not by an in-app desktop-client package.
 
 ## Service Boundaries
 
@@ -42,7 +41,6 @@ Primary responsibilities:
 - Market-data stream fanout.
 - Order/fill/position state fanout.
 - Study/algo/audit state fanout.
-- Desktop package download.
 
 ### Price Service
 
@@ -63,7 +61,7 @@ The price service publishes normalized books, trades, top of book, last trade, a
 
 Owns technical and relative-value calculations:
 
-- LR27 30-minute regression.
+- user-defined server-side linear regression study.
 - ATR.
 - Volume at price.
 - Relative value visuals.
@@ -134,22 +132,6 @@ The terminal WebSocket should publish these event classes:
 
 On reconnect, the client receives a snapshot first, then live deltas. This is what prevents reloads, missing algo orders, stale PnL, and window-to-window disagreement.
 
-## Desktop Client Direction
-
-The desktop client is not the current Chrome-app-window workflow.
-
-Future desktop behavior:
-
-1. User downloads a signed Win64 installer from the web portal.
-2. Installer creates a branded desktop launcher.
-3. Launcher opens a native desktop container.
-4. The desktop container authenticates and starts or connects to required services.
-5. A native toolbar controls workspace load/save, service status, windows, alerts, and emergency controls.
-6. The desktop app opens all saved desktop windows from the desktop workspace snapshot.
-7. Desktop workspace state is saved both server-side and locally.
-
-The desktop client must use the same backend contracts as the web client.
-
 ## Implementation Phases
 
 1. Stabilize cloud/web workflow as the default product path.
@@ -158,5 +140,4 @@ The desktop client must use the same backend contracts as the web client.
 4. Add order/fill/position snapshots to the gateway stream.
 5. Move manual and algo order placement to service APIs.
 6. Update depth ladder, order book, fills, and positions to render service-published state.
-7. Keep desktop download visible, but do not launch the old Chrome workflow.
-8. Build the native desktop client after the cloud path is deterministic.
+7. Keep browser launch as the only active client path.

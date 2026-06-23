@@ -1,0 +1,12 @@
+{
+  "service": "algo.layering",
+  "fetchedAt": "2026-06-21T14:18:00.000Z",
+  "sections": [],
+  "rows": [
+    ["Passive first clip", "Join or shade the synthetic bid/offer for 40% of planned size at the first qualified band touch.", "Normal liquidity, no urgent catalyst."],
+    ["Extension layer", "Place the second 30% only if the spread extends another 0.35 ATR and the macro read has not deteriorated.", "Mean-reversion setup with controlled volatility."],
+    ["Stabilization layer", "Final 30% enters after the spread stops making new extremes and reclaims a small threshold, such as 0.10-0.20 ATR.", "When timing precision matters more than catching the exact low/high."],
+    ["Scratch layer", "If first clip fills and immediately loses 0.35 ATR without stabilization, scratch instead of adding.", "Fast markets, news shocks, weak confirmation."],
+    ["Mean exit ladder", "Scale out at mean, +0.5 ATR, then trail the remainder.", "Any spread mean-reversion trade."]
+  ]
+}

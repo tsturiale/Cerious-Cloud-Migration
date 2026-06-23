@@ -1,6 +1,7 @@
 #include <atomic>
 #include <algorithm>
 #include <chrono>
+#include <cstdio>
 #include <csignal>
 #include <cstdlib>
 #include <exception>
@@ -89,11 +90,12 @@ int env_int(const char* key, const int fallback) {
   }
 }
 
-double db_price_to_double(const std::int64_t value) {
+void format_db_price_json(char* buffer, const std::size_t size, const std::int64_t value) {
   if (value == db::kUndefPrice) {
-    return 0.0;
+    std::snprintf(buffer, size, "null");
+    return;
   }
-  return static_cast<double>(value) / 1000000000.0;
+  std::snprintf(buffer, size, "%.9f", static_cast<double>(value) / 1000000000.0);
 }
 
 std::string json_escape(const std::string& text) {
@@ -183,33 +185,33 @@ void publish_status_json(const std::string& status,
   std::cout.flush();
 }
 
-std::string action_to_code(const db::Action action) {
+char action_to_code(const db::Action action) {
   switch (action) {
     case db::Action::Trade:
-      return "T";
+      return 'T';
     case db::Action::Add:
-      return "A";
+      return 'A';
     case db::Action::Modify:
-      return "M";
+      return 'M';
     case db::Action::Cancel:
-      return "C";
+      return 'C';
     case db::Action::Clear:
-      return "R";
+      return 'R';
     case db::Action::Fill:
-      return "F";
+      return 'F';
     default:
-      return "N";
+      return 'N';
   }
 }
 
-std::string side_to_code(const db::Side side) {
+char side_to_code(const db::Side side) {
   switch (side) {
     case db::Side::Bid:
-      return "B";
+      return 'B';
     case db::Side::Ask:
-      return "A";
+      return 'A';
     default:
-      return "N";
+      return 'N';
   }
 }
 
@@ -225,30 +227,40 @@ db::SType parse_stype(const std::string& stype) {
 
 void publish_mbp1_json(const std::string& symbol, const db::Mbp1Msg& msg) {
   const auto& level0 = msg.levels[0];
-  std::ostringstream out;
-  out << std::fixed << std::setprecision(9);
-  out << "{"
-      << "\"type\":\"market.mbp1\","
-      << "\"dataset\":\"GLBX.MDP3\","
-      << "\"schema\":\"mbp-1\","
-      << "\"symbol\":\"" << json_escape(symbol) << "\","
-      << "\"instrumentId\":" << msg.hd.instrument_id << ","
-      << "\"tsEventNs\":" << msg.hd.ts_event.time_since_epoch().count() << ","
-      << "\"tsRecvNs\":" << msg.ts_recv.time_since_epoch().count() << ","
-      << "\"sequence\":" << msg.sequence << ","
-      << "\"action\":\"" << action_to_code(msg.action) << "\","
-      << "\"side\":\"" << side_to_code(msg.side) << "\","
-      << "\"price\":" << db_price_to_double(msg.price) << ","
-      << "\"size\":" << msg.size << ","
-      << "\"bid\":" << db_price_to_double(level0.bid_px) << ","
-      << "\"ask\":" << db_price_to_double(level0.ask_px) << ","
-      << "\"bidSize\":" << level0.bid_sz << ","
-      << "\"askSize\":" << level0.ask_sz << ","
-      << "\"bidCount\":" << level0.bid_ct << ","
-      << "\"askCount\":" << level0.ask_ct
-      << "}" << std::endl;
-  std::cout << out.str();
-  std::cout.flush();
+  const auto safe_symbol = json_escape(symbol);
+  char price_json[48];
+  char bid_json[48];
+  char ask_json[48];
+  format_db_price_json(price_json, sizeof(price_json), msg.price);
+  format_db_price_json(bid_json, sizeof(bid_json), level0.bid_px);
+  format_db_price_json(ask_json, sizeof(ask_json), level0.ask_px);
+  char buffer[1536];
+  const auto length = std::snprintf(
+      buffer,
+      sizeof(buffer),
+      "{\"type\":\"market.mbp1\",\"dataset\":\"GLBX.MDP3\",\"schema\":\"mbp-1\","
+      "\"symbol\":\"%s\",\"instrumentId\":%u,\"tsEventNs\":%lld,\"tsRecvNs\":%lld,"
+      "\"sequence\":%u,\"action\":\"%c\",\"side\":\"%c\",\"price\":%s,\"size\":%u,"
+      "\"bid\":%s,\"ask\":%s,\"bidSize\":%u,\"askSize\":%u,\"bidCount\":%u,\"askCount\":%u}\n",
+      safe_symbol.c_str(),
+      msg.hd.instrument_id,
+      static_cast<long long>(msg.hd.ts_event.time_since_epoch().count()),
+      static_cast<long long>(msg.ts_recv.time_since_epoch().count()),
+      msg.sequence,
+      action_to_code(msg.action),
+      side_to_code(msg.side),
+      price_json,
+      msg.size,
+      bid_json,
+      ask_json,
+      level0.bid_sz,
+      level0.ask_sz,
+      level0.bid_ct,
+      level0.ask_ct);
+  if (length > 0) {
+    std::fwrite(buffer, 1, static_cast<std::size_t>(std::min<int>(length, sizeof(buffer) - 1)), stdout);
+    std::fflush(stdout);
+  }
 }
 
 }  // namespace
@@ -257,7 +269,7 @@ int main(int argc, char** argv) {
   std::signal(SIGINT, handle_signal);
   std::signal(SIGTERM, handle_signal);
 
-  const auto symbols_arg = arg_value(argc, argv, "--symbols", "ES.v.0,NQ.v.0,YM.v.0,RTY.v.0,CL.v.0,GC.v.0,ZM.v.0,ZS.v.0");
+  const auto symbols_arg = arg_value(argc, argv, "--symbols", "ES.v.0,MES.v.0,NQ.v.0,MNQ.v.0,YM.v.0,MYM.v.0,RTY.v.0,M2K.v.0,CL.v.0,GC.v.0,ZM.v.0,ZS.v.0");
   const auto symbols = split_symbols(symbols_arg);
   const auto stype_arg = arg_value(argc, argv, "--stype", "continuous");
   const auto stype = parse_stype(stype_arg);

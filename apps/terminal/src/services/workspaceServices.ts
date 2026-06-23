@@ -17,6 +17,7 @@ export type WorkspaceWindowKind =
   | 'depthTraderRtyEs'
   | 'mdTraderEs'
   | 'goose'
+  | 'dailySummary'
   | 'streamingNews'
   | 'liveApiArchitecture'
   | 'tradeAnalytics'

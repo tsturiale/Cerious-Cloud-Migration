@@ -1,0 +1,27 @@
+{
+  "service": "signal.atr-zscore",
+  "fetchedAt": "2026-06-21T14:18:00.000Z",
+  "sections": [
+    {
+      "title": "Spread",
+      "body": "Synthetic spread value is the normalized leg expression used for discretionary interpretation and system studies."
+    },
+    {
+      "title": "Mean",
+      "body": "Longer lookback mean anchors the relative-value read and determines whether current price is statistically stretched."
+    },
+    {
+      "title": "ATR",
+      "body": "Average true range measures realized spread volatility and drives band distance, risk unit sizing, and stress-rule checks."
+    },
+    {
+      "title": "Z-Score",
+      "body": "Z-score is calculated from spread distance to mean divided by ATR, with intraday VWAP pressure used as a secondary session read."
+    }
+  ],
+  "rows": [
+    ["Raw midpoint", "Raw midpoint reference for discretionary interpretation."],
+    ["Z-Score", "(Spread - Mean) / ATR plus an intraday VWAP z-score using ATR/2.", "Cross-spread ranking and intraday trigger pressure."],
+    ["ATR Percentile", "Current ATR versus one-year ATR distribution.", "Size down when volatility is unusually elevated."]
+  ]
+}

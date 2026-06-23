@@ -75,7 +75,7 @@ inline fs::path exe_path() {
 inline bool looks_like_root(const fs::path& candidate) {
     std::error_code ec;
     return fs::exists(candidate / L"native" / L"gateway-cpp", ec)
-        && fs::exists(candidate / L"native" / L"simulex-cpp", ec)
+        && fs::exists(candidate / L"native" / L"cerious-exchange-cpp", ec)
         && fs::exists(candidate / L"apps" / L"terminal", ec);
 }
 

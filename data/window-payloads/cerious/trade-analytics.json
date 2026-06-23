@@ -1,0 +1,36 @@
+{
+  "service": "analytics.trade",
+  "fetchedAt": "2026-06-21T14:18:00.000Z",
+  "status": "Live fill journal ready. Import a CSV to override this view.",
+  "riskLevel": "Waiting",
+  "metrics": {
+    "rows": 0,
+    "accountSize": 100000,
+    "total": 0,
+    "returnPct": 0,
+    "winRate": 0,
+    "sharpe": 0,
+    "sortino": 0,
+    "calmar": 0,
+    "profitFactor": 0,
+    "expectancy": 0,
+    "drawdown": 0,
+    "drawdownPct": 0,
+    "studyCoverage": 0,
+    "largestLossPct": 0,
+    "knownInstrumentRows": 0
+  },
+  "curve": [
+    { "index": 0, "equity": 100000, "pnl": 0, "drawdown": 0, "maxDrawdown": 0 }
+  ],
+  "records": [],
+  "studies": [
+    { "study": "Sharpe", "passed": false, "result": "Waiting", "read": "Import or generate fills to calculate risk-adjusted return." },
+    { "study": "Sortino", "passed": false, "result": "Waiting", "read": "Downside-volatility study will populate from fills." },
+    { "study": "Calmar", "passed": false, "result": "Waiting", "read": "Drawdown-adjusted return will populate from fills." }
+  ],
+  "productTotals": [],
+  "report": [
+    { "label": "Trade Analytics", "value": "Ready", "read": "CSV import and live fill journal paths are wired to this window." }
+  ]
+}

@@ -1,0 +1,96 @@
+﻿{
+    "id":  "algo-1782106194108",
+    "name":  "RTY_ES Mean Reversion WOW",
+    "template":  "mean-reversion-v2",
+    "templateId":  "mean-reversion-v2",
+    "version":  "2.0",
+    "instruments":  [
+                        "RTY_ES"
+                    ],
+    "signalRules":  [
+                        {
+                            "id":  "regression-bands-ready",
+                            "field":  "linearRegressionBands",
+                            "operator":  "=",
+                            "value":  true,
+                            "action":  "pegEntryBands",
+                            "enabled":  true
+                        },
+                        {
+                            "id":  "entry-touch",
+                            "field":  "marketCanTradeTarget",
+                            "operator":  "=",
+                            "value":  true,
+                            "action":  "releaseSniperEntry",
+                            "enabled":  true
+                        },
+                        {
+                            "id":  "oco-cover",
+                            "field":  "entryFilled",
+                            "operator":  "=",
+                            "value":  true,
+                            "action":  "attachOcoCover",
+                            "enabled":  true
+                        }
+                    ],
+    "risk":  {
+                 "maxPosition":  10,
+                 "maxLossAtr":  88,
+                 "clipSchedule":  "layered",
+                 "requireMarketOpen":  true
+             },
+    "midpointPeg":  {
+                        "enabled":  false,
+                        "source":  "30m-vwap",
+                        "label":  "Peg VWAP for midpoint",
+                        "previousClose":  false
+                    },
+    "entryPeg":  {
+                     "source":  "linear-regression",
+                     "standardDeviations":  2,
+                     "lookback":  200
+                 },
+    "layerPlan":  {
+                      "layerCount":  4,
+                      "layerSpacingTicks":  4,
+                      "maxLayers":  5,
+                      "applySymmetrically":  true,
+                      "workBuySide":  true,
+                      "workSellSide":  true
+                  },
+    "syntheticOrderManager":  {
+                                  "enabled":  true,
+                                  "containerizedOrders":  true,
+                                  "entryTechnique":  "sniper-market-if-target-price-achievable",
+                                  "holdUntilTriggered":  true,
+                                  "releaseDestination":  "exchange-gateway"
+                              },
+    "exitPolicy":  {
+                       "attachOnEntryFill":  true,
+                       "oco":  true,
+                       "coverTicksFromFill":  6,
+                       "profitTicksFromEntry":  6,
+                       "stopTicksFromEntry":  88,
+                       "stopType":  "market",
+                       "coverLimitPlacement":  "above-bid-or-below-offer"
+                   },
+    "orderPolicy":  {
+                        "mode":  "synthetic-sniper",
+                        "orderType":  "synthetic-held-market-release",
+                        "priceReference":  "linear-regression-bands",
+                        "doNotCrossInside":  true,
+                        "doNotCrossSelf":  true,
+                        "liveOrderEntryEnabled":  false
+                    },
+    "provider":  "cme",
+    "symbol":  "RTY_ES",
+    "marketKey":  "RTY_ES",
+    "side":  "both",
+    "orderType":  "limit",
+    "clipSize":  1,
+    "maxPosition":  10,
+    "operator":  "Operator 1",
+    "status":  "held",
+    "updatedAt":  1782106234228,
+    "notes":  ""
+}

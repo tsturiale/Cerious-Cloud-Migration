@@ -129,11 +129,17 @@ export function OrderPanel({ asset }: Props) {
     setPlacing(btnKey)
 
     try {
+      const orderId = `manual-${activeKey ?? asset}-${side}-${type}-${outcome}-${Date.now()}`
       const resp = await fetch(`${API}/order`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          orderId,
+          clientOrderId: orderId,
           asset, direction, side,
+          marketKey: activeKey,
+          symbol: activeKey,
+          orderType: type,
           size:         parseFloat(size) || 100,
           price,
           partial_exit: false,
@@ -180,11 +186,17 @@ export function OrderPanel({ asset }: Props) {
     const direction = outcome === 'yes' ? 'UP' : 'DOWN'
     const fillCol   = outcome === 'yes' ? YES_COL : NO_COL
     try {
+      const orderId = `manual-${activeKey ?? asset}-quick-exit-${outcome}-${pct}-${Date.now()}`
       const resp = await fetch(`${API}/order`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          orderId,
+          clientOrderId: orderId,
           asset, direction, side: 'sell',
+          marketKey: activeKey,
+          symbol: activeKey,
+          orderType: 'market',
           size:         exitSize,
           price,
           partial_exit: pct < 100,

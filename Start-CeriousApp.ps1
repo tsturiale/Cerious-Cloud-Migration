@@ -9,14 +9,14 @@ $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $BackendHost = if ($env:CERIOUS_BACKEND_HOST) { $env:CERIOUS_BACKEND_HOST } else { "127.0.0.1" }
 $BackendPort = if ($env:CERIOUS_BACKEND_PORT) { [int]$env:CERIOUS_BACKEND_PORT } else { 8000 }
-$SimulexPort = if ($env:SIMULEX_HTTP_PORT) { [int]$env:SIMULEX_HTTP_PORT } else { 8011 }
+$ExchangePort = if ($env:CERIOUS_EXCHANGE_HTTP_PORT) { [int]$env:CERIOUS_EXCHANGE_HTTP_PORT } else { 8011 }
 $BackendUrl = "http://$($BackendHost):$($BackendPort)"
-$SimulexUrl = "http://127.0.0.1:$($SimulexPort)"
+$ExchangeUrl = "http://127.0.0.1:$($ExchangePort)"
 $LogPath = Join-Path $Root "cerious-app-launcher.log"
 $BackendOut = Join-Path $Root "cerious-backend.out.log"
 $BackendErr = Join-Path $Root "cerious-backend.err.log"
-$SimulexOut = Join-Path $Root "cerious-simulex.out.log"
-$SimulexErr = Join-Path $Root "cerious-simulex.err.log"
+$ExchangeOut = Join-Path $Root "cerious-exchange.out.log"
+$ExchangeErr = Join-Path $Root "cerious-exchange.err.log"
 $ProfileRoot = Join-Path $Root "data\client-profile"
 $ProfileVersion = "cerious-branded-v1"
 $script:BrowserProcessName = "chrome.exe"
@@ -50,14 +50,26 @@ function Get-PortProcess {
   return Get-CimInstance Win32_Process -Filter "ProcessId=$($conn.OwningProcess)" -ErrorAction SilentlyContinue
 }
 
+function Get-PortProcesses {
+  param([int]$Port)
+  $owners = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue |
+    Select-Object -ExpandProperty OwningProcess -Unique
+  foreach ($owner in $owners) {
+    if ($owner) {
+      Get-CimInstance Win32_Process -Filter "ProcessId=$owner" -ErrorAction SilentlyContinue
+    }
+  }
+}
+
 function Stop-RootOwnedPort {
   param([int]$Port)
-  $proc = Get-PortProcess -Port $Port
-  if (!$proc) { return }
-  $cmd = [string]$proc.CommandLine
-  if ($cmd -and $cmd.Contains($Root)) {
-    Write-AppLog "Stopping root-owned listener pid=$($proc.ProcessId) on port $Port"
-    Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
+  $procs = @(Get-PortProcesses -Port $Port)
+  foreach ($proc in $procs) {
+    $cmd = [string]$proc.CommandLine
+    if ($cmd -and $cmd.Contains($Root)) {
+      Write-AppLog "Stopping root-owned listener pid=$($proc.ProcessId) on port $Port"
+      Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
+    }
   }
 }
 
@@ -70,10 +82,10 @@ function Test-BackendHealth {
   }
 }
 
-function Test-SimulexHealth {
+function Test-ExchangeHealth {
   try {
-    $payload = Invoke-RestMethod -Uri "$SimulexUrl/health" -TimeoutSec 3
-    return ($payload -and $payload.ok -eq $true -and $payload.service -eq "simulex.exchange")
+    $payload = Invoke-RestMethod -Uri "$ExchangeUrl/health" -TimeoutSec 3
+    return ($payload -and $payload.ok -eq $true -and $payload.service -eq "cerious.exchange")
   } catch {
     return $false
   }
@@ -89,11 +101,11 @@ function Wait-BackendHealth {
   return $false
 }
 
-function Wait-SimulexHealth {
+function Wait-ExchangeHealth {
   param([int]$Seconds = 20)
   $deadline = (Get-Date).AddSeconds($Seconds)
   while ((Get-Date) -lt $deadline) {
-    if (Test-SimulexHealth) { return $true }
+    if (Test-ExchangeHealth) { return $true }
     Start-Sleep -Milliseconds 300
   }
   return $false
@@ -125,7 +137,7 @@ function Find-AppBrowser {
       return $candidate
     }
   }
-  throw "Chrome was not found. Install Chrome or complete the Tauri desktop client build."
+  throw "Chrome or Edge was not found. Install Chrome or Edge to launch the Cerious web terminal."
 }
 
 function Start-Backend {
@@ -138,11 +150,12 @@ function Start-Backend {
   }
 
   if (Test-BackendHealth) {
-    $proc = Get-PortProcess -Port $BackendPort
-    $cmd = [string]$proc.CommandLine
-    if ($cmd -and $cmd.Contains($Root)) {
+    $rootOwned = @(Get-PortProcesses -Port $BackendPort | Where-Object { ([string]$_.CommandLine).Contains($Root) })
+    if ($rootOwned.Count -eq 1) {
       Write-AppLog "Backend already healthy on $BackendUrl"
       return
+    } elseif ($rootOwned.Count -gt 1) {
+      Write-AppLog "Backend has $($rootOwned.Count) root-owned listeners on $BackendUrl; restarting cleanly"
     }
   }
 
@@ -153,7 +166,7 @@ function Start-Backend {
   $quotedRoot = "`"$Root`""
   Start-Process `
     -FilePath $gateway `
-    -ArgumentList @("--host", $BackendHost, "--port", "$BackendPort", "--sim-host", "127.0.0.1", "--sim-port", "$SimulexPort", "--root", $quotedRoot) `
+    -ArgumentList @("--host", $BackendHost, "--port", "$BackendPort", "--execution-host", "127.0.0.1", "--execution-port", "$ExchangePort", "--root", $quotedRoot) `
     -WorkingDirectory $Root `
     -WindowStyle Hidden `
     -RedirectStandardOutput $BackendOut `
@@ -164,34 +177,42 @@ function Start-Backend {
   }
 }
 
-function Start-Simulex {
-  if ($env:CERIOUS_EXECUTION_DESTINATION -and $env:CERIOUS_EXECUTION_DESTINATION.ToLowerInvariant() -ne "simulex") {
-    Write-AppLog "Simulex not started because CERIOUS_EXECUTION_DESTINATION=$($env:CERIOUS_EXECUTION_DESTINATION)"
+function Start-ExecutionExchange {
+  if ($env:CERIOUS_EXECUTION_DESTINATION -and $env:CERIOUS_EXECUTION_DESTINATION.ToLowerInvariant() -eq "none") {
+    Write-AppLog "Execution exchange not started because CERIOUS_EXECUTION_DESTINATION=none"
     return
   }
 
-  if (Test-SimulexHealth) {
-    Write-AppLog "Simulex already healthy on $SimulexUrl"
-    return
+  if (Test-ExchangeHealth) {
+    $rootOwned = @(Get-PortProcesses -Port $ExchangePort | Where-Object { ([string]$_.CommandLine).Contains($Root) })
+    if ($rootOwned.Count -eq 1) {
+      Write-AppLog "Cerious exchange already healthy on $ExchangeUrl"
+      return
+    } elseif ($rootOwned.Count -gt 1) {
+      Write-AppLog "Cerious exchange has $($rootOwned.Count) root-owned listeners on $ExchangeUrl; restarting cleanly"
+    }
   }
 
-  Stop-RootOwnedPort -Port $SimulexPort
-  $exe = Join-Path $Root "native\simulex-cpp\build\cerious_simulex_server.exe"
+  Stop-RootOwnedPort -Port $ExchangePort
+  $exe = Join-Path $Root "native\cerious-exchange-cpp\build\Release\cerious_exchange_server.exe"
   if (!(Test-Path -LiteralPath $exe)) {
-    throw "Simulex executable not found at $exe. Build native\simulex-cpp first."
+    $exe = Join-Path $Root "native\cerious-exchange-cpp\build\cerious_exchange_server.exe"
+  }
+  if (!(Test-Path -LiteralPath $exe)) {
+    throw "Cerious exchange executable not found. Build native\cerious-exchange-cpp first."
   }
 
-  Write-AppLog "Starting Simulex on $SimulexUrl"
+  Write-AppLog "Starting Cerious exchange on $ExchangeUrl"
   Start-Process `
     -FilePath $exe `
-    -ArgumentList @("--host", "127.0.0.1", "--port", "$SimulexPort") `
+    -ArgumentList @("--port", "$ExchangePort") `
     -WorkingDirectory (Split-Path -Parent $exe) `
     -WindowStyle Hidden `
-    -RedirectStandardOutput $SimulexOut `
-    -RedirectStandardError $SimulexErr
+    -RedirectStandardOutput $ExchangeOut `
+    -RedirectStandardError $ExchangeErr
 
-  if (!(Wait-SimulexHealth -Seconds 25)) {
-    throw "Simulex did not become healthy on $SimulexUrl"
+  if (!(Wait-ExchangeHealth -Seconds 25)) {
+    throw "Cerious exchange did not become healthy on $ExchangeUrl"
   }
 }
 
@@ -308,7 +329,7 @@ function Open-AppWindowAndWait {
 
 function Stop-Services {
   Stop-RootOwnedPort -Port $BackendPort
-  Stop-RootOwnedPort -Port $SimulexPort
+  Stop-RootOwnedPort -Port $ExchangePort
   Stop-RootOwnedPort -Port 5173
 }
 
@@ -322,7 +343,7 @@ try {
     return
   }
   Import-DotEnv -Path (Join-Path $Root ".env")
-  Start-Simulex
+  Start-ExecutionExchange
   Start-Backend
   Start-Warmup -Blocking:$HostOnly
   if ($HostOnly) {

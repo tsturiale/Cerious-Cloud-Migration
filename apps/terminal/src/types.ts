@@ -390,6 +390,8 @@ export interface CmeBook {
   tickSize?: number
   tickValue?: number
   multiplier?: number
+  synthetic?: boolean
+  ltpSource?: string
 }
 
 export interface CmeTradeTick {

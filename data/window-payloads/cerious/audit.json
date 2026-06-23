@@ -1,0 +1,26 @@
+{
+  "service": "audit.journal",
+  "fetchedAt": "2026-06-21T14:18:00.000Z",
+  "entries": [
+    {
+      "id": "cerious-import-001",
+      "timestamp": "2026-06-21T14:18:00.000Z",
+      "sequence": 1,
+      "severity": "info",
+      "channel": "content",
+      "type": "import",
+      "source": "data/cerious-imports",
+      "summary": "Cerious intelligence artifacts restored into Cerious local payload files."
+    },
+    {
+      "id": "cerious-import-002",
+      "timestamp": "2026-06-21T14:21:00.000Z",
+      "sequence": 2,
+      "severity": "info",
+      "channel": "daily-summary",
+      "type": "import",
+      "source": "relative-value-spread-dashboard.html",
+      "summary": "Daily Summary created from the original Cerious page summary."
+    }
+  ]
+}

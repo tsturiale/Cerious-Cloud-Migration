@@ -1,0 +1,19 @@
+{
+  "service": "terminal.gateway",
+  "fetchedAt": "2026-06-21T14:18:00.000Z",
+  "sections": [
+    {
+      "title": "Architecture Contract",
+      "body": "The UI renders read models from the gateway. Exchange-specific nuance belongs in provider adapters and service layers, not widget logic."
+    },
+    {
+      "title": "CME Market Data",
+      "body": "CME ingress uses the native Databento C++ feed handler for MBP-1/live top-of-book and the historical executable for REST-style chart backfill."
+    },
+    {
+      "title": "Workspace Payloads",
+      "body": "Native Cerious window payloads now live under data/window-payloads/cerious inside this Cerious project root."
+    }
+  ],
+  "rows": []
+}

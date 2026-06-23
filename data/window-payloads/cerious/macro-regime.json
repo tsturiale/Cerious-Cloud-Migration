@@ -1,0 +1,38 @@
+{
+  "service": "macro.regime",
+  "fetchedAt": "2026-06-21T14:18:00.000Z",
+  "label": "Selective Risk-On",
+  "strength": 57,
+  "algo": "Mean reversion with confirmation",
+  "score": 57,
+  "factors": {
+    "volatility": 0.12,
+    "rates": -0.18,
+    "credit": -0.1,
+    "breadth": 0.21,
+    "smallCapLeadership": 0.08,
+    "news": 0.04
+  },
+  "factorRows": [
+    { "key": "Volatility", "value": 0.12, "weight": 0.2, "contribution": 2.4 },
+    { "key": "Rates", "value": -0.18, "weight": 0.2, "contribution": -3.6 },
+    { "key": "Credit", "value": -0.1, "weight": 0.18, "contribution": -1.8 },
+    { "key": "Breadth", "value": 0.21, "weight": 0.18, "contribution": 3.8 },
+    { "key": "SmallCap Leadership", "value": 0.08, "weight": 0.14, "contribution": 1.1 },
+    { "key": "Headlines", "value": 0.04, "weight": 0.1, "contribution": 0.4 }
+  ],
+  "newsRead": {
+    "bias": "mixed",
+    "score": 52,
+    "urgentCount": 0,
+    "summary": "No urgent headline override in the imported Cerious payload."
+  },
+  "leadership": {
+    "ES": 0.12,
+    "NQ": -0.08,
+    "YM": 0.06,
+    "RTY": 0.03
+  },
+  "rtyVolumeShare": 0.19,
+  "read": "Macro regime is neutral to selective risk-on. Do not force RTY/ES longs if rates, credit, or regional banks deteriorate. Treat GOOSE as the active confirmation layer."
+}

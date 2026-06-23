@@ -39,7 +39,7 @@ public:
         : root_(std::move(root)),
           log_(root_ / L"cerious-host-service.log"),
           backend_port_(dotenv_int(root_, "CERIOUS_BACKEND_PORT", 8000)),
-          sim_port_(dotenv_int(root_, "SIMULEX_HTTP_PORT", 8011)) {}
+          exchange_port_(dotenv_int(root_, "CERIOUS_EXCHANGE_HTTP_PORT", 8011)) {}
 
     void request_stop() {
         stop_.store(true);
@@ -48,20 +48,20 @@ public:
     void run() {
         append_log(log_, "host supervisor starting root=" + root_.string());
         int gateway_failures = 0;
-        int sim_failures = 0;
+        int exchange_failures = 0;
 
         while (!stop_.load()) {
-            const bool sim_ok = simulex_healthy();
+            const bool exchange_ok = exchange_healthy();
             const bool gateway_ok = gateway_healthy();
 
-            if (!sim_ok) {
-                ++sim_failures;
-                if (!process_running(sim_) || sim_failures >= 3) {
-                    restart_simulex();
-                    sim_failures = 0;
+            if (!exchange_ok) {
+                ++exchange_failures;
+                if (!process_running(exchange_) || exchange_failures >= 3) {
+                    restart_exchange();
+                    exchange_failures = 0;
                 }
             } else {
-                sim_failures = 0;
+                exchange_failures = 0;
             }
 
             if (!gateway_ok) {
@@ -86,7 +86,7 @@ public:
 
         append_log(log_, "host supervisor stopping");
         terminate_child(gateway_);
-        terminate_child(sim_);
+        terminate_child(exchange_);
         append_log(log_, "host supervisor stopped");
     }
 
@@ -96,9 +96,9 @@ private:
         return health.ok && health.body.find("\"runtime\":\"cpp\"") != std::string::npos;
     }
 
-    bool simulex_healthy() const {
-        const auto health = http_get(L"127.0.0.1", static_cast<INTERNET_PORT>(sim_port_), L"/health");
-        return health.ok && health.body.find("simulex.exchange") != std::string::npos;
+    bool exchange_healthy() const {
+        const auto health = http_get(L"127.0.0.1", static_cast<INTERNET_PORT>(exchange_port_), L"/health");
+        return health.ok && health.body.find("cerious.exchange") != std::string::npos;
     }
 
     std::optional<fs::path> gateway_exe() const {
@@ -113,10 +113,10 @@ private:
         return std::nullopt;
     }
 
-    std::optional<fs::path> simulex_exe() const {
+    std::optional<fs::path> exchange_exe() const {
         const std::vector<fs::path> candidates{
-            root_ / L"native" / L"simulex-cpp" / L"build" / L"Release" / L"cerious_simulex_server.exe",
-            root_ / L"native" / L"simulex-cpp" / L"build" / L"cerious_simulex_server.exe",
+            root_ / L"native" / L"cerious-exchange-cpp" / L"build" / L"Release" / L"cerious_exchange_server.exe",
+            root_ / L"native" / L"cerious-exchange-cpp" / L"build" / L"cerious_exchange_server.exe",
         };
         for (const auto& candidate : candidates) {
             std::error_code ec;
@@ -133,7 +133,7 @@ private:
             return;
         }
         std::wstring args = L"--host 127.0.0.1 --port " + std::to_wstring(backend_port_)
-            + L" --sim-host 127.0.0.1 --sim-port " + std::to_wstring(sim_port_)
+            + L" --execution-host 127.0.0.1 --execution-port " + std::to_wstring(exchange_port_)
             + L" --root " + quote_arg(root_.wstring());
         auto pi = start_hidden_process(*exe, args, root_);
         if (!pi) {
@@ -144,29 +144,29 @@ private:
         append_log(log_, "started gateway pid=" + std::to_string(gateway_.dwProcessId));
     }
 
-    void restart_simulex() {
-        terminate_child(sim_);
-        const auto exe = simulex_exe();
+    void restart_exchange() {
+        terminate_child(exchange_);
+        const auto exe = exchange_exe();
         if (!exe) {
-            append_log(log_, "simulex executable missing");
+            append_log(log_, "cerious exchange executable missing");
             return;
         }
-        std::wstring args = L"--host 127.0.0.1 --port " + std::to_wstring(sim_port_);
+        std::wstring args = L"--port " + std::to_wstring(exchange_port_);
         auto pi = start_hidden_process(*exe, args, exe->parent_path());
         if (!pi) {
-            append_log(log_, "failed to start simulex");
+            append_log(log_, "failed to start cerious exchange");
             return;
         }
-        sim_ = *pi;
-        append_log(log_, "started simulex pid=" + std::to_string(sim_.dwProcessId));
+        exchange_ = *pi;
+        append_log(log_, "started cerious exchange pid=" + std::to_string(exchange_.dwProcessId));
     }
 
     fs::path root_;
     fs::path log_;
     int backend_port_ = 8000;
-    int sim_port_ = 8011;
+    int exchange_port_ = 8011;
     PROCESS_INFORMATION gateway_{};
-    PROCESS_INFORMATION sim_{};
+    PROCESS_INFORMATION exchange_{};
     std::atomic_bool stop_{false};
     std::string last_market_status_;
 };

@@ -1,0 +1,43 @@
+{
+  "service": "news.stream",
+  "provider": "cerious.local-news-feed",
+  "status": "ok",
+  "fetchedAt": "2026-06-21T14:18:00.000Z",
+  "publicSourcesExpected": 5,
+  "publicSourcesLive": 5,
+  "warnings": [],
+  "items": [
+    {
+      "id": "news-001",
+      "source": "Cerious Macro",
+      "title": "Native Cerious news cockpit restored; use live source adapters for real headlines.",
+      "pubDate": "2026-06-21T14:18:00.000Z",
+      "urgency": "normal",
+      "bias": "mixed"
+    },
+    {
+      "id": "news-002",
+      "source": "Rates / Credit Watch",
+      "title": "Rates and credit remain gating inputs for small-cap relative-value trades.",
+      "pubDate": "2026-06-21T14:17:00.000Z",
+      "urgency": "normal",
+      "bias": "risk-off"
+    },
+    {
+      "id": "news-003",
+      "source": "Breadth Monitor",
+      "title": "Breadth confirmation improves confidence for RTY/ES and YM/ES risk-on expressions.",
+      "pubDate": "2026-06-21T14:16:00.000Z",
+      "urgency": "normal",
+      "bias": "risk-on"
+    },
+    {
+      "id": "news-004",
+      "source": "Volatility Monitor",
+      "title": "Size down when ATR percentile is elevated or the spread keeps worsening through the final layer.",
+      "pubDate": "2026-06-21T14:15:00.000Z",
+      "urgency": "normal",
+      "bias": "mixed"
+    }
+  ]
+}

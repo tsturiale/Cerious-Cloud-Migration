@@ -1,11 +1,16 @@
 ﻿{
-    "version":  "acme.algo-definition-registry.v1",
+    "version":  "cerious.algo-definition-registry.v1",
     "storage":  "data/algo-definitions",
     "archiveDirectory":  "data/algo-definitions/_deleted",
     "activeDefinitionIds":  [
-                                "algo-1781758888908",
+                                "algo-1781756303668",
+                                "algo-1781756364657",
+                                "algo-1781756454736",
+                                "algo-1781757711392",
+                                "algo-1781757730036",
                                 "algo-1781758312346",
                                 "algo-1781758341826",
+                                "algo-1781758888908",
                                 "algo-1781761502337",
                                 "algo-1781761542261",
                                 "algo-1781761573364",
@@ -23,9 +28,30 @@
                                 "algo-1781873021219",
                                 "algo-1781873059409",
                                 "algo-1781873089860",
-                                "algo-1781873191346"
+                                "algo-1781873191346",
+                                "algo-1782101613709",
+                                "algo-1782101649306",
+                                "algo-1782101652290",
+                                "algo-1782101654570",
+                                "algo-1782101663324",
+                                "algo-1782101694240",
+                                "algo-1782102408485",
+                                "algo-1782102444902",
+                                "algo-1782102555093",
+                                "algo-1782102586910",
+                                "algo-1782106194108",
+                                "algo-1782106234229",
+                                "algo-1782106265519",
+                                "mean-joe-brown",
+                                "mean-joe-brown-nq",
+                                "mean-reversion-baseline-ym",
+                                "mean-reversion-rty",
+                                "mean-reversion-sol",
+                                "mean-reversion-ym",
+                                "nightcrawler",
+                                "tight-collar"
                             ],
-    "updatedAt":  "2026-06-19T19:29:29.4674177Z",
+    "updatedAt":  "2026-06-23T15:33:24.5978906Z",
     "definitions":  {
                         "mean-reversion":  {
                                                "id":  "mean-reversion",
@@ -61,7 +87,7 @@
                                              "createdAt":  "2026-06-05T20:02:25.786Z",
                                              "updatedAt":  "2026-06-05T20:04:51.016Z",
                                              "file":  "tight-collar.json",
-                                             "savedAt":  "2026-06-10T15:18:18.554Z",
+                                             "savedAt":  "2026-06-23T15:30:19.0677666Z",
                                              "deleted":  false
                                          },
                         "mean-reversion-test":  {
@@ -111,7 +137,7 @@
                                                    "createdAt":  "2026-06-05T09:04:09.894Z",
                                                    "updatedAt":  "2026-06-07T22:53:30.000Z",
                                                    "file":  "mean-reversion-rty.json",
-                                                   "savedAt":  "2026-06-10T15:18:18.554Z",
+                                                   "savedAt":  "2026-06-23T15:30:18.9947107Z",
                                                    "deleted":  false
                                                },
                         "mean-reversion-ym":  {
@@ -122,7 +148,7 @@
                                                   "createdAt":  "2026-06-05T08:58:28.473Z",
                                                   "updatedAt":  "2026-06-05T09:02:59.320Z",
                                                   "file":  "mean-reversion-ym.json",
-                                                  "savedAt":  "2026-06-10T15:18:18.554Z",
+                                                  "savedAt":  "2026-06-23T15:30:19.0097121Z",
                                                   "deleted":  false
                                               },
                         "mean-reversion-baseline-nqes":  {
@@ -159,7 +185,7 @@
                                                            "createdAt":  "2026-06-05T08:41:33.088Z",
                                                            "updatedAt":  "2026-06-05T08:41:33.088Z",
                                                            "file":  "mean-reversion-baseline-ym.json",
-                                                           "savedAt":  "2026-06-10T15:18:18.554Z",
+                                                           "savedAt":  "2026-06-23T15:30:18.9847089Z",
                                                            "deleted":  false
                                                        },
                         "mean-reversion-draft":  {
@@ -183,7 +209,7 @@
                                                "createdAt":  "2026-06-04T02:51:28.629Z",
                                                "updatedAt":  "2026-06-07T22:56:29.763Z",
                                                "file":  "mean-joe-brown.json",
-                                               "savedAt":  "2026-06-10T15:18:18.554Z",
+                                               "savedAt":  "2026-06-23T15:30:18.9767126Z",
                                                "deleted":  false
                                            },
                         "nightcrawler":  {
@@ -194,7 +220,7 @@
                                              "createdAt":  "2026-06-04T04:58:44.555Z",
                                              "updatedAt":  "2026-06-07T22:55:48.601Z",
                                              "file":  "nightcrawler.json",
-                                             "savedAt":  "2026-06-10T15:18:18.554Z",
+                                             "savedAt":  "2026-06-23T15:30:19.0510584Z",
                                              "deleted":  false
                                          },
                         "mean-reverter":  {
@@ -296,7 +322,7 @@
                                                   "createdAt":  "2026-06-07T16:58:28.239Z",
                                                   "updatedAt":  "2026-06-07T22:56:05.624Z",
                                                   "file":  "mean-joe-brown-nq.json",
-                                                  "savedAt":  "2026-06-10T15:18:18.554Z",
+                                                  "savedAt":  "2026-06-23T15:30:18.9687082Z",
                                                   "deleted":  false
                                               },
                         "mean-reversion-sol":  {
@@ -307,7 +333,7 @@
                                                    "createdAt":  "2026-06-07T17:01:07.794Z",
                                                    "updatedAt":  "2026-06-07T23:27:22.955Z",
                                                    "file":  "mean-reversion-sol.json",
-                                                   "savedAt":  "2026-06-10T15:18:18.554Z",
+                                                   "savedAt":  "2026-06-23T15:30:19.0037094Z",
                                                    "deleted":  false
                                                },
                         "algo-1781756303668":  {
@@ -315,10 +341,10 @@
                                                    "name":  "ES_NQ Mean Reversion",
                                                    "templateId":  "mean-reversion-v2",
                                                    "version":  "2.0",
-                                                   "createdAt":  "2026-06-18T04:47:26.116293Z",
+                                                   "createdAt":  null,
                                                    "updatedAt":  "2026-06-18T04:47:26.116293Z",
                                                    "file":  "algo-1781756303668.json",
-                                                   "savedAt":  "2026-06-18T04:47:26.116293Z",
+                                                   "savedAt":  "2026-06-23T15:30:18.6765201Z",
                                                    "deleted":  false
                                                },
                         "algo-1781756454736":  {
@@ -326,10 +352,10 @@
                                                    "name":  "RTY_ES Mean Reversion",
                                                    "templateId":  "mean-reversion-v2",
                                                    "version":  "2.0",
-                                                   "createdAt":  1781756470441,
+                                                   "createdAt":  null,
                                                    "updatedAt":  1781756470441,
                                                    "file":  "algo-1781756454736.json",
-                                                   "savedAt":  "2026-06-18T04:26:04.038905Z",
+                                                   "savedAt":  "2026-06-23T15:30:18.7174978Z",
                                                    "deleted":  false
                                                },
                         "algo-1781756364657":  {
@@ -337,10 +363,10 @@
                                                    "name":  "YM_ES Mean Reversion",
                                                    "templateId":  "mean-reversion-v2",
                                                    "version":  "2.0",
-                                                   "createdAt":  1781756425239,
+                                                   "createdAt":  null,
                                                    "updatedAt":  1781756425239,
                                                    "file":  "algo-1781756364657.json",
-                                                   "savedAt":  "2026-06-18T04:26:04.054157Z",
+                                                   "savedAt":  "2026-06-23T15:30:18.7094985Z",
                                                    "deleted":  false
                                                },
                         "algo-1781757711392":  {
@@ -348,10 +374,10 @@
                                                    "name":  "RTY_ES Mean Reversion",
                                                    "templateId":  "mean-reversion-v2",
                                                    "version":  "2.0",
-                                                   "createdAt":  "2026-06-18T04:47:26.536591Z",
+                                                   "createdAt":  null,
                                                    "updatedAt":  "2026-06-18T04:47:26.536591Z",
                                                    "file":  "algo-1781757711392.json",
-                                                   "savedAt":  "2026-06-18T04:47:26.536591Z",
+                                                   "savedAt":  "2026-06-23T15:30:18.7250387Z",
                                                    "deleted":  false
                                                },
                         "algo-1781757730036":  {
@@ -359,10 +385,10 @@
                                                    "name":  "YM_ES Mean Reversion",
                                                    "templateId":  "mean-reversion-v2",
                                                    "version":  "2.0",
-                                                   "createdAt":  "2026-06-18T04:47:26.910628Z",
+                                                   "createdAt":  null,
                                                    "updatedAt":  "2026-06-18T04:47:26.910628Z",
                                                    "file":  "algo-1781757730036.json",
-                                                   "savedAt":  "2026-06-18T04:47:26.910628Z",
+                                                   "savedAt":  "2026-06-23T15:30:18.7330156Z",
                                                    "deleted":  false
                                                },
                         "algo-1781758312346":  {
@@ -370,10 +396,10 @@
                                                    "name":  "RTY_ES Mean Reversion",
                                                    "templateId":  "mean-reversion-v2",
                                                    "version":  "2.0",
-                                                   "createdAt":  "2026-06-19T15:27:33.582284Z",
+                                                   "createdAt":  null,
                                                    "updatedAt":  "2026-06-19T15:27:33.582284Z",
                                                    "file":  "algo-1781758312346.json",
-                                                   "savedAt":  "2026-06-19T15:27:33.582284Z",
+                                                   "savedAt":  "2026-06-23T15:30:18.7400170Z",
                                                    "deleted":  false
                                                },
                         "algo-1781758341826":  {
@@ -381,10 +407,10 @@
                                                    "name":  "YMES Mean Reversion",
                                                    "templateId":  "mean-reversion-v2",
                                                    "version":  "2.0",
-                                                   "createdAt":  "2026-06-19T15:27:33.729918Z",
+                                                   "createdAt":  null,
                                                    "updatedAt":  "2026-06-19T15:27:33.729918Z",
                                                    "file":  "algo-1781758341826.json",
-                                                   "savedAt":  "2026-06-19T15:27:33.729918Z",
+                                                   "savedAt":  "2026-06-23T15:30:18.7480154Z",
                                                    "deleted":  false
                                                },
                         "algo-1781758888908":  {
@@ -392,10 +418,10 @@
                                                    "name":  "ES_NQ Mean Reversion",
                                                    "templateId":  "mean-reversion-v2",
                                                    "version":  "2.0",
-                                                   "createdAt":  "2026-06-19T15:27:29.425158Z",
+                                                   "createdAt":  null,
                                                    "updatedAt":  "2026-06-19T15:27:29.425158Z",
                                                    "file":  "algo-1781758888908.json",
-                                                   "savedAt":  "2026-06-19T15:27:29.425158Z",
+                                                   "savedAt":  "2026-06-23T15:30:18.7541527Z",
                                                    "deleted":  false
                                                },
                         "algo-1781761502337":  {
@@ -403,10 +429,10 @@
                                                    "name":  "ES_NQ Mean Reversion",
                                                    "templateId":  "mean-reversion-v2",
                                                    "version":  "2.0",
-                                                   "createdAt":  "2026-06-19T15:27:29.832879Z",
+                                                   "createdAt":  null,
                                                    "updatedAt":  "2026-06-19T15:27:29.832879Z",
                                                    "file":  "algo-1781761502337.json",
-                                                   "savedAt":  "2026-06-19T15:27:29.832879Z",
+                                                   "savedAt":  "2026-06-23T15:30:18.7611400Z",
                                                    "deleted":  false
                                                },
                         "algo-1781761542261":  {
@@ -414,10 +440,10 @@
                                                    "name":  "YM_ES Mean Reversion",
                                                    "templateId":  "mean-reversion-v2",
                                                    "version":  "2.0",
-                                                   "createdAt":  "2026-06-19T15:27:33.678456Z",
+                                                   "createdAt":  null,
                                                    "updatedAt":  "2026-06-19T15:27:33.678456Z",
                                                    "file":  "algo-1781761542261.json",
-                                                   "savedAt":  "2026-06-19T15:27:33.678456Z",
+                                                   "savedAt":  "2026-06-23T15:30:18.7671377Z",
                                                    "deleted":  false
                                                },
                         "algo-1781761573364":  {
@@ -425,10 +451,10 @@
                                                    "name":  "RTY_ES Mean Reversion",
                                                    "templateId":  "mean-reversion-v2",
                                                    "version":  "2.0",
-                                                   "createdAt":  "2026-06-19T15:27:33.625606Z",
+                                                   "createdAt":  null,
                                                    "updatedAt":  "2026-06-19T15:27:33.625606Z",
                                                    "file":  "algo-1781761573364.json",
-                                                   "savedAt":  "2026-06-19T15:27:33.625606Z",
+                                                   "savedAt":  "2026-06-23T15:30:18.7741371Z",
                                                    "deleted":  false
                                                },
                         "algo-1781761626775":  {
@@ -436,10 +462,10 @@
                                                    "name":  "YM_ES Mean Reversion",
                                                    "templateId":  "mean-reversion-v2",
                                                    "version":  "2.0",
-                                                   "createdAt":  "2026-06-19T15:27:33.690887Z",
+                                                   "createdAt":  null,
                                                    "updatedAt":  "2026-06-19T15:27:33.690887Z",
                                                    "file":  "algo-1781761626775.json",
-                                                   "savedAt":  "2026-06-19T15:27:33.690887Z",
+                                                   "savedAt":  "2026-06-23T15:30:18.7791359Z",
                                                    "deleted":  false
                                                },
                         "algo-1781761752035":  {
@@ -447,10 +473,10 @@
                                                    "name":  "YM_ES Mean Reversion",
                                                    "templateId":  "mean-reversion-v2",
                                                    "version":  "2.0",
-                                                   "createdAt":  "2026-06-19T15:27:33.700707Z",
+                                                   "createdAt":  null,
                                                    "updatedAt":  "2026-06-19T15:27:33.700707Z",
                                                    "file":  "algo-1781761752035.json",
-                                                   "savedAt":  "2026-06-19T15:27:33.700707Z",
+                                                   "savedAt":  "2026-06-23T15:30:18.7851390Z",
                                                    "deleted":  false
                                                },
                         "algo-1781761786045":  {
@@ -458,10 +484,10 @@
                                                    "name":  "RTY_ES Mean Reversion",
                                                    "templateId":  "mean-reversion-v2",
                                                    "version":  "2.0",
-                                                   "createdAt":  "2026-06-19T15:27:33.637995Z",
+                                                   "createdAt":  null,
                                                    "updatedAt":  "2026-06-19T15:27:33.637995Z",
                                                    "file":  "algo-1781761786045.json",
-                                                   "savedAt":  "2026-06-19T15:27:33.637995Z",
+                                                   "savedAt":  "2026-06-23T15:30:18.7931381Z",
                                                    "deleted":  false
                                                },
                         "algo-1781783009611":  {
@@ -469,10 +495,10 @@
                                                    "name":  "ES_NQ BUYSIDE Mean Reversion",
                                                    "templateId":  "mean-reversion-v2",
                                                    "version":  "2.0",
-                                                   "createdAt":  "2026-06-19T15:27:33.272767Z",
+                                                   "createdAt":  null,
                                                    "updatedAt":  "2026-06-19T15:27:33.272767Z",
                                                    "file":  "algo-1781783009611.json",
-                                                   "savedAt":  "2026-06-19T15:27:33.272767Z",
+                                                   "savedAt":  "2026-06-23T15:30:18.8085128Z",
                                                    "deleted":  false
                                                },
                         "algo-1781785483625":  {
@@ -480,10 +506,10 @@
                                                    "name":  "ES_NQ Mean Reversion WIDE",
                                                    "templateId":  "mean-reversion-v2",
                                                    "version":  "2.0",
-                                                   "createdAt":  "2026-06-19T15:27:32.261862Z",
+                                                   "createdAt":  null,
                                                    "updatedAt":  "2026-06-19T15:27:32.261862Z",
                                                    "file":  "algo-1781785483625.json",
-                                                   "savedAt":  "2026-06-19T15:27:32.261862Z",
+                                                   "savedAt":  "2026-06-23T15:30:18.8148991Z",
                                                    "deleted":  false
                                                },
                         "algo-1781785537734":  {
@@ -491,10 +517,10 @@
                                                    "name":  "ES_NQ Mean Reversion",
                                                    "templateId":  "mean-reversion-v2",
                                                    "version":  "2.0",
-                                                   "createdAt":  "2026-06-19T15:27:30.194905Z",
+                                                   "createdAt":  null,
                                                    "updatedAt":  "2026-06-19T15:27:30.194905Z",
                                                    "file":  "algo-1781785537734.json",
-                                                   "savedAt":  "2026-06-19T15:27:30.194905Z",
+                                                   "savedAt":  "2026-06-23T15:30:18.8208998Z",
                                                    "deleted":  false
                                                },
                         "algo-1781785567259":  {
@@ -502,10 +528,10 @@
                                                    "name":  "ES_NQ Mean Reversion WIDE",
                                                    "templateId":  "mean-reversion-v2",
                                                    "version":  "2.0",
-                                                   "createdAt":  "2026-06-19T15:27:32.815248Z",
+                                                   "createdAt":  null,
                                                    "updatedAt":  "2026-06-19T15:27:32.815248Z",
                                                    "file":  "algo-1781785567259.json",
-                                                   "savedAt":  "2026-06-19T15:27:32.815248Z",
+                                                   "savedAt":  "2026-06-23T15:30:18.8274310Z",
                                                    "deleted":  false
                                                },
                         "algo-1781785599400":  {
@@ -513,10 +539,10 @@
                                                    "name":  "ES_NQ Mean Reversion",
                                                    "templateId":  "mean-reversion-v2",
                                                    "version":  "2.0",
-                                                   "createdAt":  "2026-06-19T15:27:30.654434Z",
+                                                   "createdAt":  null,
                                                    "updatedAt":  "2026-06-19T15:27:30.654434Z",
                                                    "file":  "algo-1781785599400.json",
-                                                   "savedAt":  "2026-06-19T15:27:30.654434Z",
+                                                   "savedAt":  "2026-06-23T15:30:18.8336127Z",
                                                    "deleted":  false
                                                },
                         "algo-1781872811359":  {
@@ -524,10 +550,10 @@
                                                    "name":  "YM_ES Mean Reversion",
                                                    "templateId":  "mean-reversion-v2",
                                                    "version":  "2.0",
-                                                   "createdAt":  "2026-06-19T15:27:33.711191Z",
+                                                   "createdAt":  null,
                                                    "updatedAt":  "2026-06-19T15:27:33.711191Z",
                                                    "file":  "algo-1781872811359.json",
-                                                   "savedAt":  "2026-06-19T15:27:33.711191Z",
+                                                   "savedAt":  "2026-06-23T15:30:18.8406123Z",
                                                    "deleted":  false
                                                },
                         "algo-1781872853846":  {
@@ -535,10 +561,10 @@
                                                    "name":  "ES_NQ Mean Reversion",
                                                    "templateId":  "mean-reversion-v2",
                                                    "version":  "2.0",
-                                                   "createdAt":  "2026-06-19T15:27:31.030402Z",
+                                                   "createdAt":  null,
                                                    "updatedAt":  "2026-06-19T15:27:31.030402Z",
                                                    "file":  "algo-1781872853846.json",
-                                                   "savedAt":  "2026-06-19T15:27:31.030402Z",
+                                                   "savedAt":  "2026-06-23T15:30:18.8466196Z",
                                                    "deleted":  false
                                                },
                         "algo-1781872969276":  {
@@ -546,10 +572,10 @@
                                                    "name":  "ES_NQ Mean Reversion 101",
                                                    "templateId":  "mean-reversion-v2",
                                                    "version":  "2.0",
-                                                   "createdAt":  "2026-06-19T15:27:31.405304Z",
+                                                   "createdAt":  null,
                                                    "updatedAt":  "2026-06-19T15:27:31.405304Z",
                                                    "file":  "algo-1781872969276.json",
-                                                   "savedAt":  "2026-06-19T15:27:31.405304Z",
+                                                   "savedAt":  "2026-06-23T15:30:18.8526197Z",
                                                    "deleted":  false
                                                },
                         "algo-1781873021219":  {
@@ -557,10 +583,10 @@
                                                    "name":  "YM_ES Mean Reversion 101",
                                                    "templateId":  "mean-reversion-v2",
                                                    "version":  "2.0",
-                                                   "createdAt":  "2026-06-19T15:27:33.720002Z",
+                                                   "createdAt":  null,
                                                    "updatedAt":  "2026-06-19T15:27:33.720002Z",
                                                    "file":  "algo-1781873021219.json",
-                                                   "savedAt":  "2026-06-19T15:27:33.720002Z",
+                                                   "savedAt":  "2026-06-23T15:30:18.8581326Z",
                                                    "deleted":  false
                                                },
                         "algo-1781873059409":  {
@@ -568,10 +594,10 @@
                                                    "name":  "RTY_ES Mean Reversion",
                                                    "templateId":  "mean-reversion-v2",
                                                    "version":  "2.0",
-                                                   "createdAt":  "2026-06-19T15:27:33.649579Z",
+                                                   "createdAt":  null,
                                                    "updatedAt":  "2026-06-19T15:27:33.649579Z",
                                                    "file":  "algo-1781873059409.json",
-                                                   "savedAt":  "2026-06-19T15:27:33.649579Z",
+                                                   "savedAt":  "2026-06-23T15:30:18.8648017Z",
                                                    "deleted":  false
                                                },
                         "algo-1781873089860":  {
@@ -579,10 +605,10 @@
                                                    "name":  "RTY_ES Mean Reversion 101",
                                                    "templateId":  "mean-reversion-v2",
                                                    "version":  "2.0",
-                                                   "createdAt":  "2026-06-19T15:27:33.661567Z",
+                                                   "createdAt":  null,
                                                    "updatedAt":  "2026-06-19T15:27:33.661567Z",
                                                    "file":  "algo-1781873089860.json",
-                                                   "savedAt":  "2026-06-19T15:27:33.661567Z",
+                                                   "savedAt":  "2026-06-23T15:30:18.8708032Z",
                                                    "deleted":  false
                                                },
                         "algo-1781873191346":  {
@@ -590,10 +616,153 @@
                                                    "name":  "ES_NQ Mean Reversion 101",
                                                    "templateId":  "mean-reversion-v2",
                                                    "version":  "2.0",
-                                                   "createdAt":  "2026-06-19T15:27:31.841864Z",
+                                                   "createdAt":  null,
                                                    "updatedAt":  "2026-06-19T15:27:31.841864Z",
                                                    "file":  "algo-1781873191346.json",
-                                                   "savedAt":  "2026-06-19T15:27:31.841864Z",
+                                                   "savedAt":  "2026-06-23T15:30:18.8768001Z",
+                                                   "deleted":  false
+                                               },
+                        "algo-1782101613709":  {
+                                                   "id":  "algo-1782101613709",
+                                                   "name":  "ES_NQ Mean Reversion",
+                                                   "templateId":  "mean-reversion-v2",
+                                                   "version":  "2.0",
+                                                   "createdAt":  null,
+                                                   "updatedAt":  1782101649304,
+                                                   "file":  "algo-1782101613709.json",
+                                                   "savedAt":  "2026-06-23T15:30:18.8845958Z",
+                                                   "deleted":  false
+                                               },
+                        "algo-1782101663324":  {
+                                                   "id":  "algo-1782101663324",
+                                                   "name":  "YM_ES  Mean Reversion BIG",
+                                                   "templateId":  "mean-reversion-v2",
+                                                   "version":  "2.0",
+                                                   "createdAt":  null,
+                                                   "updatedAt":  1782101694239,
+                                                   "file":  "algo-1782101663324.json",
+                                                   "savedAt":  "2026-06-23T15:30:18.8979420Z",
+                                                   "deleted":  false
+                                               },
+                        "algo-1782101694240":  {
+                                                   "id":  "algo-1782101694240",
+                                                   "name":  "RTY_ES Mean Reversion BIG",
+                                                   "templateId":  "mean-reversion-v2",
+                                                   "version":  "2.0",
+                                                   "createdAt":  null,
+                                                   "updatedAt":  1782101725587,
+                                                   "file":  "algo-1782101694240.json",
+                                                   "savedAt":  "2026-06-23T15:30:18.9049298Z",
+                                                   "deleted":  false
+                                               },
+                        "algo-1782102408485":  {
+                                                   "id":  "algo-1782102408485",
+                                                   "name":  "RTY_ES Mean Reversion 10",
+                                                   "templateId":  "mean-reversion-v2",
+                                                   "version":  "2.0",
+                                                   "createdAt":  null,
+                                                   "updatedAt":  1782102444901,
+                                                   "file":  "algo-1782102408485.json",
+                                                   "savedAt":  "2026-06-23T15:30:18.9119347Z",
+                                                   "deleted":  false
+                                               },
+                        "algo-1782102444902":  {
+                                                   "id":  "algo-1782102444902",
+                                                   "name":  "ES_NQ Mean Reversion BIG",
+                                                   "templateId":  "mean-reversion-v2",
+                                                   "version":  "2.0",
+                                                   "createdAt":  null,
+                                                   "updatedAt":  1782102555092,
+                                                   "file":  "algo-1782102444902.json",
+                                                   "savedAt":  "2026-06-23T15:30:18.9199357Z",
+                                                   "deleted":  false
+                                               },
+                        "algo-1782102555093":  {
+                                                   "id":  "algo-1782102555093",
+                                                   "name":  "YM_ES  Mean Reversion BIG",
+                                                   "templateId":  "mean-reversion-v2",
+                                                   "version":  "2.0",
+                                                   "createdAt":  null,
+                                                   "updatedAt":  1782102586909,
+                                                   "file":  "algo-1782102555093.json",
+                                                   "savedAt":  "2026-06-23T15:30:18.9264490Z",
+                                                   "deleted":  false
+                                               },
+                        "algo-1782102586910":  {
+                                                   "id":  "algo-1782102586910",
+                                                   "name":  "RTY_ES Mean Reversion BIG",
+                                                   "templateId":  "mean-reversion-v2",
+                                                   "version":  "2.0",
+                                                   "createdAt":  null,
+                                                   "updatedAt":  1782102617590,
+                                                   "file":  "algo-1782102586910.json",
+                                                   "savedAt":  "2026-06-23T15:30:18.9334511Z",
+                                                   "deleted":  false
+                                               },
+                        "algo-1782106194108":  {
+                                                   "id":  "algo-1782106194108",
+                                                   "name":  "RTY_ES Mean Reversion WOW",
+                                                   "templateId":  "mean-reversion-v2",
+                                                   "version":  "2.0",
+                                                   "createdAt":  null,
+                                                   "updatedAt":  1782106234228,
+                                                   "file":  "algo-1782106194108.json",
+                                                   "savedAt":  "2026-06-23T15:30:18.9414551Z",
+                                                   "deleted":  false
+                                               },
+                        "algo-1782106234229":  {
+                                                   "id":  "algo-1782106234229",
+                                                   "name":  "ES_NQ Mean Reversion WOW",
+                                                   "templateId":  "mean-reversion-v2",
+                                                   "version":  "2.0",
+                                                   "createdAt":  null,
+                                                   "updatedAt":  1782106265518,
+                                                   "file":  "algo-1782106234229.json",
+                                                   "savedAt":  "2026-06-23T15:30:18.9514560Z",
+                                                   "deleted":  false
+                                               },
+                        "algo-1782106265519":  {
+                                                   "id":  "algo-1782106265519",
+                                                   "name":  "YM_ES Mean Reversion WOW",
+                                                   "templateId":  "mean-reversion-v2",
+                                                   "version":  "2.0",
+                                                   "createdAt":  null,
+                                                   "updatedAt":  1782106294716,
+                                                   "file":  "algo-1782106265519.json",
+                                                   "savedAt":  "2026-06-23T15:30:18.9597082Z",
+                                                   "deleted":  false
+                                               },
+                        "algo-1782101649306":  {
+                                                   "id":  "algo-1782101649306",
+                                                   "name":  "ES_NQ Mean Reversion",
+                                                   "templateId":  "mean-reversion-v2",
+                                                   "version":  "2.0",
+                                                   "createdAt":  null,
+                                                   "updatedAt":  1782101652288,
+                                                   "file":  "algo-1782101649306.json",
+                                                   "savedAt":  "2026-06-23T15:30:18.8909251Z",
+                                                   "deleted":  false
+                                               },
+                        "algo-1782101652290":  {
+                                                   "id":  "algo-1782101652290",
+                                                   "name":  "ES_NQ Mean Reversion",
+                                                   "templateId":  "mean-reversion-v2",
+                                                   "version":  "2.0",
+                                                   "createdAt":  null,
+                                                   "updatedAt":  1782101654568,
+                                                   "file":  "algo-1782101652290.json",
+                                                   "savedAt":  "2026-06-23T15:30:18.8939316Z",
+                                                   "deleted":  false
+                                               },
+                        "algo-1782101654570":  {
+                                                   "id":  "algo-1782101654570",
+                                                   "name":  "ES_NQ Mean Reversion BIG",
+                                                   "templateId":  "mean-reversion-v2",
+                                                   "version":  "2.0",
+                                                   "createdAt":  null,
+                                                   "updatedAt":  1782101663322,
+                                                   "file":  "algo-1782101654570.json",
+                                                   "savedAt":  "2026-06-23T15:30:18.8959253Z",
                                                    "deleted":  false
                                                }
                     },

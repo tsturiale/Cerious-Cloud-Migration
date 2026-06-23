@@ -4,18 +4,102 @@ import type {
   Position, Trade, DailyMetrics, CopyStatus, Regime,
   MarketInfo, ProbPoint, Settlement, PolyBook, PolyTradeTick,
   KalshiMarket, IbkrMarket, CryptoPrice, MarketProvider,
-  ExecutionPosition, ExecutionRisk, SimOrder, SimPosition, SimFill,
+  ExecutionPosition, ExecutionRisk, SimOrder, SimPosition,
   SimAlgoRole, SimOrderType,
 } from '../types'
 import { normalizeModel } from '../types'
 import {
   calculateOpenFuturesPnl,
-  futuresContractSpecFor,
-  isKnownFuturesProduct,
-  isRawFuturesPriceValue,
   resolveFuturesMultiplier,
-  type FuturesContractSpec,
 } from '../utils/futuresPnl'
+
+function normalizeExchangeNumber(value: unknown, fallback = 0): number {
+  if (value === null || value === undefined) return fallback
+  const parsed = typeof value === 'string' ? Number.parseFloat(value) : Number(value)
+  return Number.isFinite(parsed) ? parsed : fallback
+}
+
+function normalizeSimOrder(order: SimOrder): SimOrder {
+  const raw = order as SimOrder & Record<string, unknown>
+  const id = String(raw.id ?? raw.orderId ?? raw.order_id ?? `sim-order-${Date.now()}`)
+  const marketKey = String(raw.marketKey ?? raw.symbol ?? raw.product ?? 'UNKNOWN')
+  const rawSide = String(raw.side ?? raw.orderSide ?? '').toLowerCase()
+  const side = rawSide === 'offer' || rawSide === 'ask' || rawSide === 'sell' ? 'offer' : 'bid'
+  const status = raw.status === 'partially_filled' || raw.status === 'filled' || raw.status === 'cancelled' || raw.status === 'working'
+    ? raw.status
+    : 'working'
+  const orderType = raw.orderType === 'market' || raw.type === 'market' ? 'market' : 'limit'
+  const size = Math.max(0, normalizeExchangeNumber(raw.size ?? raw.quantity))
+  const remaining = Math.max(0, normalizeExchangeNumber(raw.remaining ?? raw.remainingQuantity, size))
+  return {
+    ...order,
+    id,
+    marketKey,
+    outcome: raw.outcome === 'no' ? 'no' : 'yes',
+    side,
+    orderType,
+    price: normalizeExchangeNumber(raw.price ?? raw.limitPrice),
+    size,
+    remaining,
+    filledSize: Math.max(0, normalizeExchangeNumber(raw.filledSize, Math.max(0, size - remaining))),
+    matchedVolume: Math.max(0, normalizeExchangeNumber(raw.matchedVolume)),
+    status,
+    createdAt: normalizeExchangeNumber(raw.createdAt ?? raw.timestampMs, Date.now()),
+    updatedAt: normalizeExchangeNumber(raw.updatedAt ?? raw.timestampMs, Date.now()),
+    operator: String(raw.operator ?? raw.operatorId ?? 'tsturiale'),
+    source: raw.source === 'algo' ? 'algo' : 'manual',
+    strategy: String(raw.strategy ?? ''),
+    legId: String(raw.legId ?? raw.leg_id ?? `${marketKey}-${id}`),
+  }
+}
+
+function normalizeSimPosition(position: SimPosition): SimPosition {
+  const raw = position as SimPosition & Record<string, unknown>
+  const id = String(raw.id ?? raw.positionId ?? raw.position_id ?? `sim-position-${raw.marketKey ?? raw.symbol ?? 'UNKNOWN'}`)
+  const marketKey = String(raw.marketKey ?? raw.symbol ?? 'UNKNOWN')
+  const size = normalizeExchangeNumber(raw.size ?? raw.qty)
+  const avgPrice = normalizeExchangeNumber(raw.avgPrice ?? raw.averagePrice)
+  const markPrice = normalizeExchangeNumber(raw.markPrice ?? raw.marketPrice, avgPrice)
+  const openPnl = normalizeExchangeNumber(raw.openPnl)
+  const realizedPnl = normalizeExchangeNumber(raw.realizedPnl)
+  return {
+    ...position,
+    id,
+    marketKey,
+    outcome: raw.outcome === 'no' ? 'no' : 'yes',
+    size,
+    avgPrice,
+    markPrice,
+    openPnl,
+    realizedPnl,
+    totalPnl: normalizeExchangeNumber(raw.totalPnl, openPnl + realizedPnl),
+    status: raw.status === 'closed' ? 'closed' : 'open',
+    openedAt: normalizeExchangeNumber(raw.openedAt, Date.now()),
+    closedAt: raw.closedAt == null ? undefined : normalizeExchangeNumber(raw.closedAt),
+    operator: String(raw.operator ?? raw.operatorId ?? 'tsturiale'),
+    source: raw.source === 'algo' ? 'algo' : 'manual',
+    strategy: String(raw.strategy ?? ''),
+    legId: String(raw.legId ?? raw.leg_id ?? `${marketKey}-${id}`),
+  }
+}
+
+function normalizeExchangeFills(fills: Record<string, PolyTradeTick[]>): Record<string, PolyTradeTick[]> {
+  return Object.fromEntries(Object.entries(fills).map(([marketKey, rows]) => [
+    marketKey,
+    rows.map((fill, index) => {
+      const raw = fill as PolyTradeTick & Record<string, unknown>
+      return {
+        ...fill,
+        timestamp: normalizeExchangeNumber(raw.timestamp ?? raw.timestampMs ?? raw.ts, Date.now()),
+        marketKey: String(raw.marketKey ?? raw.symbol ?? marketKey),
+        price: normalizeExchangeNumber(raw.price ?? raw.match_price),
+        size: normalizeExchangeNumber(raw.size ?? raw.qty ?? raw.match_qty),
+        side: ['no', 'sell', 'offer', 'ask'].includes(String(raw.side ?? '').toLowerCase()) ? 'no' : 'yes',
+        orderId: String(raw.orderId ?? raw.order_id ?? `fill-${marketKey}-${index}`),
+      } as PolyTradeTick
+    }),
+  ]))
+}
 
 interface TerminalState {
   // Asset selection
@@ -174,420 +258,9 @@ interface TerminalState {
 const ASSETS: Asset[] = ['ES', 'NQ', 'YM', 'RTY', 'CL', 'GC', 'ZM', 'ZS', 'ES_NQ', 'YM_ES', 'RTY_ES', 'BTC', 'ETH', 'SOL', 'XRP', 'HYPE', 'BNB', 'DOGE', 'EVENT']
 const initRecord = <T>(v: T) => Object.fromEntries(ASSETS.map(a => [a, v])) as Record<Asset, T>
 
-const SIM_EXCHANGE = 'Sim Exchange' as const
-const MIN_SIM_TRADE_EVIDENCE = 2
-// The browser may display market data and mark positions, but it must not
-// create exchange fills from quotes. Fills belong to the exchange/sim service.
-const CLIENT_VISIBLE_MARKET_MATCHING_ENABLED = false
-
-function priceForOutcome(tick: PolyTradeTick, outcome: 'yes' | 'no'): number {
-  if (tick.side === outcome) return tick.price
-  return 100 - tick.price
-}
-
-function isRawFuturesPrice(price: number): boolean {
-  return isRawFuturesPriceValue(price)
-}
-
-function bookUsesRawPrices(book: PolyBook | undefined, ticks?: PolyTradeTick[]): boolean {
-  const bookPrices = [
-    book?.best_bid,
-    book?.best_ask,
-    book?.mid,
-    ...(book?.bids ?? []).map(level => level.price),
-    ...(book?.asks ?? []).map(level => level.price),
-  ].filter((price): price is number => Number.isFinite(price))
-  return bookPrices.some(isRawFuturesPrice) || (ticks ?? []).some(tick => isRawFuturesPrice(tick.price))
-}
-
-function simDisplayPrice(price: number, rawPrices: boolean): number {
-  return rawPrices ? price : cents(price)
-}
-
-function simProductSpec(marketKey: string, price?: number): FuturesContractSpec {
-  return futuresContractSpecFor(marketKey, price)
-}
-
-function simContractMultiplier(orderOrPosition: Pick<SimOrder | SimPosition | SimFill, 'marketKey' | 'multiplier'>, price: number): number {
-  return resolveFuturesMultiplier(orderOrPosition.marketKey, orderOrPosition.multiplier, price)
-}
-
-function simDollarPnl(marketKey: string, fromPrice: number, toPrice: number, size: number, multiplier?: number): number {
-  const appliedMultiplier = resolveFuturesMultiplier(marketKey, multiplier, fromPrice)
-  return calculateOpenFuturesPnl(fromPrice, toPrice, size, appliedMultiplier)
-}
-
 function finiteNumber(value: unknown): number | null {
   const numberValue = Number(value)
   return Number.isFinite(numberValue) ? numberValue : null
-}
-
-function simPriceLabel(price: number): string {
-  if (!Number.isFinite(price)) return '-'
-  return isRawFuturesPrice(price) ? price.toFixed(Math.abs(price) >= 100 ? 2 : 3) : `${price.toFixed(1)}c`
-}
-
-function simUsesRawProduct(order: Pick<SimOrder, 'marketKey' | 'price' | 'multiplier'>): boolean {
-  return isKnownFuturesProduct(order.marketKey)
-    || isRawFuturesPrice(order.price)
-    || (Number.isFinite(order.multiplier ?? NaN) && Number(order.multiplier) > 1)
-}
-
-function simEntryOrderId(order: Pick<SimOrder, 'id' | 'source' | 'algoRole' | 'parentOrderId'>): string | undefined {
-  if (order.source !== 'algo') return undefined
-  if (order.algoRole === 'cover') return order.parentOrderId
-  if (order.algoRole === 'entry') return order.id
-  return order.parentOrderId ?? order.id
-}
-
-function simPositionMatchesOrder(position: SimPosition, order: SimOrder): boolean {
-  if (position.marketKey !== order.marketKey) return false
-  if (position.outcome !== order.outcome) return false
-  if (position.status !== 'open') return false
-  if (position.operator !== order.operator) return false
-  if (position.source !== order.source) return false
-
-  if (order.source === 'algo') {
-    const entryOrderId = simEntryOrderId(order)
-    if (order.algoRole === 'cover' && entryOrderId) return position.entryOrderId === entryOrderId
-    if (order.algoRole === 'entry') return position.entryOrderId === order.id
-    return Boolean(order.algoId)
-      && position.algoId === order.algoId
-      && position.strategy === order.strategy
-      && position.layer === order.layer
-  }
-
-  return position.strategy === order.strategy
-}
-
-function simOrderSideLabel(order: Pick<SimOrder, 'marketKey' | 'outcome' | 'side' | 'price' | 'multiplier'>): string {
-  if (simUsesRawProduct(order)) return order.side === 'bid' ? 'BUY' : 'SELL'
-  return `${order.outcome.toUpperCase()} ${order.side.toUpperCase()}`
-}
-
-function simDisplaySide(order: Pick<SimOrder, 'marketKey' | 'outcome' | 'side' | 'price' | 'multiplier'>): string {
-  if (simUsesRawProduct(order)) return order.side === 'bid' ? 'BUY' : 'SELL'
-  return order.outcome.toUpperCase()
-}
-
-function simFillTick(fill: SimFill): PolyTradeTick {
-  return {
-    timestamp: fill.timestamp,
-    marketKey: fill.marketKey,
-    price: fill.price,
-    size: fill.size,
-    side: fill.side,
-    displaySide: fill.displaySide,
-    orderSide: fill.orderSide,
-    exchange: fill.exchange,
-    orderId: fill.orderId,
-  } as PolyTradeTick & { exchange: typeof SIM_EXCHANGE; orderId: string }
-}
-
-function cents(price: number): number {
-  return Math.max(1, Math.min(99, Math.round(price * 100)))
-}
-
-function marketPriceSatisfiesOrder(order: SimOrder, marketPrice: number): boolean {
-  if (!Number.isFinite(marketPrice)) return false
-  if (order.orderType === 'market') return true
-  return order.side === 'bid'
-    ? marketPrice <= order.price
-    : marketPrice >= order.price
-}
-
-type VisibleMarketMatch = { price: number; size: number; contraId: string; timestamp?: number }
-
-function eventTimestampMs(value: unknown): number {
-  const timestamp = Number(value)
-  if (!Number.isFinite(timestamp) || timestamp <= 0) return 0
-  if (timestamp > 100_000_000_000_000_000) return Math.floor(timestamp / 1_000_000)
-  if (timestamp > 100_000_000_000_000) return Math.floor(timestamp / 1000)
-  if (timestamp > 100_000_000_000) return timestamp
-  if (timestamp > 100_000_000) return timestamp * 1000
-  return timestamp
-}
-
-function visibleBookCounterparties(order: SimOrder, book: PolyBook | undefined): VisibleMarketMatch[] {
-  if (!book) return []
-  const rawPrices = bookUsesRawPrices(book)
-
-  const byPrice = (matches: VisibleMarketMatch[]) => matches
-    .filter(match => match.size > 0 && marketPriceSatisfiesOrder(order, match.price))
-    .sort((a, b) => order.side === 'bid' ? a.price - b.price : b.price - a.price)
-
-  if (rawPrices) {
-    return order.side === 'bid'
-      ? byPrice(book.asks.map(level => ({ price: simDisplayPrice(level.price, true), size: level.size, contraId: 'visible-ask' })))
-      : byPrice(book.bids.map(level => ({ price: simDisplayPrice(level.price, true), size: level.size, contraId: 'visible-bid' })))
-  }
-
-  if (order.outcome === 'yes' && order.side === 'bid') {
-    return byPrice(book.asks.map(level => ({ price: cents(level.price), size: level.size, contraId: 'visible-yes-ask' })))
-  }
-  if (order.outcome === 'yes' && order.side === 'offer') {
-    return byPrice(book.bids.map(level => ({ price: cents(level.price), size: level.size, contraId: 'visible-yes-bid' })))
-  }
-  if (order.outcome === 'no' && order.side === 'bid') {
-    return byPrice(book.bids.map(level => ({ price: 100 - cents(level.price), size: level.size, contraId: 'visible-no-ask' })))
-  }
-  return byPrice(book.asks.map(level => ({ price: 100 - cents(level.price), size: level.size, contraId: 'visible-no-bid' })))
-}
-
-function lastExternalPrint(order: SimOrder, ticks: PolyTradeTick[] | undefined): VisibleMarketMatch | null {
-  const last = [...(ticks ?? [])].reverse().find(tick => (tick as PolyTradeTick & Record<string, unknown>).exchange !== SIM_EXCHANGE)
-  if (!last) return null
-  const printTimestamp = eventTimestampMs(last.timestamp)
-  const orderTimestamp = Math.max(eventTimestampMs(order.createdAt), eventTimestampMs(order.updatedAt))
-  if (printTimestamp > 0 && orderTimestamp > 0 && printTimestamp <= orderTimestamp) return null
-  const rawPrices = bookUsesRawPrices(undefined, ticks)
-  return {
-    price: rawPrices ? last.price : Math.round(priceForOutcome(last, order.outcome)),
-    size: last.size,
-    contraId: 'last-external-print',
-    timestamp: printTimestamp,
-  }
-}
-
-function visibleMarketMatches(order: SimOrder, book: PolyBook | undefined, ticks: PolyTradeTick[] | undefined): VisibleMarketMatch[] {
-  const bookMatches = visibleBookCounterparties(order, book)
-  if (bookMatches.length > 0) return bookMatches
-
-  const print = lastExternalPrint(order, ticks)
-  if (!print) return []
-  if (print.size < MIN_SIM_TRADE_EVIDENCE) return []
-  if (!marketPriceSatisfiesOrder(order, print.price)) return []
-  return [print]
-}
-
-function publishSimFill(
-  filledOrder: SimOrder,
-  size: number,
-  price: number,
-  timestamp: number,
-  contraId: string,
-  fills: Record<string, PolyTradeTick[]>,
-  polyTicks: Record<string, PolyTradeTick[]>,
-  simPositions: SimPosition[],
-  messages: string[],
-): {
-  fills: Record<string, PolyTradeTick[]>
-  polyTicks: Record<string, PolyTradeTick[]>
-  simPositions: SimPosition[]
-} {
-  const displaySide = simDisplaySide(filledOrder)
-  const fill: SimFill = {
-    timestamp,
-    marketKey: filledOrder.marketKey,
-    price,
-    size,
-    side: simUsesRawProduct(filledOrder) ? (filledOrder.side === 'bid' ? 'yes' : 'no') : filledOrder.outcome,
-    displaySide,
-    marketSide: displaySide === 'SELL' ? 'sell' : 'buy',
-    orderSide: filledOrder.side,
-    orderId: filledOrder.id,
-    exchange: SIM_EXCHANGE,
-    operator: filledOrder.operator,
-    source: filledOrder.source,
-    strategy: filledOrder.strategy,
-    legId: filledOrder.legId,
-    orderTag: filledOrder.orderTag,
-    algoRole: filledOrder.algoRole,
-    algoId: filledOrder.algoId,
-    algoName: filledOrder.algoName,
-    parentOrderId: filledOrder.parentOrderId,
-    layer: filledOrder.layer,
-    trigger: filledOrder.trigger,
-    coverTicksFromFill: filledOrder.coverTicksFromFill,
-    coverTickSize: filledOrder.coverTickSize,
-    tickSize: filledOrder.tickSize,
-    tickValue: filledOrder.tickValue,
-    multiplier: filledOrder.multiplier,
-    realizedPnl: 0,
-  }
-  const marketFills = fills[filledOrder.marketKey] ?? []
-  const marketTicks = polyTicks[filledOrder.marketKey] ?? []
-  const nextFills = { ...fills, [filledOrder.marketKey]: [...marketFills, fill].slice(-250) }
-  const nextPolyTicks = { ...polyTicks, [filledOrder.marketKey]: [...marketTicks.slice(-199), simFillTick(fill)] }
-  const nextSimPositions = updateSimPositions(simPositions, fill, filledOrder, price)
-  messages.push(`Sim Exchange fill ${size}x ${simOrderSideLabel(filledOrder)} ${simPriceLabel(price)} on ${filledOrder.marketKey}; ${filledOrder.id} matched ${contraId}.`)
-  return { fills: nextFills, polyTicks: nextPolyTicks, simPositions: nextSimPositions }
-}
-
-function buildAlgoCoverOrder(entryOrder: SimOrder, size: number, fillPrice: number, timestamp: number): SimOrder | null {
-  if (entryOrder.source !== 'algo' || entryOrder.algoRole !== 'entry') return null
-  const coverTicks = Number(entryOrder.coverTicksFromFill ?? 0)
-  const tickSize = Number(entryOrder.coverTickSize ?? 0)
-  if (!Number.isFinite(coverTicks) || coverTicks <= 0 || !Number.isFinite(tickSize) || tickSize <= 0) return null
-  const coverSide = entryOrder.side === 'bid' ? 'offer' : 'bid'
-  const direction = entryOrder.side === 'bid' ? 1 : -1
-  const coverPrice = fillPrice + (direction * coverTicks * tickSize)
-  const id = `${entryOrder.id}-cover-${timestamp}`
-  return {
-    id,
-    marketKey: entryOrder.marketKey,
-    outcome: entryOrder.outcome,
-    side: coverSide,
-    orderType: 'limit',
-    price: coverPrice,
-    size,
-    remaining: size,
-    filledSize: 0,
-    matchedVolume: 0,
-    status: 'working',
-    createdAt: timestamp,
-    updatedAt: timestamp,
-    operator: entryOrder.operator,
-    source: 'algo',
-    strategy: entryOrder.strategy,
-    legId: `${entryOrder.legId}-C${timestamp}`,
-    orderTag: 'ALGO COVER',
-    algoRole: 'cover',
-    algoId: entryOrder.algoId,
-    algoName: entryOrder.algoName,
-    deployIntentId: entryOrder.deployIntentId,
-    parentOrderId: entryOrder.id,
-    layer: entryOrder.layer,
-    trigger: 'entry-fill-cover',
-    tickSize: entryOrder.tickSize,
-    tickValue: entryOrder.tickValue,
-    multiplier: entryOrder.multiplier,
-  }
-}
-
-function fillWorkingOrdersFromVisibleMarket(
-  orders: SimOrder[],
-  marketKey: string,
-  book: PolyBook | undefined,
-  ticks: PolyTradeTick[] | undefined,
-  fills: Record<string, PolyTradeTick[]>,
-  polyTicks: Record<string, PolyTradeTick[]>,
-  simPositions: SimPosition[],
-  messages: string[],
-): {
-  simOrders: SimOrder[]
-  fills: Record<string, PolyTradeTick[]>
-  polyTicks: Record<string, PolyTradeTick[]>
-  simPositions: SimPosition[]
-} {
-  let nextOrders = orders
-  let nextFills = fills
-  let nextPolyTicks = polyTicks
-  let nextPositions = simPositions
-  let coverOrders: SimOrder[] = []
-
-  for (const order of nextOrders) {
-    if (order.marketKey !== marketKey) continue
-    if (order.status !== 'working' && order.status !== 'partially_filled') continue
-    if (order.remaining <= 0) continue
-    let working = order
-    for (const match of visibleMarketMatches(working, book, ticks)) {
-      if (working.remaining <= 0) break
-      const ts = Date.now()
-      const fillSize = Math.min(working.remaining, match.size)
-      if (fillSize <= 0) continue
-      const remaining = working.remaining - fillSize
-      const updatedOrder: SimOrder = {
-        ...working,
-        remaining,
-        filledSize: working.filledSize + fillSize,
-        matchedVolume: working.matchedVolume + fillSize,
-        status: remaining === 0 ? 'filled' : 'partially_filled',
-        updatedAt: ts,
-      }
-      const published = publishSimFill(updatedOrder, fillSize, match.price, ts, match.contraId, nextFills, nextPolyTicks, nextPositions, messages)
-      nextFills = published.fills
-      nextPolyTicks = published.polyTicks
-      nextPositions = published.simPositions
-      const coverOrder = buildAlgoCoverOrder(updatedOrder, fillSize, match.price, ts)
-      if (coverOrder) {
-        coverOrders = [coverOrder, ...coverOrders]
-        messages.push(`Sim Exchange staged ALGO COVER ${coverOrder.remaining}x ${simOrderSideLabel(coverOrder)} ${simPriceLabel(coverOrder.price)} on ${coverOrder.marketKey}; parent ${updatedOrder.id}.`)
-      }
-      nextOrders = nextOrders.map(item => item.id === order.id ? updatedOrder : item)
-      working = updatedOrder
-    }
-  }
-
-  return { simOrders: [...coverOrders, ...nextOrders], fills: nextFills, polyTicks: nextPolyTicks, simPositions: nextPositions }
-}
-
-function updateSimPositions(
-  positions: SimPosition[],
-  fill: SimFill,
-  order: SimOrder,
-  markPrice: number,
-): SimPosition[] {
-  const open = positions.find(position => simPositionMatchesOrder(position, order))
-  const direction = order.side === 'bid' ? 1 : -1
-  const signedSize = direction * fill.size
-  const multiplier = simContractMultiplier(order, fill.price)
-  const tickSize = order.tickSize ?? simProductSpec(order.marketKey, fill.price).tickSize
-  const tickValue = order.tickValue ?? tickSize * multiplier
-
-  if (!open) {
-    const openPnl = simDollarPnl(order.marketKey, fill.price, markPrice, signedSize, multiplier)
-    return [...positions, {
-      id: `sim-pos-${order.id}`,
-      marketKey: order.marketKey,
-      outcome: order.outcome,
-      size: signedSize,
-      avgPrice: fill.price,
-      markPrice,
-      openPnl,
-      realizedPnl: 0,
-      totalPnl: openPnl,
-      status: signedSize === 0 ? 'closed' : 'open',
-      openedAt: fill.timestamp,
-      operator: order.operator,
-      source: order.source,
-      strategy: order.strategy,
-      legId: order.legId,
-      entryOrderId: simEntryOrderId(order),
-      orderTag: order.orderTag,
-      algoRole: order.algoRole,
-      algoId: order.algoId,
-      algoName: order.algoName,
-      parentOrderId: order.parentOrderId,
-      layer: order.layer,
-      trigger: order.trigger,
-      tickSize,
-      tickValue,
-      multiplier,
-    }]
-  }
-
-  return positions.map(position => {
-    if (position !== open) return position
-    const nextSize = position.size + signedSize
-    const isReducing = Math.sign(position.size) !== Math.sign(signedSize)
-    const closedQty = isReducing ? Math.min(Math.abs(position.size), Math.abs(signedSize)) : 0
-    const positionMultiplier = simContractMultiplier(position, position.avgPrice)
-    const realized = isReducing ? simDollarPnl(position.marketKey, position.avgPrice, fill.price, closedQty * Math.sign(position.size), positionMultiplier) : 0
-    const avgPrice = nextSize === 0
-      ? 0
-      : isReducing && Math.sign(nextSize) !== Math.sign(position.size)
-        ? fill.price
-        : Math.sign(nextSize) === Math.sign(position.size) && !isReducing
-      ? ((position.avgPrice * Math.abs(position.size)) + (fill.price * Math.abs(signedSize))) / Math.abs(nextSize)
-      : position.avgPrice
-    const openPnl = nextSize === 0 ? 0 : simDollarPnl(position.marketKey, avgPrice, markPrice, nextSize, positionMultiplier)
-    const realizedPnl = position.realizedPnl + realized
-    return {
-      ...position,
-      size: nextSize,
-      avgPrice,
-      markPrice,
-      openPnl,
-      realizedPnl,
-      totalPnl: realizedPnl + openPnl,
-      status: nextSize === 0 ? 'closed' : 'open',
-      closedAt: nextSize === 0 ? fill.timestamp : position.closedAt,
-      tickSize: position.tickSize ?? tickSize,
-      tickValue: position.tickValue ?? tickValue,
-      multiplier: positionMultiplier,
-    }
-  })
 }
 
 function yesPriceFromBook(book: PolyBook): number | null {
@@ -791,9 +464,9 @@ export const useStore = create<TerminalState>((set, get) => ({
     simMessages: [`Sim Exchange ${v ? 'enabled' : 'disabled'}.`, ...s.simMessages].slice(0, 50),
   })),
   setSimTradingState: (state) => set(s => ({
-    simOrders: state.simOrders ?? s.simOrders,
-    simPositions: state.simPositions ?? s.simPositions,
-    fills: state.fills ?? s.fills,
+    simOrders: state.simOrders ? state.simOrders.map(normalizeSimOrder) : s.simOrders,
+    simPositions: state.simPositions ? state.simPositions.map(normalizeSimPosition) : s.simPositions,
+    fills: state.fills ? normalizeExchangeFills(state.fills) : s.fills,
     simMessages: state.simMessages ?? s.simMessages,
   })),
   placeSimOrder: (order) => {
@@ -914,31 +587,7 @@ export const useStore = create<TerminalState>((set, get) => ({
       const nextSeen = (book as PolyBook & { seen_ms?: number }).seen_ms ?? book.timestamp_ms
       if (nextSeen < prevSeen) return s
     }
-    const nextPolyBooks = { ...s.polyBooks, [key]: book }
-    if (!s.simulationEnabled || !CLIENT_VISIBLE_MARKET_MATCHING_ENABLED) {
-      return { polyBooks: nextPolyBooks }
-    }
-
-    const messages: string[] = []
-    const matched = fillWorkingOrdersFromVisibleMarket(
-      s.simOrders,
-      key,
-      book,
-      s.polyTicks[key],
-      s.fills,
-      s.polyTicks,
-      s.simPositions,
-      messages,
-    )
-
-    return {
-      polyBooks: nextPolyBooks,
-      simOrders: matched.simOrders,
-      fills: matched.fills,
-      polyTicks: matched.polyTicks,
-      simPositions: matched.simPositions,
-      ...(messages.length ? { simMessages: [...messages, ...s.simMessages].slice(0, 50) } : {}),
-    }
+    return { polyBooks: { ...s.polyBooks, [key]: book } }
   }),
 
   pushPolyTick: (key, tick) => set(s => {
@@ -957,28 +606,7 @@ export const useStore = create<TerminalState>((set, get) => ({
       ...s.polyTicks,
       [key]: [...prev.slice(-199), tick],
     }
-    if (!s.simulationEnabled || !CLIENT_VISIBLE_MARKET_MATCHING_ENABLED) {
-      return { polyTicks: nextPolyTicks }
-    }
-    const messages: string[] = []
-    const matched = fillWorkingOrdersFromVisibleMarket(
-      s.simOrders,
-      key,
-      s.polyBooks[key],
-      nextPolyTicks[key],
-      s.fills,
-      nextPolyTicks,
-      s.simPositions,
-      messages,
-    )
-
-    return {
-      polyTicks: matched.polyTicks,
-      simOrders: matched.simOrders,
-      fills: matched.fills,
-      simPositions: matched.simPositions,
-      ...(messages.length ? { simMessages: [...messages, ...s.simMessages].slice(0, 50) } : {}),
-    }
+    return { polyTicks: nextPolyTicks }
   }),
 
   pushPolyFill: (key, tick) => set(s => {

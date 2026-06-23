@@ -27,10 +27,10 @@ export function parseBarsPayload(payload: unknown): Bar[] {
 
   return source
     .map(row => {
-      const item = row as Partial<Bar> & { price?: unknown; ts?: unknown; time?: unknown }
+      const item = row as Partial<Bar> & { price?: unknown; ts?: unknown; time?: unknown; timestampMs?: unknown }
       const close = finiteNumber(item.close ?? item.price)
       if (close === null) return null
-      const timestamp = normalizeTimestamp(item.timestamp ?? item.ts ?? item.time)
+      const timestamp = normalizeTimestamp(item.time ?? item.timestampMs ?? item.timestamp ?? item.ts)
       if (timestamp === null) return null
       const open = finiteNumber(item.open) ?? close
       const high = finiteNumber(item.high) ?? Math.max(open, close)

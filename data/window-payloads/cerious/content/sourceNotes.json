@@ -1,0 +1,23 @@
+{
+  "service": "knowledge.notes",
+  "fetchedAt": "2026-06-21T14:18:00.000Z",
+  "sections": [
+    {
+      "title": "Daily ATR Source",
+      "body": "ATR is calculated from daily OHLC bars. Provider order is exchange/vendor EOD or OHLC adapter first, configured futures CSV second, and public fallback only when no key-backed source is available."
+    },
+    {
+      "title": "Live Cockpit Source",
+      "body": "The server ingests Databento GLBX.MDP3 live trades and MBP-1 top-of-book by product symbol, then publishes normalized product definitions, books, trades, bars, and spread marks to the UI."
+    },
+    {
+      "title": "GOOSE Source",
+      "body": "GOOSE combines refreshed futures history, macro regime inputs, spread z-scores, volume context, live quote layer, public factor proxies, CFTC positioning, and available market headline feeds."
+    },
+    {
+      "title": "Risk Note",
+      "body": "This is a risk-management framework and operator cockpit, not financial advice. Use exchange rules, broker margin, live market data, and your own risk limits before trading."
+    }
+  ],
+  "rows": []
+}

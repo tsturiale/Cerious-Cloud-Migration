@@ -6,6 +6,7 @@ import type { Asset, ExecutionPosition, ExecutionRisk, WsMsg } from '../types'
 const CONFIGURED_WS_BASE = (import.meta.env.VITE_CERIOUS_WS_BASE as string | undefined)?.trim()
 const WS_BASE = CONFIGURED_WS_BASE || ceriousWsBase()
 const WORKSPACE_SESSION_TOKEN_KEY = 'cerious.workspace.sessionToken.v1'
+const ENABLE_LEGACY_BROWSER_WS = import.meta.env.VITE_CERIOUS_ENABLE_LEGACY_WS === 'true'
 
 export function useWebSocket(asset: Asset) {
   const wsRef = useRef<WebSocket | null>(null)
@@ -18,6 +19,7 @@ export function useWebSocket(asset: Asset) {
           setExecutionPositions, setExecutionRisk, setSimTradingState } = useStore.getState()
 
   useEffect(() => {
+    if (!ENABLE_LEGACY_BROWSER_WS) return
     let alive = true
     let endpointIndex = 0
     const endpoints = [WS_BASE]

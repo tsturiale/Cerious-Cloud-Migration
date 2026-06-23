@@ -57,7 +57,9 @@ import {
   type WorkspaceTemplate,
   type WorkspaceWindowKind,
 } from '../services/workspaceServices'
-import { ceriousWsBase, isCeriousDesktopRuntime } from '../platform/transport'
+import { ceriousWsBase } from '../platform/transport'
+
+const ENABLE_LEGACY_BROWSER_WS = import.meta.env.VITE_CERIOUS_ENABLE_LEGACY_WS === 'true'
 
 type WorkspaceWindow = {
   id: string
@@ -75,7 +77,7 @@ type WorkspaceWindow = {
   account?: string
   poppedOut?: boolean
   floatingBounds?: FloatingWindowBounds
-  chartSettings?: AcmeChartSettings
+  chartSettings?: CeriousChartSettings
   depthLadderSettings?: DepthLadderSettings
 }
 
@@ -236,9 +238,6 @@ type AlgoDefinition = {
   operator: string
   status: AlgoStatus
   updatedAt: number
-  acmeTemplateId?: string
-  acmeVersion?: string
-  acmeRaw?: Record<string, unknown>
 }
 
 type AlgoSignalRule = {
@@ -266,16 +265,13 @@ type AlgoMidpointPeg = {
 
 type AlgoEntryPeg = {
   source: string
-  period: number
+  lookback?: number
   standardDeviations: number
-  pegSellSideToPlus2: boolean
-  pegBuySideToMinus2: boolean
+  interval?: string
+  timeframe?: string
 }
 
 type AlgoLayerPlan = {
-  ticksOffMidpoint: number
-  buyTicksOffMidpoint: number
-  sellTicksOffMidpoint: number
   layerCount: number
   layerSpacingTicks: number
   maxLayers: number
@@ -415,7 +411,7 @@ const DEPTH_LADDER_LAYOUT_KEY = 'cerious.depth-ladder.layout.v1'
 const TRADE_ANALYTICS_IMPORT_KEY = 'cerious.trade-analytics.import.v1'
 const MODEL_VARIANT_KEY = 'cerious.model.variant.v1'
 const MODEL_VARIANT_LIBRARY_KEY = 'cerious.model.variant.library.v1'
-const LEGACY_ACME_MODEL_VARIANT_KEY = 'acmeTraderModelVariantRegistryV1'
+const LEGACY_CERIOUS_MODEL_VARIANT_KEY = 'ceriousTraderModelVariantRegistryV1'
 const ALGO_LIBRARY_EVENT = 'cerious-algo-library'
 const ALGO_MANAGER_STATE_EVENT = 'cerious-algo-manager-state'
 const DEFAULT_OPERATOR = 'Operator 1'
@@ -454,6 +450,7 @@ const WINDOW_LABELS: Record<WorkspaceWindowKind, string> = {
   depthTraderRtyEs: 'Depth Ladder - RTY / ES',
   mdTraderEs: 'Depth Ladder - ES',
   goose: 'GOOSE',
+  dailySummary: 'Daily Summary',
   streamingNews: 'Streaming News',
   liveApiArchitecture: 'Live API Architecture',
   tradeAnalytics: 'Trade Analytics',
@@ -478,9 +475,11 @@ const WINDOW_LABELS: Record<WorkspaceWindowKind, string> = {
 
 const WIDGET_MENU: Array<{ group: string; kinds: WorkspaceWindowKind[] }> = [
   { group: 'Cerious Core', kinds: ['marketData', 'depthLadder', 'positionsOrders', 'fills', 'auditTrail'] },
-  { group: 'Cerious Spreads', kinds: ['spreadConfigurations', 'relativeSpreadCharts', 'relativeSpreadVisuals', 'liveSpreadSignals'] },
-  { group: 'Cerious Intelligence', kinds: ['goose', 'macroRegimeSummary', 'streamingNews', 'tradeAnalytics', 'atrZScoreEngine', 'crossSpreadOpportunityMap'] },
-  { group: 'Cerious Risk & Research', kinds: ['notionalCalculator', 'executionRules', 'orderLayeringTechniques', 'moneyManagement', 'riskChecklist', 'sourceNotes', 'modelResearchGovernance'] },
+  { group: 'Daily Summary', kinds: ['dailySummary'] },
+  { group: 'GOOSE', kinds: ['goose'] },
+  { group: 'Spread Signals', kinds: ['spreadConfigurations', 'relativeSpreadCharts', 'relativeSpreadVisuals', 'liveSpreadSignals', 'atrZScoreEngine', 'crossSpreadOpportunityMap'] },
+  { group: 'Research & Risk', kinds: ['macroRegimeSummary', 'tradeAnalytics', 'notionalCalculator', 'executionRules', 'orderLayeringTechniques', 'moneyManagement', 'riskChecklist', 'sourceNotes', 'modelResearchGovernance'] },
+  { group: 'News', kinds: ['streamingNews'] },
   { group: 'Trading', kinds: ['order', 'alerts', 'liquidityMap', 'fixMonitor'] },
   { group: 'Algos', kinds: ['algoBuilder', 'algoManager'] },
   { group: 'Charts', kinds: ['charts'] },
@@ -497,7 +496,7 @@ const REMOVED_WINDOW_PATTERNS = [
   new RegExp(['^sports', 'Terminal$'].join(''), 'i'),
   new RegExp(['^trading', 'View'].join(''), 'i'),
   new RegExp(['^single', 'PanelChart$'].join(''), 'i'),
-  /^acme(Two|Three)PanelChart$/i,
+  /^cerious(Two|Three)PanelChart$/i,
   new RegExp(['^prediction', 'Chart$'].join(''), 'i'),
   new RegExp(['^product', 'Library$'].join(''), 'i'),
   /^spread(EsNq|YmEs|RtyEs)$/i,
@@ -680,25 +679,34 @@ function ensureFuturesDepthLadderWindow(windows: WorkspaceWindow[]): WorkspaceWi
   ]
 }
 
-function fmtMoney(n: number | undefined): string {
-  if (n === undefined || Number.isNaN(n)) return '-'
-  if (Math.abs(n) >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`
-  if (Math.abs(n) >= 1_000) return `$${(n / 1_000).toFixed(1)}K`
-  return `$${n.toFixed(n >= 100 ? 0 : 2)}`
+function displayNumber(value: unknown, fallback = 0): number {
+  const parsed = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(parsed) ? parsed : fallback
 }
 
-function fmtNum(n: number | undefined, digits = 2): string {
-  if (n === undefined || Number.isNaN(n)) return '-'
+function fmtMoney(value: unknown): string {
+  const n = finiteOptional(value)
+  if (n === undefined) return '-'
+  if (Math.abs(n) >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`
+  if (Math.abs(n) >= 1_000) return `$${(n / 1_000).toFixed(1)}K`
+  return `$${n.toFixed(Math.abs(n) >= 100 ? 0 : 2)}`
+}
+
+function fmtNum(value: unknown, digits = 2): string {
+  const n = finiteOptional(value)
+  if (n === undefined) return '-'
   return n.toFixed(digits)
 }
 
-function fmtPct(n: number | undefined): string {
-  if (n === undefined || Number.isNaN(n)) return '-'
+function fmtPct(value: unknown): string {
+  const n = finiteOptional(value)
+  if (n === undefined) return '-'
   return `${(n * 100).toFixed(1)}%`
 }
 
-function fmtInt(n: number | undefined): string {
-  if (n === undefined || Number.isNaN(n)) return '-'
+function fmtInt(value: unknown): string {
+  const n = finiteOptional(value)
+  if (n === undefined) return '-'
   return Math.round(n).toLocaleString()
 }
 
@@ -1003,13 +1011,13 @@ function algoTemplateLabel(template: AlgoTemplate): string {
   return 'Scale In'
 }
 
-function defaultAcmeMeanReversionFields(symbol: string) {
+function defaultCeriousMeanReversionFields(symbol: string) {
   return {
     templateId: 'mean-reversion-v2',
     version: '2.0',
     instruments: [symbol],
     signalRules: [
-      { id: 'regression-bands-ready', field: 'linearRegression27Bands', operator: '=', value: true, action: 'pegEntryBands', enabled: true },
+      { id: 'regression-bands-ready', field: 'linearRegressionBands', operator: '=', value: true, action: 'pegEntryBands', enabled: true },
       { id: 'entry-touch', field: 'marketCanTradeTarget', operator: '=', value: true, action: 'releaseSniperEntry', enabled: true },
       { id: 'oco-cover', field: 'entryFilled', operator: '=', value: true, action: 'attachOcoCover', enabled: true },
     ] as AlgoSignalRule[],
@@ -1026,16 +1034,10 @@ function defaultAcmeMeanReversionFields(symbol: string) {
       previousClose: false,
     } as AlgoMidpointPeg,
     entryPeg: {
-      source: '27-period-linear-regression',
-      period: 27,
+      source: 'linear-regression',
       standardDeviations: 2,
-      pegSellSideToPlus2: true,
-      pegBuySideToMinus2: true,
     } as AlgoEntryPeg,
     layerPlan: {
-      ticksOffMidpoint: 0,
-      buyTicksOffMidpoint: 0,
-      sellTicksOffMidpoint: 0,
       layerCount: 3,
       layerSpacingTicks: 2,
       maxLayers: 5,
@@ -1062,7 +1064,7 @@ function defaultAcmeMeanReversionFields(symbol: string) {
     orderPolicy: {
       mode: 'synthetic-sniper',
       orderType: 'synthetic-held-market-release',
-      priceReference: '27-lr-regression-bands',
+      priceReference: 'linear-regression-bands',
       doNotCrossInside: true,
       doNotCrossSelf: true,
       liveOrderEntryEnabled: false,
@@ -1072,19 +1074,19 @@ function defaultAcmeMeanReversionFields(symbol: string) {
 
 function defaultAlgo(option: ProductOption | undefined, operator: string): AlgoDefinition {
   const symbol = option?.marketKey ?? option?.symbol ?? 'ES_NQ'
-  const acmeDefaults = defaultAcmeMeanReversionFields(symbol)
+  const ceriousDefaults = defaultCeriousMeanReversionFields(symbol)
   return {
     id: `algo-${Date.now()}`,
     name: `${symbol} Mean Reversion`,
     template: 'mean-reversion-v2',
-    ...acmeDefaults,
+    ...ceriousDefaults,
     provider: option?.provider ?? 'cme',
     symbol,
     marketKey: option?.marketKey,
     side: 'both',
     orderType: 'limit',
     clipSize: 1,
-    maxPosition: acmeDefaults.risk.maxPosition,
+    maxPosition: ceriousDefaults.risk.maxPosition,
     operator,
     status: 'held',
     updatedAt: Date.now(),
@@ -1099,13 +1101,15 @@ function asTemplate(value: unknown): AlgoTemplate {
 }
 
 function asSignalRules(value: unknown): AlgoSignalRule[] {
-  if (!Array.isArray(value)) return defaultAcmeMeanReversionFields('ES_NQ').signalRules
+  if (!Array.isArray(value)) return defaultCeriousMeanReversionFields('ES_NQ').signalRules
   return value.map((rule, index) => {
     const row = rule && typeof rule === 'object' ? rule as Record<string, unknown> : {}
     const rawValue = row.value
+    const rawField = String(row.field ?? '')
+    const fieldLower = rawField.toLowerCase()
     return {
       id: String(row.id ?? `rule-${index + 1}`),
-      field: String(row.field ?? ''),
+      field: fieldLower.includes('linearregression') && fieldLower.includes('band') ? 'linearRegressionBands' : rawField,
       operator: String(row.operator ?? '='),
       value: typeof rawValue === 'boolean' || typeof rawValue === 'number' || typeof rawValue === 'string' ? rawValue : true,
       action: String(row.action ?? ''),
@@ -1121,21 +1125,29 @@ function mergeObject<T extends object>(defaults: T, value: unknown): T {
   } as T
 }
 
-function normalizeAcmeFields(item: Partial<AlgoDefinition> | Record<string, unknown>, symbol: string) {
+function normalizeCeriousFields(item: Partial<AlgoDefinition> | Record<string, unknown>, symbol: string) {
   const productKey = normalizeProductKey(symbol) || 'ES_NQ'
-  const defaults = defaultAcmeMeanReversionFields(productKey)
+  const defaults = defaultCeriousMeanReversionFields(productKey)
+  const entryPeg = mergeObject(defaults.entryPeg, item.entryPeg)
+  const rawEntryPeg = item.entryPeg && typeof item.entryPeg === 'object' ? item.entryPeg as Record<string, unknown> : {}
+  const migratedLookback = normalizedLookback(rawEntryPeg.lookback ?? entryPeg.lookback)
+  if (migratedLookback !== null) entryPeg.lookback = migratedLookback
+  if (String(entryPeg.source).toLowerCase().includes('linear-regression')) entryPeg.source = 'linear-regression'
+  const layerPlan = mergeObject(defaults.layerPlan, item.layerPlan)
+  const orderPolicy = mergeObject(defaults.orderPolicy, item.orderPolicy)
+  if (String(orderPolicy.priceReference).toLowerCase().includes('27')) orderPolicy.priceReference = 'linear-regression-bands'
   return {
-    templateId: String(item.templateId ?? item.acmeTemplateId ?? defaults.templateId),
-    version: String(item.version ?? item.acmeVersion ?? defaults.version),
+    templateId: String(item.templateId ?? defaults.templateId),
+    version: String(item.version ?? defaults.version),
     instruments: [productKey],
     signalRules: asSignalRules(item.signalRules),
     risk: mergeObject(defaults.risk, item.risk),
     midpointPeg: mergeObject(defaults.midpointPeg, item.midpointPeg),
-    entryPeg: mergeObject(defaults.entryPeg, item.entryPeg),
-    layerPlan: mergeObject(defaults.layerPlan, item.layerPlan),
+    entryPeg,
+    layerPlan,
     syntheticOrderManager: mergeObject(defaults.syntheticOrderManager, item.syntheticOrderManager),
     exitPolicy: mergeObject(defaults.exitPolicy, item.exitPolicy),
-    orderPolicy: mergeObject(defaults.orderPolicy, item.orderPolicy),
+    orderPolicy,
     notes: String(item.notes ?? ''),
   }
 }
@@ -1150,7 +1162,7 @@ function loadAlgoLibrary(): AlgoDefinition[] {
   }
 }
 
-function acmeDefinitionToAlgo(item: Record<string, unknown>): AlgoDefinition | null {
+function ceriousDefinitionToAlgo(item: Record<string, unknown>): AlgoDefinition | null {
   const id = String(item.id ?? '')
   const name = String(item.name ?? id)
   if (!id || !name) return null
@@ -1159,7 +1171,7 @@ function acmeDefinitionToAlgo(item: Record<string, unknown>): AlgoDefinition | n
   const layerPlan = item.layerPlan && typeof item.layerPlan === 'object' ? item.layerPlan as Record<string, unknown> : {}
   const templateId = String(item.templateId ?? 'mean-reversion-v2')
   const symbol = normalizeProductKey(item.marketKey ?? item.symbol) || normalizeProductKey(instruments[0]) || 'ES_NQ'
-  const acmeFields = normalizeAcmeFields(item, symbol)
+  const ceriousFields = normalizeCeriousFields(item, symbol)
   const statusRaw = String(item.status ?? 'held')
   const status = statusRaw === 'draft' || statusRaw === 'paused' ? statusRaw : 'held'
   const rawClipSize = Number(item.clipSize ?? item.contractsPerOrder ?? item.orderSize ?? risk.clipSize ?? risk.contractsPerOrder ?? 1)
@@ -1170,7 +1182,7 @@ function acmeDefinitionToAlgo(item: Record<string, unknown>): AlgoDefinition | n
     id,
     name,
     template: asTemplate(templateId),
-    ...acmeFields,
+    ...ceriousFields,
     provider: 'cme',
     symbol,
     marketKey: symbol,
@@ -1181,9 +1193,6 @@ function acmeDefinitionToAlgo(item: Record<string, unknown>): AlgoDefinition | n
     operator: 'Cerious Trader',
     status,
     updatedAt: Date.parse(String(item.updatedAt ?? item.createdAt ?? '')) || 0,
-    acmeTemplateId: templateId,
-    acmeVersion: String(item.version ?? ''),
-    acmeRaw: item,
   }
 }
 
@@ -1193,8 +1202,8 @@ function normalizeStoredAlgoDefinition(item: Partial<AlgoDefinition> | Record<st
   const name = String(item.name ?? id).trim()
   if (!id || !name) return null
   const symbol = algoMarketCandidates(item)[0] || 'ES_NQ'
-  const acmeFields = normalizeAcmeFields(item, symbol)
-  const risk = acmeFields.risk
+  const ceriousFields = normalizeCeriousFields(item, symbol)
+  const risk = ceriousFields.risk
   const statusRaw = String(item.status ?? 'held')
   const status: AlgoStatus = statusRaw === 'draft' || statusRaw === 'paused' || statusRaw === 'quoting' || statusRaw === 'held' ? statusRaw : 'held'
   const sideRaw = String(item.side ?? 'both')
@@ -1205,7 +1214,7 @@ function normalizeStoredAlgoDefinition(item: Partial<AlgoDefinition> | Record<st
   const clipSize = Math.max(1, Number(item.clipSize ?? riskRecord.clipSize ?? riskRecord.contractsPerOrder ?? 1) || 1)
   const maxPosition = Math.max(1, Number(item.maxPosition ?? risk.maxPosition ?? clipSize) || clipSize)
   return {
-    ...acmeFields,
+    ...ceriousFields,
     id,
     name,
     template: asTemplate(item.template ?? item.templateId),
@@ -1224,8 +1233,6 @@ function normalizeStoredAlgoDefinition(item: Partial<AlgoDefinition> | Record<st
 
 function sortAlgoDefinitions(list: AlgoDefinition[]): AlgoDefinition[] {
   return [...list].sort((a, b) => {
-    const sourceRank = Number(!a.acmeRaw) - Number(!b.acmeRaw)
-    if (sourceRank !== 0) return sourceRank
     const symbolRank = normalizeProductKey(a.symbol).localeCompare(normalizeProductKey(b.symbol))
     if (symbolRank !== 0) return symbolRank
     const nameRank = a.name.localeCompare(b.name)
@@ -1264,14 +1271,14 @@ function useAlgoLibrary() {
 
   useEffect(() => {
     let cancelled = false
-    const loadAcmeDefinitions = async () => {
+    const loadCeriousDefinitions = async () => {
       try {
         const response = await ceriousFetch('/api/algo-manager/state')
         if (!response.ok) return
         const payload = await response.json()
         const definitions = Array.isArray(payload.definitions) ? payload.definitions : []
         const mapped = definitions
-          .map((definition: Record<string, unknown>) => acmeDefinitionToAlgo(definition))
+          .map((definition: Record<string, unknown>) => ceriousDefinitionToAlgo(definition))
           .filter(Boolean) as AlgoDefinition[]
         if (cancelled || !mapped.length) return
         setAlgos(() => {
@@ -1283,7 +1290,7 @@ function useAlgoLibrary() {
         // Local staged algos remain usable if the service is down.
       }
     }
-    loadAcmeDefinitions()
+    loadCeriousDefinitions()
     return () => {
       cancelled = true
     }
@@ -1323,7 +1330,7 @@ function useAlgoLibrary() {
   }
 }
 
-type AcmeSpreadStat = {
+type CeriousSpreadStat = {
   key: string
   label: string
   spread: number
@@ -1355,17 +1362,17 @@ type AcmeSpreadStat = {
   rvUpdatedAt?: number
   publishedAt?: string
   publishReason?: string
-  lr27Mean?: number
-  lr27Upper2?: number
-  lr27Lower2?: number
-  lr27Sigma?: number
-  lr27Slope?: number
-  lr27Interval?: string
-  lr27Period?: number
-  lr27Bars?: number
-  lr27UpdatedAt?: number
-  lr27IsForming?: boolean
-  lr27Source?: string
+  linearRegressionMean?: number
+  linearRegressionUpper?: number
+  linearRegressionLower?: number
+  linearRegressionSigma?: number
+  linearRegressionSlope?: number
+  linearRegressionInterval?: string
+  linearRegressionLookback?: number
+  linearRegressionBars?: number
+  linearRegressionUpdatedAt?: number
+  linearRegressionIsForming?: boolean
+  linearRegressionSource?: string
   theoreticalBid: number
   theoreticalAsk: number
   signal: string
@@ -1374,14 +1381,14 @@ type AcmeSpreadStat = {
   bars: Bar[]
 }
 
-type AcmeMacroFactorRow = {
+type CeriousMacroFactorRow = {
   key: string
   value: number
   weight: number
   contribution: number
 }
 
-type AcmeMacroState = {
+type CeriousMacroState = {
   service: string
   fetchedAt?: string
   label: string
@@ -1389,7 +1396,7 @@ type AcmeMacroState = {
   algo: string
   score: number
   factors: Record<string, number>
-  factorRows: AcmeMacroFactorRow[]
+  factorRows: CeriousMacroFactorRow[]
   newsRead?: {
     bias: string
     score: number
@@ -1401,7 +1408,7 @@ type AcmeMacroState = {
   read: string
 }
 
-type AcmeSpreadConfig = {
+type CeriousSpreadConfig = {
   symbol: string
   label: string
   meaning: string
@@ -1415,7 +1422,7 @@ type AcmeSpreadConfig = {
   ratio: number
 }
 
-type AcmeIntelligence = {
+type CeriousIntelligence = {
   goose?: {
     strategy: string
     direction: string
@@ -1428,70 +1435,60 @@ type AcmeIntelligence = {
     nextReviewSeconds?: number
   }
   spreadPack?: {
-    spreads: AcmeSpreadStat[]
-    strongest?: AcmeSpreadStat
+    spreads: CeriousSpreadStat[]
+    strongest?: CeriousSpreadStat
   }
-  spreadConfigs?: AcmeSpreadConfig[]
-  macroRegime?: AcmeMacroState
-  liveSpreadSignals?: Array<Pick<AcmeSpreadStat, 'key' | 'label' | 'spread' | 'lastTraded' | 'mean' | 'longTermMean' | 'lookbackMean' | 'lookbackDays' | 'priorSettle' | 'moveFromMean' | 'movePctOfAtr' | 'z' | 'atr' | 'atr3' | 'atr20' | 'atr30' | 'blendedAtr' | 'halfAtr' | 'vwapBasis' | 'dayZ' | 'signalThreshold' | 'bias' | 'orderFlowScore' | 'updateCadence' | 'rvInterval' | 'rvBars' | 'rvUpdatedAt' | 'publishedAt' | 'publishReason' | 'lr27Mean' | 'lr27Upper2' | 'lr27Lower2' | 'lr27Sigma' | 'lr27Slope' | 'lr27Interval' | 'lr27Period' | 'lr27Bars' | 'lr27UpdatedAt' | 'lr27IsForming' | 'lr27Source' | 'signal' | 'theoreticalBid' | 'theoreticalAsk' | 'volume' | 'live'>>
+  spreadConfigs?: CeriousSpreadConfig[]
+  macroRegime?: CeriousMacroState
+  liveSpreadSignals?: Array<Pick<CeriousSpreadStat, 'key' | 'label' | 'spread' | 'lastTraded' | 'mean' | 'longTermMean' | 'lookbackMean' | 'lookbackDays' | 'priorSettle' | 'moveFromMean' | 'movePctOfAtr' | 'z' | 'atr' | 'atr3' | 'atr20' | 'atr30' | 'blendedAtr' | 'halfAtr' | 'vwapBasis' | 'dayZ' | 'signalThreshold' | 'bias' | 'orderFlowScore' | 'updateCadence' | 'rvInterval' | 'rvBars' | 'rvUpdatedAt' | 'publishedAt' | 'publishReason' | 'linearRegressionMean' | 'linearRegressionUpper' | 'linearRegressionLower' | 'linearRegressionSigma' | 'linearRegressionSlope' | 'linearRegressionInterval' | 'linearRegressionLookback' | 'linearRegressionBars' | 'linearRegressionUpdatedAt' | 'linearRegressionIsForming' | 'linearRegressionSource' | 'signal' | 'theoreticalBid' | 'theoreticalAsk' | 'volume' | 'live'>>
 }
 
-type AcmeChartMode = 'candles' | 'line'
-type AcmeChartTimeframe = '1m' | '5m' | '30m' | '1h' | '1d'
-type AcmeChartDisplayPreset = 'clean' | 'grid' | 'calendar' | 'outline'
-type AcmeChartStudyType = 'regression-channel' | 'atr' | 'volume-at-price'
+type CeriousChartMode = 'candles' | 'line'
+type CeriousChartTimeframe = '1m' | '5m' | '30m' | '1h' | '1d'
+type CeriousChartDisplayPreset = 'clean' | 'grid' | 'calendar' | 'outline'
+type CeriousChartStudyType = 'regression-channel' | 'atr' | 'volume-at-price'
 
-type AcmeChartStudy = {
+type CeriousChartStudy = {
   id: string
-  type: AcmeChartStudyType
-  lookback: number
+  type: CeriousChartStudyType
+  lookback?: number
   upperDeviation?: number
   lowerDeviation?: number
   atrMultiplier?: number
   bins?: number
 }
 
-const DEFAULT_REGRESSION_CHART_STUDY: AcmeChartStudy = {
-  id: 'regch-default-27',
-  type: 'regression-channel',
-  lookback: 27,
-  upperDeviation: 2,
-  lowerDeviation: 2,
+function defaultCeriousChartStudies(): CeriousChartStudy[] {
+  return []
 }
 
-function defaultAcmeChartStudies(): AcmeChartStudy[] {
-  return [{ ...DEFAULT_REGRESSION_CHART_STUDY }]
+function isDefaultRegressionChartStudy(study: CeriousChartStudy) {
+  void study
+  return false
 }
 
-function isDefaultRegressionChartStudy(study: AcmeChartStudy) {
-  return study.type === 'regression-channel'
-    && Math.floor(study.lookback || 0) === 27
-    && Number(study.upperDeviation ?? 2) === 2
-    && Number(study.lowerDeviation ?? 2) === 2
-}
-
-function initialAcmeChartStudies(settings?: AcmeChartSettings): AcmeChartStudy[] {
+function initialCeriousChartStudies(settings?: CeriousChartSettings): CeriousChartStudy[] {
   const configured = settings?.studies?.filter(study => study && study.type) ?? []
-  return configured.length ? configured : defaultAcmeChartStudies()
+  return configured.length ? configured : defaultCeriousChartStudies()
 }
 
-type AcmeChartSettings = {
-  mode: AcmeChartMode
-  timeframe: AcmeChartTimeframe
-  displayPreset: AcmeChartDisplayPreset
+type CeriousChartSettings = {
+  mode: CeriousChartMode
+  timeframe: CeriousChartTimeframe
+  displayPreset: CeriousChartDisplayPreset
   compressBlankSessions: boolean
   showGrid: boolean
   solidCandles: boolean
-  studies: AcmeChartStudy[]
-  studyType: AcmeChartStudyType
-  studyLookback: number
+  studies: CeriousChartStudy[]
+  studyType: CeriousChartStudyType
+  studyLookback?: number
   upperDeviation: number
   lowerDeviation: number
   atrMultiplier: number
   volumePriceBins: number
 }
 
-type AcmePositionRow = {
+type CeriousPositionRow = {
   instrumentId: string
   label?: string
   qty: number
@@ -1506,7 +1503,7 @@ type AcmePositionRow = {
   fillCount?: number
 }
 
-type AcmeOrderRow = {
+type CeriousOrderRow = {
   id: string
   instrumentId: string
   label?: string
@@ -1523,7 +1520,7 @@ type AcmeOrderRow = {
   updatedAt?: string
 }
 
-type AcmePositionsOrdersState = {
+type CeriousPositionsOrdersState = {
   service: string
   fetchedAt: string
   fillsJournalUpdatedAt?: string
@@ -1532,8 +1529,8 @@ type AcmePositionsOrdersState = {
   simPositions?: SimPosition[]
   fills?: Record<string, PolyTradeTick[]>
   simMessages?: string[]
-  positions: AcmePositionRow[]
-  orders: AcmeOrderRow[]
+  positions: CeriousPositionRow[]
+  orders: CeriousOrderRow[]
   summary: {
     positionCount: number
     workingOrderCount: number
@@ -1544,7 +1541,25 @@ type AcmePositionsOrdersState = {
   }
 }
 
-type AcmeNewsItem = {
+function applyCeriousTradingSnapshot(payload?: Partial<CeriousPositionsOrdersState> | null) {
+  if (!payload) return
+  if (ceriousTradingSnapshotUnavailable(payload)) return
+  if (payload.simOrders || payload.simPositions || payload.fills || payload.simMessages) {
+    useStore.getState().setSimTradingState({
+      simOrders: payload.simOrders,
+      simPositions: payload.simPositions,
+      fills: payload.fills,
+      simMessages: payload.simMessages,
+    })
+  }
+}
+
+function ceriousTradingSnapshotUnavailable(payload?: Partial<CeriousPositionsOrdersState> | null): boolean {
+  if (!payload) return true
+  return (payload.simMessages ?? []).some(message => /EXCHANGE STATE UNAVAILABLE|STATE UNAVAILABLE/i.test(String(message)))
+}
+
+type CeriousNewsItem = {
   id: string
   source: string
   title: string
@@ -1555,18 +1570,18 @@ type AcmeNewsItem = {
   bias?: 'risk-on' | 'risk-off' | 'mixed'
 }
 
-type AcmeNewsState = {
+type CeriousNewsState = {
   service: string
   provider: string
   status: string
   fetchedAt: string
-  items: AcmeNewsItem[]
+  items: CeriousNewsItem[]
   warnings?: string[]
   publicSourcesExpected?: number
   publicSourcesLive?: number
 }
 
-type AcmeAuditEntry = {
+type CeriousAuditEntry = {
   id: string
   timestamp: string
   sequence?: string | number
@@ -1577,13 +1592,31 @@ type AcmeAuditEntry = {
   summary: string
 }
 
-type AcmeAuditState = {
+type CeriousAuditState = {
   service: string
   fetchedAt: string
-  entries: AcmeAuditEntry[]
+  entries: CeriousAuditEntry[]
 }
 
-type AcmeOpportunityState = {
+type CeriousDailySummaryState = {
+  service: string
+  fetchedAt: string
+  summaryRead: string
+  top: Array<{ label: string; value: string; note: string }>
+  classification: Array<{ label: string; value: string; note: string }>
+  sourcePills?: Array<{ label: string; tone?: 'blue' | 'amber' | 'red' | string }>
+  eligibleSpreads?: Array<{
+    key: string
+    label: string
+    score: number
+    z: number
+    bias: string
+    approach: string
+  }>
+  gooseComplement?: string
+}
+
+type CeriousOpportunityState = {
   service: string
   fetchedAt: string
   rows: Array<{
@@ -1625,7 +1658,7 @@ type AcmeOpportunityState = {
   }>
 }
 
-type AcmeTradeAnalyticsState = {
+type CeriousTradeAnalyticsState = {
   service: string
   fetchedAt: string
   status: string
@@ -1675,7 +1708,7 @@ type ImportedFillRecord = {
   timestampMs?: number
 }
 
-type AcmeNotionalState = {
+type CeriousNotionalState = {
   service: string
   fetchedAt: string
   rows: Array<{
@@ -1694,7 +1727,7 @@ type AcmeNotionalState = {
   }>
 }
 
-type AcmeContentState = {
+type CeriousContentState = {
   kind: string
   service: string
   fetchedAt: string
@@ -1715,7 +1748,7 @@ type ModelVariantDraft = {
   schema?: string
 }
 
-function useAcmeEndpoint<T>(path: string, intervalMs = 10000) {
+function useCeriousEndpoint<T>(path: string, intervalMs = 10000) {
   const [data, setData] = useState<T | null>(null)
   const [error, setError] = useState('')
 
@@ -1745,7 +1778,7 @@ function useAcmeEndpoint<T>(path: string, intervalMs = 10000) {
   return { data, error }
 }
 
-function parseAcmeCsv(text: string): string[][] {
+function parseCeriousCsv(text: string): string[][] {
   const rows: string[][] = []
   let row: string[] = []
   let cell = ''
@@ -1780,7 +1813,7 @@ function normalizeCsvHeader(value: unknown): string {
   return String(value ?? '').trim().toLowerCase().replace(/[^a-z0-9]/g, '')
 }
 
-function acmeHeaderIndex(headers: string[], names: string[], options: { exclude?: string[] } = {}): number {
+function ceriousHeaderIndex(headers: string[], names: string[], options: { exclude?: string[] } = {}): number {
   const normalizedNames = names.map(normalizeCsvHeader)
   const excluded = (options.exclude ?? []).map(normalizeCsvHeader)
   const candidates = headers
@@ -1800,23 +1833,23 @@ function csvNumber(value: unknown): number | null {
   return Number.isFinite(parsed) ? (negative ? -Math.abs(parsed) : parsed) : null
 }
 
-function acmeMean(values: number[]): number {
+function ceriousMean(values: number[]): number {
   return values.length ? values.reduce((total, value) => total + value, 0) / values.length : 0
 }
 
-function acmeStdev(values: number[]): number {
+function ceriousStdev(values: number[]): number {
   if (values.length < 2) return 0
-  const mean = acmeMean(values)
+  const mean = ceriousMean(values)
   const variance = values.reduce((total, value) => total + (value - mean) ** 2, 0) / (values.length - 1)
   return Math.sqrt(variance)
 }
 
-function acmeDownsideDeviation(returns: number[], target = 0): number {
+function ceriousDownsideDeviation(returns: number[], target = 0): number {
   if (!returns.length) return 0
-  return Math.sqrt(acmeMean(returns.map(value => Math.min(0, value - target) ** 2)))
+  return Math.sqrt(ceriousMean(returns.map(value => Math.min(0, value - target) ** 2)))
 }
 
-function acmeMaxDrawdown(values: number[]): number {
+function ceriousMaxDrawdown(values: number[]): number {
   let peak = 0
   let worst = 0
   let equity = 0
@@ -1845,7 +1878,7 @@ function parseTradeTimestamp(value: unknown): number {
   ).getTime()
 }
 
-function equityCurveFromPnls(pnls: number[], accountSize = TRADE_ANALYTICS_ACCOUNT_SIZE): AcmeTradeAnalyticsState['curve'] {
+function equityCurveFromPnls(pnls: number[], accountSize = TRADE_ANALYTICS_ACCOUNT_SIZE): CeriousTradeAnalyticsState['curve'] {
   let cumulative = 0
   let peak = 0
   let maxDrawdown = 0
@@ -1863,13 +1896,13 @@ function equityCurveFromPnls(pnls: number[], accountSize = TRADE_ANALYTICS_ACCOU
   })
 }
 
-function tradeAnalyticsRiskLevel(metrics: AcmeTradeAnalyticsState['metrics']): string {
+function tradeAnalyticsRiskLevel(metrics: CeriousTradeAnalyticsState['metrics']): string {
   if (metrics.drawdownPct >= 0.02 || metrics.total < 0 || metrics.sharpe < 0 || metrics.calmar < 0) return 'High'
   if (metrics.drawdownPct >= 0.01 || metrics.profitFactor < 1.2 || metrics.sharpe < 0.5) return 'Elevated'
   return 'Controlled'
 }
 
-function buildTradeAnalyticsStudies(metrics: AcmeTradeAnalyticsState['metrics']): AcmeTradeAnalyticsState['studies'] {
+function buildTradeAnalyticsStudies(metrics: CeriousTradeAnalyticsState['metrics']): CeriousTradeAnalyticsState['studies'] {
   const known = metrics.knownInstrumentRows ?? Math.round(metrics.studyCoverage * metrics.rows)
   return [
     {
@@ -1912,9 +1945,9 @@ function buildTradeAnalyticsStudies(metrics: AcmeTradeAnalyticsState['metrics'])
 }
 
 function buildTradeAnalyticsReport(
-  metrics: AcmeTradeAnalyticsState['metrics'],
+  metrics: CeriousTradeAnalyticsState['metrics'],
   records: ImportedFillRecord[],
-): NonNullable<AcmeTradeAnalyticsState['report']> {
+): NonNullable<CeriousTradeAnalyticsState['report']> {
   const best = records.reduce<ImportedFillRecord | null>((winner, record) => !winner || record.pnl > winner.pnl ? record : winner, null)
   const worst = records.reduce<ImportedFillRecord | null>((loser, record) => !loser || record.pnl < loser.pnl ? record : loser, null)
   return [
@@ -1928,7 +1961,7 @@ function buildTradeAnalyticsReport(
           : 'P&L and drawdown are within the current risk envelope.',
     },
     {
-      label: 'Period result',
+      label: 'Session result',
       value: `${fmtMoney(metrics.total)} / ${fmtPct(metrics.returnPct)}`,
       read: metrics.total >= 0 ? 'Net positive against the account base.' : 'Net negative against the account base.',
     },
@@ -1970,25 +2003,25 @@ function buildTradeAnalyticsReport(
   ]
 }
 
-function analyzeTradeAnalyticsCsv(text: string, filename = 'fills.csv'): AcmeTradeAnalyticsState {
-  const rows = parseAcmeCsv(text)
+function analyzeTradeAnalyticsCsv(text: string, filename = 'fills.csv'): CeriousTradeAnalyticsState {
+  const rows = parseCeriousCsv(text)
   if (rows.length < 2) throw new Error('CSV needs a header row and at least one fill row')
   const headers = rows[0].map(value => value.trim())
-  const pnlIndex = acmeHeaderIndex(headers, ['realizedPnl', 'closedPnl', 'netPnl', 'tradePnl', 'pnl', 'profit', 'net', 'realized'], {
+  const pnlIndex = ceriousHeaderIndex(headers, ['realizedPnl', 'closedPnl', 'netPnl', 'tradePnl', 'pnl', 'profit', 'net', 'realized'], {
     exclude: ['openPnl', 'cumulativePnl', 'accountDrawdown', 'accountMaxDrawdown', 'accountEquity'],
   })
   if (pnlIndex < 0) throw new Error('Could not find a realized P&L column. Try realizedPnl, pnl, profit, net, or realized.')
 
-  const instrumentIndex = acmeHeaderIndex(headers, ['instrument', 'instrumentId', 'symbol', 'product', 'market'])
-  const sideIndex = acmeHeaderIndex(headers, ['side', 'buy/sell'])
-  const qtyIndex = acmeHeaderIndex(headers, ['qty', 'quantity', 'size'])
-  const priceIndex = acmeHeaderIndex(headers, ['price', 'fillPrice', 'fill price'])
-  const timestampIndex = acmeHeaderIndex(headers, ['timestamp'])
-  const timestampChicagoIndex = acmeHeaderIndex(headers, ['timestampChicago'])
-  const timeIndex = acmeHeaderIndex(headers, ['time', 'date'])
-  const cumulativeIndex = acmeHeaderIndex(headers, ['cumulativePnl'])
-  const drawdownIndex = acmeHeaderIndex(headers, ['accountMaxDrawdown', 'maxDrawdown'])
-  const currentDrawdownIndex = acmeHeaderIndex(headers, ['accountDrawdown', 'drawdown'])
+  const instrumentIndex = ceriousHeaderIndex(headers, ['instrument', 'instrumentId', 'symbol', 'product', 'market'])
+  const sideIndex = ceriousHeaderIndex(headers, ['side', 'buy/sell'])
+  const qtyIndex = ceriousHeaderIndex(headers, ['qty', 'quantity', 'size'])
+  const priceIndex = ceriousHeaderIndex(headers, ['price', 'fillPrice', 'fill price'])
+  const timestampIndex = ceriousHeaderIndex(headers, ['timestamp'])
+  const timestampChicagoIndex = ceriousHeaderIndex(headers, ['timestampChicago'])
+  const timeIndex = ceriousHeaderIndex(headers, ['time', 'date'])
+  const cumulativeIndex = ceriousHeaderIndex(headers, ['cumulativePnl'])
+  const drawdownIndex = ceriousHeaderIndex(headers, ['accountMaxDrawdown', 'maxDrawdown'])
+  const currentDrawdownIndex = ceriousHeaderIndex(headers, ['accountDrawdown', 'drawdown'])
   const knownProducts = new Set(['ES', 'NQ', 'YM', 'RTY', 'ES_NQ', 'YM_ES', 'RTY_ES', 'ES/NQ', 'YM/ES', 'RTY/ES', 'ZM', 'ZS', 'CL', 'GC'])
 
   const records = rows.slice(1).map(row => {
@@ -2026,14 +2059,14 @@ function analyzeTradeAnalyticsCsv(text: string, filename = 'fills.csv'): AcmeTra
   const grossProfit = wins.reduce((sum, value) => sum + value, 0)
   const grossLoss = Math.abs(losses.reduce((sum, value) => sum + value, 0))
   const returns = pnls.map(value => value / TRADE_ANALYTICS_ACCOUNT_SIZE)
-  const meanReturn = acmeMean(returns)
-  const sigma = acmeStdev(returns)
-  const downside = acmeDownsideDeviation(returns, 0)
+  const meanReturn = ceriousMean(returns)
+  const sigma = ceriousStdev(returns)
+  const downside = ceriousDownsideDeviation(returns, 0)
   const curve = equityCurveFromPnls(pnls)
   const reportedDrawdown = Math.max(0, ...records.map(record => Number(record.accountMaxDrawdown)).filter(Number.isFinite))
-  const drawdown = reportedDrawdown || (curve.length ? curve[curve.length - 1].maxDrawdown : acmeMaxDrawdown(pnls))
-  const peakPoint = curve.reduce<AcmeTradeAnalyticsState['curve'][number] | null>((winner, point) => !winner || point.equity > winner.equity ? point : winner, null)
-  const troughPoint = curve.reduce<AcmeTradeAnalyticsState['curve'][number] | null>((loser, point) => !loser || point.equity < loser.equity ? point : loser, null)
+  const drawdown = reportedDrawdown || (curve.length ? curve[curve.length - 1].maxDrawdown : ceriousMaxDrawdown(pnls))
+  const peakPoint = curve.reduce<CeriousTradeAnalyticsState['curve'][number] | null>((winner, point) => !winner || point.equity > winner.equity ? point : winner, null)
+  const troughPoint = curve.reduce<CeriousTradeAnalyticsState['curve'][number] | null>((loser, point) => !loser || point.equity < loser.equity ? point : loser, null)
   const worstDrawdownPoint = records.reduce<ImportedFillRecord | null>((worst, record) => {
     const value = Number(record.accountDrawdown)
     if (!Number.isFinite(value)) return worst
@@ -2051,7 +2084,7 @@ function analyzeTradeAnalyticsCsv(text: string, filename = 'fills.csv'): AcmeTra
   const returnPct = total / TRADE_ANALYTICS_ACCOUNT_SIZE
   const drawdownPct = drawdown / TRADE_ANALYTICS_ACCOUNT_SIZE
   const knownInstrumentRows = records.filter(record => knownProducts.has(record.instrument)).length
-  const metrics: AcmeTradeAnalyticsState['metrics'] = {
+  const metrics: CeriousTradeAnalyticsState['metrics'] = {
     rows: records.length,
     accountSize: TRADE_ANALYTICS_ACCOUNT_SIZE,
     total,
@@ -2061,7 +2094,7 @@ function analyzeTradeAnalyticsCsv(text: string, filename = 'fills.csv'): AcmeTra
     sortino: downside ? meanReturn / downside * Math.sqrt(returns.length) : 0,
     calmar: drawdownPct ? returnPct / drawdownPct : 0,
     profitFactor: grossLoss ? grossProfit / grossLoss : grossProfit || 0,
-    expectancy: acmeMean(pnls),
+    expectancy: ceriousMean(pnls),
     drawdown,
     drawdownPct,
     studyCoverage: records.length ? knownInstrumentRows / records.length : 0,
@@ -2091,23 +2124,26 @@ function analyzeTradeAnalyticsCsv(text: string, filename = 'fills.csv'): AcmeTra
   }
 }
 
-function loadImportedTradeAnalytics(): AcmeTradeAnalyticsState | null {
+function loadImportedTradeAnalytics(): CeriousTradeAnalyticsState | null {
   try {
     const raw = window.localStorage.getItem(TRADE_ANALYTICS_IMPORT_KEY)
-    return raw ? JSON.parse(raw) as AcmeTradeAnalyticsState : null
+    return raw ? JSON.parse(raw) as CeriousTradeAnalyticsState : null
   } catch {
     return null
   }
 }
 
-function useAcmeIntelligence(intervalMs = 60000): AcmeIntelligence | null {
-  const [data, setData] = useState<AcmeIntelligence | null>(null)
+const CERIOUS_ADVISORY_REFRESH_MS = 30 * 60_000
+const CERIOUS_ADVISORY_REFRESH_LABEL = 'Completed 30m advisory cadence'
+
+function useCeriousIntelligence(intervalMs = CERIOUS_ADVISORY_REFRESH_MS): CeriousIntelligence | null {
+  const [data, setData] = useState<CeriousIntelligence | null>(null)
 
   useEffect(() => {
     let cancelled = false
     const pull = async () => {
       try {
-        const response = await fetch('/api/acme/intelligence', { cache: 'no-store' })
+        const response = await fetch('/api/cerious/intelligence', { cache: 'no-store' })
         if (!response.ok || cancelled) return
         setData(await response.json())
       } catch {
@@ -2126,6 +2162,7 @@ function useAcmeIntelligence(intervalMs = 60000): AcmeIntelligence | null {
 }
 
 async function submitSharedOrder(order: Partial<SimOrder> & {
+  orderId: string
   marketKey: string
   side: 'bid' | 'offer'
   price: number
@@ -2154,7 +2191,7 @@ async function submitSharedOrder(order: Partial<SimOrder> & {
 }
 
 async function cancelSharedOrder(orderId: string): Promise<void> {
-  const response = await ceriousFetch(`/api/acme/orders/${encodeURIComponent(orderId)}/cancel`, { method: 'POST' })
+  const response = await ceriousFetch(`/api/cerious/orders/${encodeURIComponent(orderId)}/cancel`, { method: 'POST' })
   const payload = await response.json().catch(() => ({}))
   if (!response.ok || !payload.ok) {
     throw new Error(String(payload.detail || payload.message || `Cancel rejected HTTP ${response.status}`))
@@ -2169,24 +2206,18 @@ async function cancelSharedOrder(orderId: string): Promise<void> {
   }
 }
 
-function useAcmePositionsOrders() {
-  const [data, setData] = useState<AcmePositionsOrdersState | null>(null)
+function useCeriousPositionsOrders() {
+  const [data, setData] = useState<CeriousPositionsOrdersState | null>(null)
   const [error, setError] = useState('')
 
   const pull = async () => {
     try {
-      const response = await ceriousFetch('/api/acme/positions-orders', { cache: 'no-store' })
+      const response = await ceriousFetch('/api/cerious/positions-orders', { cache: 'no-store' })
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      const payload = await response.json() as AcmePositionsOrdersState
+      const payload = await response.json() as CeriousPositionsOrdersState
+      if (ceriousTradingSnapshotUnavailable(payload)) return
       setData(payload)
-      if (payload.simOrders || payload.simPositions || payload.fills || payload.simMessages) {
-        useStore.getState().setSimTradingState({
-          simOrders: payload.simOrders,
-          simPositions: payload.simPositions,
-          fills: payload.fills,
-          simMessages: payload.simMessages,
-        })
-      }
+      applyCeriousTradingSnapshot(payload)
       setError('')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Positions refresh failed')
@@ -2208,6 +2239,28 @@ function useAcmePositionsOrders() {
   }, [])
 
   return { data, error, refresh: pull }
+}
+
+function useCeriousTradingStateHydrator(intervalMs = 1000) {
+  useEffect(() => {
+    let cancelled = false
+    const pull = async () => {
+      try {
+        const response = await ceriousFetch('/api/cerious/positions-orders', { cache: 'no-store' })
+        if (!response.ok || cancelled) return
+        const payload = await response.json() as CeriousPositionsOrdersState
+        if (!cancelled) applyCeriousTradingSnapshot(payload)
+      } catch {
+        // Trading state hydration is retried on the next interval; service health UI reports readiness.
+      }
+    }
+    void pull()
+    const id = window.setInterval(() => { void pull() }, intervalMs)
+    return () => {
+      cancelled = true
+      window.clearInterval(id)
+    }
+  }, [intervalMs])
 }
 
 function useMarketBootstrap() {
@@ -2411,6 +2464,22 @@ function mappedLiquidityProducts(options: ProductOption[], cryptoPrices: ReturnT
     if (rank !== 0) return rank
     return a.symbol.localeCompare(b.symbol)
   })
+}
+
+function productOptionForSavedRow(options: ProductOption[], row: MarketRowConfig): ProductOption {
+  const existing = options.find(item => item.provider === row.provider && item.symbol === row.symbol)
+  if (existing) return existing
+  const symbol = normalizeProductKey(row.symbol) || String(row.symbol || '').trim().toUpperCase()
+  const asset = PRODUCT_ASSETS.includes(symbol as Asset) ? symbol as Asset : undefined
+  return {
+    provider: normalizeProviderKey(row.provider),
+    symbol,
+    label: symbol,
+    subtitle: `${symbol} mapped product`,
+    marketKey: symbol,
+    asset,
+    live: true,
+  }
 }
 
 function ProductSelector({
@@ -2759,6 +2828,7 @@ function yesPriceFromTrade(tick: PolyTradeTick | undefined): number | undefined 
 }
 
 function cmeBookToPolyCompat(cmeBook: CmeBook): PolyBook {
+  const mark = cmeBook.ltp ?? cmeBook.mid
   return {
     market_key: cmeBook.symbol,
     question: `${cmeBook.symbol} CME depth`,
@@ -2769,9 +2839,9 @@ function cmeBookToPolyCompat(cmeBook: CmeBook): PolyBook {
     best_ask: cmeBook.bestAsk ?? cmeBook.asks?.[0]?.price ?? null,
     mid: cmeBook.mid ?? 0,
     spread_pct: cmeBook.spread ?? null,
-    up_pct: cmeBook.ltp ?? cmeBook.mid ?? 0,
-    down_pct: cmeBook.ltp ?? cmeBook.mid ?? 0,
-    ltp: cmeBook.ltp,
+    up_pct: mark ?? 0,
+    down_pct: mark ?? 0,
+    ltp: mark,
     ltp_size: cmeBook.ltpSize,
     expiry_ts: (cmeBook.tsMs ?? Date.now()) + 24 * 60 * 60 * 1000,
     live: true,
@@ -2838,29 +2908,31 @@ function useCmeMarketDataSubscriptions(symbols: string[]) {
         })
         .catch(() => undefined)
 
-      const wsParams = new URLSearchParams({ provider: 'cme' })
-      const token = workspaceSessionToken()
-      if (token) wsParams.set('token', token)
-      const ws = new WebSocket(`${wsBase}/${encodeURIComponent(target)}?${wsParams.toString()}`)
-      ws.onmessage = event => {
-        try {
-          const payload = JSON.parse(event.data)
-          if (payload.type === 'snapshot') {
-            const cmeBooks = payload.cme_books as Record<string, CmeBook> | undefined
-            const cmeTrades = payload.cme_trades as Record<string, CmeTradeTick[]> | undefined
-            if (cmeBooks?.[target]) ingestBook(target, cmeBooks[target])
-            for (const trade of cmeTrades?.[target] ?? []) acceptTrade(target, trade)
-            return
+      if (ENABLE_LEGACY_BROWSER_WS) {
+        const wsParams = new URLSearchParams({ provider: 'cme' })
+        const token = workspaceSessionToken()
+        if (token) wsParams.set('token', token)
+        const ws = new WebSocket(`${wsBase}/${encodeURIComponent(target)}?${wsParams.toString()}`)
+        ws.onmessage = event => {
+          try {
+            const payload = JSON.parse(event.data)
+            if (payload.type === 'snapshot') {
+              const cmeBooks = payload.cme_books as Record<string, CmeBook> | undefined
+              const cmeTrades = payload.cme_trades as Record<string, CmeTradeTick[]> | undefined
+              if (cmeBooks?.[target]) ingestBook(target, cmeBooks[target])
+              for (const trade of cmeTrades?.[target] ?? []) acceptTrade(target, trade)
+              return
+            }
+            if (payload.type === 'cme_book' && payload.symbol === target) ingestBook(target, payload.data as CmeBook)
+            if (payload.type === 'cme_trade' && payload.symbol === target) acceptTrade(target, payload.data as CmeTradeTick)
+            if (payload.type === 'markets') store().setMarkets(payload.data, true)
+          } catch {
+            // Ignore malformed feed messages and keep the stream alive.
           }
-          if (payload.type === 'cme_book' && payload.symbol === target) ingestBook(target, payload.data as CmeBook)
-          if (payload.type === 'cme_trade' && payload.symbol === target) acceptTrade(target, payload.data as CmeTradeTick)
-          if (payload.type === 'markets') store().setMarkets(payload.data, true)
-        } catch {
-          // Ignore malformed feed messages and keep the stream alive.
         }
+        ws.onerror = () => ws.close()
+        sockets.push(ws)
       }
-      ws.onerror = () => ws.close()
-      sockets.push(ws)
     }
 
     return () => {
@@ -3115,14 +3187,14 @@ function MarketDataWindow({
   const marketHeaderClass = 'flex min-w-0 items-center justify-center truncate text-center'
   const marketCellClass = 'flex min-w-0 items-center justify-center truncate text-center'
   const cmeRowSymbols = useMemo(() => rows.flatMap(row => {
-    const option = options.find(item => item.provider === row.provider && item.symbol === row.symbol)
+    const option = productOptionForSavedRow(options, row)
     if (option?.provider !== 'cme') return []
     return [String(option.marketKey ?? option.asset ?? option.symbol).toUpperCase()]
   }), [options, rows])
   useCmeMarketDataSubscriptions(cmeRowSymbols)
 
   const rowData = rows.map(row => {
-    const option = options.find(item => item.provider === row.provider && item.symbol === row.symbol)
+    const option = productOptionForSavedRow(options, row)
     const book = option?.marketKey ? polyBooks[option.marketKey] : undefined
     const marketTicks = option?.marketKey ? (polyTicks[option.marketKey] ?? []) : []
     const marketFills = option?.marketKey ? (fills[option.marketKey] ?? []) : []
@@ -3174,7 +3246,8 @@ function MarketDataWindow({
     const spread = book?.spread_pct ?? (bid != null && ask != null ? ask - bid : undefined)
     const bookSeen = book ? ((book as { seen_ms?: number }).seen_ms ?? book.timestamp_ms) : undefined
     const timestamp = bookSeen ?? latestTrade?.timestamp ?? futuresStats.timestamp ?? stats.timestamp ?? option?.lastUpdate
-    const status = timestamp ? (Date.now() - timestamp < 30_000 ? 'OPEN' : 'STALE') : option?.live ? 'OPEN' : 'WAIT'
+    const hasLiveQuote = option?.live && (lastPrice != null || bid != null || ask != null)
+    const status = hasLiveQuote ? 'OPEN' : timestamp ? (Date.now() - timestamp < 30_000 ? 'OPEN' : 'STALE') : option?.live ? 'OPEN' : 'WAIT'
     const previousClose = quoteMode === 'price'
       ? futuresStats.previousClose ?? option?.priceToBeat
       : stats.previousClose ?? (quoteMode === 'money' && option?.spot != null ? option.spot : undefined)
@@ -3592,7 +3665,7 @@ function useDepthMarketStream(asset: Asset | string | undefined, provider: Provi
       ws.onerror = () => ws?.close()
     }
 
-    connect()
+    if (ENABLE_LEGACY_BROWSER_WS) connect()
     pullRestBook()
     const restBookId = window.setInterval(pullRestBook, 1000)
     fetch(`/api/cme/trades/${encodeURIComponent(target)}`)
@@ -4043,7 +4116,7 @@ function NormalDepthLadderWindow({
     if (simulationEnabled) {
       setDefaultStatus(`Sending ${side} ${priceKey}`)
       await submitSharedOrder({
-        id,
+        orderId: id,
         marketKey,
         outcome: 'yes',
         side: side === 'BID' ? 'bid' : 'offer',
@@ -4067,9 +4140,14 @@ function NormalDepthLadderWindow({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            orderId: id,
+            clientOrderId: id,
             product: marketKey,
+            marketKey,
+            symbol: marketKey,
             side,
             price: Number(priceKey),
+            size: defaultSize,
             qty: defaultSize,
             orderType: actionMode,
             source: 'depth-ladder',
@@ -4094,9 +4172,14 @@ function NormalDepthLadderWindow({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          orderId: order.id,
+          clientOrderId: order.id,
           product: marketKey,
+          marketKey,
+          symbol: marketKey,
           side: order.side,
           price: Number(order.priceKey),
+          size: order.size,
           qty: order.size,
           orderType: order.orderType,
           source: 'depth-ladder',
@@ -4137,7 +4220,7 @@ function NormalDepthLadderWindow({
         try {
           await cancelSharedOrder(orderToMove.id)
           await submitSharedOrder({
-            id: orderToMove.id,
+            orderId: orderToMove.id,
             marketKey: marketKey ?? '',
             outcome: 'yes',
             side: orderToMove.side === 'BID' ? 'bid' : 'offer',
@@ -4970,16 +5053,20 @@ function productLookup(options: ProductOption[]): Map<string, ProductOption> {
   return byKey
 }
 
-function simOrderToAcmeOrderRow(order: SimOrder, option: ProductOption | undefined): AcmeOrderRow {
+function simOrderToCeriousOrderRow(order: SimOrder, option: ProductOption | undefined): CeriousOrderRow {
   const side = executionOrderSideLabel(order)
   const tag = simOrderTag(order.source, order.algoRole, order.orderTag)
+  const remaining = executionNumber(order.remaining)
+  const size = executionNumber(order.size)
+  const price = executionNumber(order.price)
+  const updatedAt = executionNumber(order.updatedAt, Date.now())
   return {
     id: order.id,
     instrumentId: option?.label ?? order.marketKey,
     label: option?.subtitle ?? order.marketKey,
     side,
-    qty: order.remaining > 0 ? order.remaining : order.size,
-    price: order.price,
+    qty: remaining > 0 ? remaining : size,
+    price,
     status: order.status,
     held: false,
     source: order.source,
@@ -4987,11 +5074,11 @@ function simOrderToAcmeOrderRow(order: SimOrder, option: ProductOption | undefin
     orderType: order.orderType,
     algoName: order.algoName ?? (order.source === 'algo' ? order.strategy : undefined),
     algoLegRole: order.algoRole ? (order.algoRole === 'cover' ? 'ALGO COVER' : 'ALGO ENTRY') : undefined,
-    updatedAt: new Date(order.updatedAt).toISOString(),
+    updatedAt: new Date(updatedAt).toISOString(),
   }
 }
 
-function simPositionToAcmePositionRow(position: SimPosition, option: ProductOption | undefined): AcmePositionRow {
+function simPositionToCeriousPositionRow(position: SimPosition, option: ProductOption | undefined): CeriousPositionRow {
   const multiplier = executionMultiplier(position.marketKey, position as unknown as Record<string, unknown>, position.avgPrice)
   const openPnl = calculateOpenFuturesPnl(position.avgPrice, position.markPrice, position.size, multiplier)
   return {
@@ -5035,19 +5122,22 @@ function buildExecutionRows({
     const market = markets.find(item => item.key === marketKey)
     return fills.filter(fill => isAccountFillTick(fill as unknown as Record<string, unknown>)).map((fill, index) => {
       const raw = fill as PolyTradeTick & Record<string, unknown>
+      const fillTimestamp = executionNumber(fill.timestamp, Date.now())
+      const fillPrice = executionNumber(fill.price)
+      const fillSize = executionNumber(fill.size)
       const exchange = String(raw.exchange ?? providerLabel(option?.provider ?? 'cme'))
       const source = inferSource(raw, typeof raw.model === 'string' ? raw.model : undefined)
       const venue: ProviderKey | 'sim' = exchange === 'Sim Exchange' ? 'sim' : option?.provider ?? 'cme'
-      const orderId = String(raw.order_id ?? raw.orderId ?? raw.trade_id ?? raw.tradeId ?? `${option?.provider ?? 'cme'}-${marketKey}-${fill.timestamp}-${index}`)
+      const orderId = String(raw.order_id ?? raw.orderId ?? raw.trade_id ?? raw.tradeId ?? `${option?.provider ?? 'cme'}-${marketKey}-${fillTimestamp}-${index}`)
       const product = option?.label ?? market?.key ?? fill.marketKey ?? marketKey
-      const priceLabel = executionPriceLabel(fill.price, marketKey, raw)
-      const notional = executionNotional(fill.price, fill.size, marketKey, raw)
+      const priceLabel = executionPriceLabel(fillPrice, marketKey, raw)
+      const notional = executionNotional(fillPrice, fillSize, marketKey, raw)
       const sideLabel = executionSideLabel(fill, marketKey, raw)
       const syntheticLegs = normalizeSyntheticFillLegs(raw)
       return {
-        id: `fill-${marketKey}-${fill.timestamp}-${fill.price}-${fill.size}-${index}`,
+        id: `fill-${marketKey}-${fillTimestamp}-${fillPrice}-${fillSize}-${index}`,
         row_type: 'fill' as const,
-        timestamp: fill.timestamp,
+        timestamp: fillTimestamp,
         account: 'Parent',
         exchange,
         provider: venue,
@@ -5062,11 +5152,11 @@ function buildExecutionRows({
         leg_id: String(raw.leg_id ?? raw.legId ?? `${orderId}-L${index + 1}`),
         side: sideLabel,
         price: priceLabel,
-        size: fill.size.toFixed(0),
+        size: fillSize.toFixed(0),
         status: 'FILLED',
         pnl: typeof raw.realizedPnl === 'number' ? raw.realizedPnl : 0,
         notional,
-        order_details: `${simOrderTag(source, String(raw.algoRole ?? ''), String(raw.orderTag ?? ''))} ${exchange} ${product} ${sideLabel} ${fill.size.toFixed(0)} @ ${priceLabel}`,
+        order_details: `${simOrderTag(source, String(raw.algoRole ?? ''), String(raw.orderTag ?? ''))} ${exchange} ${product} ${sideLabel} ${fillSize.toFixed(0)} @ ${priceLabel}`,
         synthetic_legs: syntheticLegs,
       }
     })
@@ -5079,13 +5169,17 @@ function buildExecutionRows({
     const triggerDetail = order.trigger ? ` trigger ${order.trigger}` : ''
     const layerDetail = order.layer ? ` L${order.layer}` : ''
     const parentDetail = order.parentOrderId ? ` parent ${order.parentOrderId}` : ''
-    const priceLabel = executionPriceLabel(order.price, order.marketKey, order as unknown as Record<string, unknown>)
-    const notional = executionNotional(order.price, order.size, order.marketKey, order as unknown as Record<string, unknown>)
+    const price = executionNumber(order.price)
+    const size = executionNumber(order.size)
+    const filledSize = executionNumber(order.filledSize)
+    const updatedAt = executionNumber(order.updatedAt, Date.now())
+    const priceLabel = executionPriceLabel(price, order.marketKey, order as unknown as Record<string, unknown>)
+    const notional = executionNotional(price, size, order.marketKey, order as unknown as Record<string, unknown>)
     const sideLabel = executionOrderSideLabel(order)
     return {
       id: `sim-order-${order.id}`,
       row_type: 'order' as const,
-      timestamp: order.updatedAt,
+      timestamp: updatedAt,
       account: 'Parent',
       exchange: 'Sim Exchange',
       provider: 'sim' as const,
@@ -5100,11 +5194,11 @@ function buildExecutionRows({
       leg_id: order.legId,
       side: sideLabel,
       price: priceLabel,
-      size: `${order.filledSize.toFixed(0)} / ${order.size.toFixed(0)}`,
+      size: `${filledSize.toFixed(0)} / ${size.toFixed(0)}`,
       status: order.status,
       pnl: position?.totalPnl ?? 0,
       notional,
-      order_details: `${tag}${layerDetail} ${sideLabel} ${order.orderType.toUpperCase()} ${order.status} ${order.filledSize.toFixed(0)}/${order.size.toFixed(0)} @ ${priceLabel}${triggerDetail}${parentDetail}`,
+      order_details: `${tag}${layerDetail} ${sideLabel} ${String(order.orderType ?? 'limit').toUpperCase()} ${order.status} ${filledSize.toFixed(0)}/${size.toFixed(0)} @ ${priceLabel}${triggerDetail}${parentDetail}`,
     }
   })
 
@@ -5197,7 +5291,7 @@ function OrderBookWindow({ operatorName }: { operatorName: string }) {
     }
     setCancelStatus(`Cancelling ${row.order_id}...`)
     try {
-      const response = await ceriousFetch(`/api/acme/orders/${encodeURIComponent(row.order_id)}/cancel`, {
+      const response = await ceriousFetch(`/api/cerious/orders/${encodeURIComponent(row.order_id)}/cancel`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       })
@@ -5209,11 +5303,11 @@ function OrderBookWindow({ operatorName }: { operatorName: string }) {
 
   const cancelAllOrders = async () => {
     setCancelStatus(simulationEnabled ? 'Cancelling Sim Exchange orders...' : 'Cancelling working orders...')
-    const acmeCancel = await ceriousFetch('/api/acme/orders/cancel-all', { method: 'POST' }).catch(() => null)
-    let acmeCount = 0
-    if (acmeCancel?.ok) {
-      const payload = await acmeCancel.json().catch(() => ({}))
-      acmeCount = Number(payload.count ?? 0)
+    const ceriousCancel = await ceriousFetch('/api/cerious/orders/cancel-all', { method: 'POST' }).catch(() => null)
+    let ceriousCount = 0
+    if (ceriousCancel?.ok) {
+      const payload = await ceriousCancel.json().catch(() => ({}))
+      ceriousCount = Number(payload.count ?? 0)
       if (payload.state) {
         useStore.getState().setSimTradingState({
           simOrders: payload.state.simOrders,
@@ -5223,8 +5317,8 @@ function OrderBookWindow({ operatorName }: { operatorName: string }) {
         })
       }
     }
-    setCancelStatus(acmeCancel?.ok
-      ? `Cancel all accepted by order service; ${acmeCount} server order${acmeCount === 1 ? '' : 's'} cancelled.`
+    setCancelStatus(ceriousCancel?.ok
+      ? `Cancel all accepted by order service; ${ceriousCount} server order${ceriousCount === 1 ? '' : 's'} cancelled.`
       : 'Cancel-all failed; no order service acknowledged.')
   }
 
@@ -5450,6 +5544,49 @@ function executionSizeValue(value: number | string | undefined): number {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
+function executionNumber(value: unknown, fallback = 0): number {
+  const parsed = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(parsed) ? parsed : fallback
+}
+
+function normalizeCeriousPositionRow(row: Partial<CeriousPositionRow> & Record<string, unknown>): CeriousPositionRow {
+  const avgPrice = executionNumber(row.avgPrice)
+  const markPrice = executionNumber(row.markPrice, avgPrice)
+  return {
+    instrumentId: String(row.instrumentId ?? row.marketKey ?? row.symbol ?? 'UNKNOWN'),
+    label: row.label == null ? undefined : String(row.label),
+    qty: executionNumber(row.qty),
+    avgPrice,
+    markPrice,
+    markLive: Boolean(row.markLive),
+    multiplier: row.multiplier == null ? undefined : executionNumber(row.multiplier),
+    openPnl: executionNumber(row.openPnl),
+    realizedPnl: row.realizedPnl == null ? undefined : executionNumber(row.realizedPnl),
+    account: row.account == null ? undefined : String(row.account),
+    lastFillAt: row.lastFillAt == null ? undefined : String(row.lastFillAt),
+    fillCount: row.fillCount == null ? undefined : executionNumber(row.fillCount),
+  }
+}
+
+function normalizeCeriousOrderRow(row: Partial<CeriousOrderRow> & Record<string, unknown>): CeriousOrderRow {
+  return {
+    id: String(row.id ?? row.order_id ?? row.orderId ?? 'unknown-order'),
+    instrumentId: String(row.instrumentId ?? row.marketKey ?? row.symbol ?? 'UNKNOWN'),
+    label: row.label == null ? undefined : String(row.label),
+    side: String(row.side ?? ''),
+    qty: executionNumber(row.qty),
+    price: executionNumber(row.price),
+    status: String(row.status ?? 'unknown'),
+    held: Boolean(row.held),
+    source: row.source == null ? undefined : String(row.source),
+    orderClass: row.orderClass == null ? undefined : String(row.orderClass),
+    orderType: row.orderType == null ? undefined : String(row.orderType),
+    algoName: row.algoName == null ? undefined : String(row.algoName),
+    algoLegRole: row.algoLegRole == null ? undefined : String(row.algoLegRole),
+    updatedAt: row.updatedAt == null ? undefined : String(row.updatedAt),
+  }
+}
+
 function buildProductFillRollups(rows: AccountExecutionRow[]): ProductFillRollup[] {
   const byProduct = new Map<string, ProductFillRollup>()
   for (const row of rows) {
@@ -5486,8 +5623,9 @@ function signedExecutionPositionSize(direction: string, size: number): number {
 }
 
 function positionSideLabel(size: number): string {
-  if (size > 0) return `LONG ${Math.abs(size).toFixed(Number.isInteger(size) ? 0 : 2)}`
-  if (size < 0) return `SHORT ${Math.abs(size).toFixed(Number.isInteger(size) ? 0 : 2)}`
+  const qty = executionNumber(size)
+  if (qty > 0) return `LONG ${Math.abs(qty).toFixed(Number.isInteger(qty) ? 0 : 2)}`
+  if (qty < 0) return `SHORT ${Math.abs(qty).toFixed(Number.isInteger(qty) ? 0 : 2)}`
   return 'FLAT'
 }
 
@@ -5497,8 +5635,14 @@ function monitorPriceLabel(price: number, marketKey: string, raw?: Record<string
 }
 
 function simPositionToMonitorRow(position: SimPosition, option: ProductOption | undefined): PositionMonitorRow {
-  const multiplier = executionMultiplier(position.marketKey, position as unknown as Record<string, unknown>, position.avgPrice)
-  const openPnl = calculateOpenFuturesPnl(position.avgPrice, position.markPrice, position.size, multiplier)
+  const size = executionNumber(position.size)
+  const avgPrice = executionNumber(position.avgPrice)
+  const marketPrice = executionNumber(position.markPrice, avgPrice)
+  const realizedPnl = executionNumber(position.realizedPnl)
+  const openedAt = executionNumber(position.openedAt, Date.now())
+  const closedAt = position.closedAt == null ? undefined : executionNumber(position.closedAt)
+  const multiplier = executionMultiplier(position.marketKey, position as unknown as Record<string, unknown>, avgPrice)
+  const openPnl = calculateOpenFuturesPnl(avgPrice, marketPrice, size, multiplier)
   return {
     id: `sim-position-${position.id}`,
     provider: 'sim',
@@ -5506,18 +5650,18 @@ function simPositionToMonitorRow(position: SimPosition, option: ProductOption | 
     product: option?.label ?? position.marketKey,
     symbol: option?.asset ?? option?.symbol ?? position.marketKey,
     marketKey: position.marketKey,
-    position: position.status === 'closed' ? 0 : position.size,
-    avgPrice: position.avgPrice,
-    marketPrice: position.markPrice,
-    marketValue: calculateFuturesMarketValue(position.markPrice, position.size, multiplier),
+    position: position.status === 'closed' ? 0 : size,
+    avgPrice,
+    marketPrice,
+    marketValue: calculateFuturesMarketValue(marketPrice, size, multiplier),
     openPnl,
-    closedPnl: position.realizedPnl,
-    dayPnl: position.realizedPnl + openPnl,
+    closedPnl: realizedPnl,
+    dayPnl: realizedPnl + openPnl,
     status: position.status,
     source: position.source,
     strategy: position.algoName ?? position.strategy,
-    updatedAt: position.closedAt ?? position.openedAt,
-    details: `${simOrderTag(position.source, position.algoRole, position.orderTag)} ${position.status.toUpperCase()} ${positionSideLabel(position.size)} @ ${monitorPriceLabel(position.avgPrice, position.marketKey, position as unknown as Record<string, unknown>)}`,
+    updatedAt: closedAt ?? openedAt,
+    details: `${simOrderTag(position.source, position.algoRole, position.orderTag)} ${position.status.toUpperCase()} ${positionSideLabel(size)} @ ${monitorPriceLabel(avgPrice, position.marketKey, position as unknown as Record<string, unknown>)}`,
   }
 }
 
@@ -5953,19 +6097,29 @@ function AlgoBuilderWindow({
 
   const saveDraft = (status: AlgoStatus = 'held') => {
     const saveSymbol = selectedOption?.marketKey ?? symbol
-    const acmeFields = normalizeAcmeFields({
+    const ceriousFields = normalizeCeriousFields({
       ...draft,
       instruments: draft.instruments?.length ? draft.instruments : [saveSymbol],
     }, saveSymbol)
+    const saveSide: AlgoDefinition['side'] = ceriousFields.layerPlan.workBuySide && ceriousFields.layerPlan.workSellSide
+      ? 'both'
+      : ceriousFields.layerPlan.workBuySide
+        ? 'bid'
+        : ceriousFields.layerPlan.workSellSide
+          ? 'offer'
+          : 'both'
     const savedStatus: AlgoStatus = status === 'draft' ? 'draft' : 'held'
     const savedAlgo: AlgoDefinition = {
       ...draft,
-      ...acmeFields,
+      ...ceriousFields,
       id: draft.id || `algo-${Date.now()}`,
       provider,
       symbol: saveSymbol,
       marketKey: selectedOption?.marketKey ?? saveSymbol,
       instruments: [saveSymbol],
+      side: saveSide,
+      entryPeg: { ...ceriousFields.entryPeg, source: 'linear-regression' },
+      orderPolicy: { ...ceriousFields.orderPolicy, priceReference: 'linear-regression-bands' },
       operator: operatorName,
       status: savedStatus,
       updatedAt: Date.now(),
@@ -5974,37 +6128,37 @@ function AlgoBuilderWindow({
     void saveAlgoDefinitionServer(savedAlgo)
     setDraft(defaultAlgo(selectedOption, operatorName))
   }
-  const acmeDraft = normalizeAcmeFields(draft, draft.marketKey ?? draft.symbol)
-  const signalRules = draft.signalRules ?? acmeDraft.signalRules
-  const risk = draft.risk ?? acmeDraft.risk
-  const entryPeg = draft.entryPeg ?? acmeDraft.entryPeg
-  const layerPlan = draft.layerPlan ?? acmeDraft.layerPlan
-  const syntheticOrderManager = draft.syntheticOrderManager ?? acmeDraft.syntheticOrderManager
-  const exitPolicy = draft.exitPolicy ?? acmeDraft.exitPolicy
-  const orderPolicy = draft.orderPolicy ?? acmeDraft.orderPolicy
+  const ceriousDraft = normalizeCeriousFields(draft, draft.marketKey ?? draft.symbol)
+  const signalRules = draft.signalRules ?? ceriousDraft.signalRules
+  const risk = draft.risk ?? ceriousDraft.risk
+  const entryPeg = draft.entryPeg ?? ceriousDraft.entryPeg
+  const layerPlan = draft.layerPlan ?? ceriousDraft.layerPlan
+  const syntheticOrderManager = draft.syntheticOrderManager ?? ceriousDraft.syntheticOrderManager
+  const exitPolicy = draft.exitPolicy ?? ceriousDraft.exitPolicy
+  const orderPolicy = draft.orderPolicy ?? ceriousDraft.orderPolicy
   const sniperMode = String(orderPolicy.mode || syntheticOrderManager.entryTechnique || '').toLowerCase().includes('sniper')
   const setTemplate = (template: AlgoTemplate) => {
     setDraft(current => {
       const symbolKey = selectedOption?.marketKey ?? current.symbol
-      const acmeFields = template === 'mean-reversion-v2' ? normalizeAcmeFields(current, symbolKey) : {}
-      return { ...current, ...acmeFields, template, templateId: template }
+      const ceriousFields = template === 'mean-reversion-v2' ? normalizeCeriousFields(current, symbolKey) : {}
+      return { ...current, ...ceriousFields, template, templateId: template }
     })
   }
   const updateRule = (index: number, patch: Partial<AlgoSignalRule>) => {
     setDraft(current => {
-      const rules = [...(current.signalRules ?? acmeDraft.signalRules)]
+      const rules = [...(current.signalRules ?? ceriousDraft.signalRules)]
       rules[index] = { ...rules[index], ...patch }
       return { ...current, signalRules: rules }
     })
   }
-  const updateRisk = (patch: Partial<AlgoRisk>) => setDraft(current => ({ ...current, risk: { ...(current.risk ?? acmeDraft.risk), ...patch } }))
-  const updateEntryPeg = (patch: Partial<AlgoEntryPeg>) => setDraft(current => ({ ...current, entryPeg: { ...(current.entryPeg ?? acmeDraft.entryPeg), ...patch } }))
-  const updateLayerPlan = (patch: Partial<AlgoLayerPlan>) => setDraft(current => ({ ...current, layerPlan: { ...(current.layerPlan ?? acmeDraft.layerPlan), ...patch } }))
-  const updateExitPolicy = (patch: Partial<AlgoExitPolicy>) => setDraft(current => ({ ...current, exitPolicy: { ...(current.exitPolicy ?? acmeDraft.exitPolicy), ...patch } }))
-  const updateOrderPolicy = (patch: Partial<AlgoOrderPolicy>) => setDraft(current => ({ ...current, orderPolicy: { ...(current.orderPolicy ?? acmeDraft.orderPolicy), ...patch } }))
+  const updateRisk = (patch: Partial<AlgoRisk>) => setDraft(current => ({ ...current, risk: { ...(current.risk ?? ceriousDraft.risk), ...patch } }))
+  const updateEntryPeg = (patch: Partial<AlgoEntryPeg>) => setDraft(current => ({ ...current, entryPeg: { ...(current.entryPeg ?? ceriousDraft.entryPeg), ...patch } }))
+  const updateLayerPlan = (patch: Partial<AlgoLayerPlan>) => setDraft(current => ({ ...current, layerPlan: { ...(current.layerPlan ?? ceriousDraft.layerPlan), ...patch } }))
+  const updateExitPolicy = (patch: Partial<AlgoExitPolicy>) => setDraft(current => ({ ...current, exitPolicy: { ...(current.exitPolicy ?? ceriousDraft.exitPolicy), ...patch } }))
+  const updateOrderPolicy = (patch: Partial<AlgoOrderPolicy>) => setDraft(current => ({ ...current, orderPolicy: { ...(current.orderPolicy ?? ceriousDraft.orderPolicy), ...patch } }))
   const setSniperMode = (enabled: boolean) => {
     setDraft(current => {
-      const currentFields = normalizeAcmeFields(current, current.marketKey ?? current.symbol)
+      const currentFields = normalizeCeriousFields(current, current.marketKey ?? current.symbol)
       return {
         ...current,
         orderType: 'limit',
@@ -6041,14 +6195,6 @@ function AlgoBuilderWindow({
                 <option value="scale-in">Scale In</option>
               </select>
             </label>
-            <label className="text-[10px] uppercase text-muted">
-              Quote Side
-              <select className="input-field mt-1 w-full py-1 text-[11px]" value={draft.side} onChange={event => setDraft(current => ({ ...current, side: event.target.value as AlgoDefinition['side'] }))}>
-                <option value="both">Both</option>
-                <option value="bid">Bid</option>
-                <option value="offer">Offer</option>
-              </select>
-            </label>
             <label className="flex items-center gap-2 rounded border border-surface-border bg-surface-card px-2 py-2 text-[10px] uppercase text-muted">
               <input type="checkbox" checked={sniperMode} onChange={event => setSniperMode(event.target.checked)} />
               <span className="font-bold text-slate-200">Sniper</span>
@@ -6070,7 +6216,7 @@ function AlgoBuilderWindow({
                     setDraft(current => ({
                       ...current,
                       [key]: value,
-                      ...(key === 'maxPosition' ? { risk: { ...(current.risk ?? acmeDraft.risk), maxPosition: value } } : {}),
+                      ...(key === 'maxPosition' ? { risk: { ...(current.risk ?? ceriousDraft.risk), maxPosition: value } } : {}),
                     }))
                   }}
                 />
@@ -6099,19 +6245,23 @@ function AlgoBuilderWindow({
               <div className="mb-2 font-mono text-[10px] font-black uppercase text-accent">Regression Entry Peg</div>
               <div className="grid grid-cols-2 gap-2">
                 <label className="text-[10px] uppercase text-muted">
-                  Period
-                  <input type="number" className="input-field mt-1 w-full py-1 text-[11px]" value={entryPeg.period} onChange={event => updateEntryPeg({ period: Number(event.target.value) || 1 })} />
+                  Lookback
+                  <input
+                    type="number"
+                    min={2}
+                    className="input-field mt-1 w-full py-1 text-[11px]"
+                    value={entryPeg.lookback ?? ''}
+                    onChange={event => updateEntryPeg({ lookback: event.target.value === '' ? undefined : Number(event.target.value) })}
+                  />
                 </label>
                 <label className="text-[10px] uppercase text-muted">
                   Std Dev
                   <input type="number" step={0.25} className="input-field mt-1 w-full py-1 text-[11px]" value={entryPeg.standardDeviations} onChange={event => updateEntryPeg({ standardDeviations: Number(event.target.value) || 0 })} />
                 </label>
                 <label className="col-span-2 text-[10px] uppercase text-muted">
-                  Source
-                  <input className="input-field mt-1 w-full py-1 text-[11px]" value={entryPeg.source} onChange={event => updateEntryPeg({ source: event.target.value })} />
+                  Calculator
+                  <input className="input-field mt-1 w-full py-1 text-[11px]" value="linear-regression" readOnly />
                 </label>
-                <label className="flex items-center gap-2 text-[10px] uppercase text-muted"><input type="checkbox" checked={entryPeg.pegBuySideToMinus2} onChange={event => updateEntryPeg({ pegBuySideToMinus2: event.target.checked })} /> Buy to -band</label>
-                <label className="flex items-center gap-2 text-[10px] uppercase text-muted"><input type="checkbox" checked={entryPeg.pegSellSideToPlus2} onChange={event => updateEntryPeg({ pegSellSideToPlus2: event.target.checked })} /> Sell to +band</label>
               </div>
             </div>
             <div className="rounded border border-surface-border bg-surface-card p-2">
@@ -6124,14 +6274,6 @@ function AlgoBuilderWindow({
                 <label className="text-[10px] uppercase text-muted">
                   Spacing Ticks
                   <input type="number" className="input-field mt-1 w-full py-1 text-[11px]" value={layerPlan.layerSpacingTicks} onChange={event => updateLayerPlan({ layerSpacingTicks: Number(event.target.value) || 0 })} />
-                </label>
-                <label className="text-[10px] uppercase text-muted">
-                  Buy Offset
-                  <input type="number" className="input-field mt-1 w-full py-1 text-[11px]" value={layerPlan.buyTicksOffMidpoint} onChange={event => updateLayerPlan({ buyTicksOffMidpoint: Number(event.target.value) || 0 })} />
-                </label>
-                <label className="text-[10px] uppercase text-muted">
-                  Sell Offset
-                  <input type="number" className="input-field mt-1 w-full py-1 text-[11px]" value={layerPlan.sellTicksOffMidpoint} onChange={event => updateLayerPlan({ sellTicksOffMidpoint: Number(event.target.value) || 0 })} />
                 </label>
                 <label className="flex items-center gap-2 text-[10px] uppercase text-muted"><input type="checkbox" checked={layerPlan.workBuySide} onChange={event => updateLayerPlan({ workBuySide: event.target.checked })} /> Work bid</label>
                 <label className="flex items-center gap-2 text-[10px] uppercase text-muted"><input type="checkbox" checked={layerPlan.workSellSide} onChange={event => updateLayerPlan({ workSellSide: event.target.checked })} /> Work ask</label>
@@ -6175,16 +6317,16 @@ function AlgoBuilderWindow({
         <div className="rounded border border-surface-border bg-surface-card p-2 font-mono">
           <div className="text-[10px] font-black uppercase text-accent">Deployment Contract</div>
           <div className="mt-2 grid grid-cols-2 gap-y-1 text-[10px]">
-            <span className="text-muted">Send Peg</span><span className="text-right font-black text-slate-100">LR27 +/-2</span>
+            <span className="text-muted">Send Peg</span><span className="text-right font-black text-slate-100">Linear Regression lookback {entryPeg.lookback ? `${entryPeg.lookback}` : 'X'} +/-{entryPeg.standardDeviations}</span>
             <span className="text-muted">Order Type</span><span className="text-right font-black text-slate-100">{sniperMode ? 'Sniper' : 'Limit'}</span>
-            <span className="text-muted">Period</span><span className="text-right font-black text-slate-100">{entryPeg.period} x 30m</span>
+            <span className="text-muted">Lookback</span><span className="text-right font-black text-slate-100">{entryPeg.lookback ? `${entryPeg.lookback} bars` : 'Required'}</span>
             <span className="text-muted">Layers</span><span className="text-right font-black text-slate-100">{layerPlan.layerCount}</span>
             <span className="text-muted">Spacing</span><span className="text-right font-black text-slate-100">{layerPlan.layerSpacingTicks} ticks</span>
             <span className="text-muted">Clip</span><span className="text-right font-black text-slate-100">{draft.clipSize}</span>
             <span className="text-muted">Max/Side</span><span className="text-right font-black text-slate-100">{draft.maxPosition}</span>
           </div>
           <div className="mt-2 text-[9px] leading-relaxed text-muted">
-            Server deploy reads the saved script, server LR27, and product tick definition. Invalid scripts fail without sending.
+            Server deploy reads the saved definition, resolves its linear-regression send peg, and sends only valid orders.
           </div>
         </div>
       </div>
@@ -6213,7 +6355,32 @@ type RegressionBandValues = {
   lower?: number
   sigma?: number
   slope?: number
+  interval?: string
+  lookback?: number
+  updatedAt?: number
   label: string
+}
+
+type RegressionStudySnapshot = {
+  ok: boolean
+  runtime?: string
+  source?: string
+  study?: string
+  symbol: string
+  interval: string
+  lookback: number
+  standardDeviations: number
+  bars: number
+  includesLiveMark: boolean
+  updatedAt: number
+  mean?: number
+  upper?: number
+  lower?: number
+  sigma?: number
+  slope?: number
+  intercept?: number
+  label?: string
+  error?: string
 }
 
 function finiteOptional(value: unknown): number | undefined {
@@ -6221,29 +6388,95 @@ function finiteOptional(value: unknown): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined
 }
 
-function regressionBandsForPeg(stat: AcmeSpreadStat | undefined, period: number, deviations: number): RegressionBandValues | null {
-  const lookback = Math.max(2, Math.floor(Number(period) || 27))
+function normalizedLookback(value: unknown, minimum = 2, maximum = 2000): number | null {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return null
+  const lookback = Math.floor(parsed)
+  if (lookback < minimum) return null
+  return Math.min(maximum, lookback)
+}
+
+function regressionBandsForPeg(stat: CeriousSpreadStat | undefined, lookback: number | undefined, deviations: number): RegressionBandValues | null {
+  const requestedLookback = normalizedLookback(lookback)
+  if (requestedLookback === null) return null
+  const statLookback = Math.floor(Number(stat?.linearRegressionLookback) || 0)
   const std = Math.max(0, Number(deviations) || 2)
-  if (lookback !== 27 || Math.abs(std - 2) >= 0.0001) return null
-  const mean = finiteOptional(stat?.lr27Mean)
-  const upper = finiteOptional(stat?.lr27Upper2)
-  const lower = finiteOptional(stat?.lr27Lower2)
+  if (statLookback > 0 && statLookback !== requestedLookback) return null
+  const mean = finiteOptional(stat?.linearRegressionMean)
+  const upper = finiteOptional(stat?.linearRegressionUpper)
+  const lower = finiteOptional(stat?.linearRegressionLower)
   if (upper === undefined || lower === undefined) return null
-  const interval = stat?.lr27Interval || '30m'
+  const interval = stat?.linearRegressionInterval || '30m'
   return {
     mean,
     upper,
     lower,
-    sigma: finiteOptional(stat?.lr27Sigma),
-    slope: finiteOptional(stat?.lr27Slope),
-    label: `LR27 ${interval} +/-2`,
+    sigma: finiteOptional(stat?.linearRegressionSigma),
+    slope: finiteOptional(stat?.linearRegressionSlope),
+    interval,
+    lookback: requestedLookback,
+    updatedAt: finiteOptional(stat?.linearRegressionUpdatedAt),
+    label: `Linear Regression lookback ${requestedLookback} ${interval} +/-${std}`,
+  }
+}
+
+function regressionStudyKey(symbol: string, interval: string, lookback: number, standardDeviations: number) {
+  const normalized = normalizedLookback(lookback)
+  if (normalized === null) throw new Error('regression lookback is not defined')
+  return `${normalizeProductKey(symbol)}|${String(interval || '30m').toLowerCase()}|${normalized}|${Number(standardDeviations || 2).toFixed(4)}`
+}
+
+async function fetchRegressionStudySnapshot(
+  symbol: string,
+  interval: string,
+  lookback: number,
+  standardDeviations: number,
+  signal?: AbortSignal,
+): Promise<RegressionStudySnapshot> {
+  const normalized = normalizedLookback(lookback)
+  if (normalized === null) throw new Error('regression lookback is not defined')
+  const params = new URLSearchParams({
+    interval: String(interval || '30m'),
+    lookback: String(normalized),
+    stdDev: String(Number(standardDeviations || 2)),
+  })
+  const response = await ceriousFetch(`/api/studies/regression/${encodeURIComponent(normalizeProductKey(symbol))}?${params.toString()}`, {
+    cache: 'no-store',
+    signal,
+  })
+  const payload = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    throw new Error(String(payload.detail || payload.error || `HTTP ${response.status}`))
+  }
+  return payload as RegressionStudySnapshot
+}
+
+function regressionBandsFromSnapshot(snapshot: RegressionStudySnapshot | undefined): RegressionBandValues | null {
+  if (!snapshot?.ok) return null
+  const mean = finiteOptional(snapshot.mean)
+  const upper = finiteOptional(snapshot.upper)
+  const lower = finiteOptional(snapshot.lower)
+  if (upper === undefined || lower === undefined) return null
+  const lookback = normalizedLookback(snapshot.lookback)
+  if (lookback === null) return null
+  const std = Math.max(0, Number(snapshot.standardDeviations) || 2)
+  return {
+    mean,
+    upper,
+    lower,
+    sigma: finiteOptional(snapshot.sigma),
+    slope: finiteOptional(snapshot.slope),
+    interval: snapshot.interval,
+    lookback,
+    updatedAt: finiteOptional(snapshot.updatedAt),
+    label: snapshot.label || `Linear Regression lookback ${lookback} ${snapshot.interval || '30m'} +/-${std}`,
   }
 }
 
 function algoUsesRegressionPeg(algo: AlgoDefinition, entryPeg: AlgoEntryPeg): boolean {
   const source = [
     entryPeg.source,
-    entryPeg.period,
+    entryPeg.lookback,
     algo.orderPolicy?.priceReference,
     ...(algo.signalRules ?? []).map(rule => `${rule.field} ${rule.action}`),
   ].join(' ').toLowerCase()
@@ -6256,34 +6489,59 @@ function algoUsesRegressionPeg(algo: AlgoDefinition, entryPeg: AlgoEntryPeg): bo
 function resolveAlgoSendBands(
   algo: AlgoDefinition,
   entryPeg: AlgoEntryPeg,
-  spreadStat: AcmeSpreadStat | undefined,
+  spreadStat: CeriousSpreadStat | undefined,
+  studySnapshot?: RegressionStudySnapshot,
 ): RegressionBandValues | null {
-  if (!entryPeg.pegBuySideToMinus2 && !entryPeg.pegSellSideToPlus2) return null
   if (!algoUsesRegressionPeg(algo, entryPeg)) return null
-  return regressionBandsForPeg(spreadStat, entryPeg.period, entryPeg.standardDeviations)
+  const snapshotBands = regressionBandsFromSnapshot(studySnapshot)
+  if (snapshotBands) return snapshotBands
+  return regressionBandsForPeg(spreadStat, entryPeg.lookback, entryPeg.standardDeviations)
+}
+
+function algoRegressionStudyRequest(algo: AlgoDefinition, option?: ProductOption) {
+  const symbol = resolveAlgoMarketKey(algo, option)
+  const ceriousFields = normalizeCeriousFields(algo, symbol)
+  const entryPeg = algo.entryPeg ?? ceriousFields.entryPeg
+  if (!algoUsesRegressionPeg(algo, entryPeg)) return null
+  const interval = String(entryPeg.interval ?? entryPeg.timeframe ?? '30m').toLowerCase()
+  const lookback = normalizedLookback(entryPeg.lookback)
+  if (lookback === null) return null
+  const standardDeviations = Math.max(0, Number(entryPeg.standardDeviations) || 2)
+  return {
+    key: regressionStudyKey(symbol, interval, lookback, standardDeviations),
+    symbol,
+    interval,
+    lookback,
+    standardDeviations,
+  }
 }
 
 function buildAlgoDeploymentOrders(
   algo: AlgoDefinition,
   option: ProductOption | undefined,
-  spreadStat?: AcmeSpreadStat,
+  spreadStat?: CeriousSpreadStat,
+  studySnapshot?: RegressionStudySnapshot,
 ): AlgoDeploymentBuildResult {
   const symbol = resolveAlgoMarketKey(algo, option)
-  const acmeFields = normalizeAcmeFields(algo, symbol)
-  const layerPlan = algo.layerPlan ?? acmeFields.layerPlan
-  const entryPeg = algo.entryPeg ?? acmeFields.entryPeg
-  const exitPolicy = algo.exitPolicy ?? acmeFields.exitPolicy
+  const ceriousFields = normalizeCeriousFields(algo, symbol)
+  const layerPlan = algo.layerPlan ?? ceriousFields.layerPlan
+  const entryPeg = algo.entryPeg ?? ceriousFields.entryPeg
+  const exitPolicy = algo.exitPolicy ?? ceriousFields.exitPolicy
   const tick = finiteDepthPrice(option?.tickSize)
   if (tick === undefined || tick <= 0) return { orders: [], missingSendPrices: [`${algo.name}: product tick size missing`] }
-  const pegBands = resolveAlgoSendBands(algo, entryPeg, spreadStat)
+  const requestedLookback = normalizedLookback(entryPeg.lookback)
+  if (algoUsesRegressionPeg(algo, entryPeg) && requestedLookback === null) {
+    return { orders: [], missingSendPrices: [`${algo.name}: regression lookback is not defined`] }
+  }
+  const pegBands = resolveAlgoSendBands(algo, entryPeg, spreadStat, studySnapshot)
   const layers = clamp(Math.floor(Number(layerPlan.layerCount) || 1), 1, 100)
   const spacingTicks = Number(layerPlan.layerSpacingTicks) || 0
   const size = Math.max(1, Number(algo.clipSize) || 1)
   const sides: Array<'bid' | 'offer'> = []
   if ((algo.side === 'both' || algo.side === 'bid') && layerPlan.workBuySide !== false) sides.push('bid')
   if ((algo.side === 'both' || algo.side === 'offer') && layerPlan.workSellSide !== false) sides.push('offer')
-  const buyBase = entryPeg.pegBuySideToMinus2 ? pegBands?.lower : undefined
-  const sellBase = entryPeg.pegSellSideToPlus2 ? pegBands?.upper : undefined
+  const buyBase = pegBands?.lower
+  const sellBase = pegBands?.upper
   const missingSendPrices: string[] = []
   if (sides.includes('bid') && buyBase === undefined) {
     missingSendPrices.push(`${algo.name}: buy send peg ${entryPeg.source} -${entryPeg.standardDeviations} not published`)
@@ -6293,15 +6551,14 @@ function buildAlgoDeploymentOrders(
   }
   const orders: AlgoDeploymentOrder[] = []
   for (let layer = 0; layer < layers; layer += 1) {
-    const buyOffset = (Number(layerPlan.buyTicksOffMidpoint ?? layerPlan.ticksOffMidpoint) || 0) + (layer * spacingTicks)
-    const sellOffset = (Number(layerPlan.sellTicksOffMidpoint ?? layerPlan.ticksOffMidpoint) || 0) + (layer * spacingTicks)
+    const layerOffset = layer * spacingTicks
     if (sides.includes('bid') && buyBase !== undefined) {
       orders.push({
         side: 'bid',
-        price: roundToTick(buyBase - (buyOffset * tick), tick),
+        price: roundToTick(buyBase - (layerOffset * tick), tick),
         size,
         layer: layer + 1,
-        trigger: `${pegBands?.label ?? 'LR27'} lower`,
+        trigger: `${pegBands?.label ?? `Linear Regression lookback ${requestedLookback ?? ''}`.trim()} lower`,
         coverTicksFromFill: Number(exitPolicy.coverTicksFromFill) || 0,
         coverTickSize: tick,
       })
@@ -6309,10 +6566,10 @@ function buildAlgoDeploymentOrders(
     if (sides.includes('offer') && sellBase !== undefined) {
       orders.push({
         side: 'offer',
-        price: roundToTick(sellBase + (sellOffset * tick), tick),
+        price: roundToTick(sellBase + (layerOffset * tick), tick),
         size,
         layer: layer + 1,
-        trigger: `${pegBands?.label ?? 'LR27'} upper`,
+        trigger: `${pegBands?.label ?? `Linear Regression lookback ${requestedLookback ?? ''}`.trim()} upper`,
         coverTicksFromFill: Number(exitPolicy.coverTicksFromFill) || 0,
         coverTickSize: tick,
       })
@@ -6324,15 +6581,16 @@ function buildAlgoDeploymentOrders(
 function AlgoManagerWindow() {
   const { algos, updateAlgo, removeAlgo } = useAlgoLibrary()
   const options = useProductOptions()
-  const intelligence = useAcmeIntelligence(30000)
+  const intelligence = useCeriousIntelligence(30000)
   const simOrders = useStore(s => s.simOrders)
   const initialManagerState = useMemo(loadAlgoManagerWorkspaceState, [])
   const [statusFilter, setStatusFilter] = useState<AlgoStatus | 'all'>(initialManagerState.statusFilter ?? 'all')
   const [algoToLoad, setAlgoToLoad] = useState('')
-  const [stagedAlgoIds, setStagedAlgoIds] = useState<string[]>(initialManagerState.stagedAlgoIds)
-  const [selectedDeployIds, setSelectedDeployIds] = useState<string[]>(initialManagerState.selectedDeployIds)
+  const [stagedAlgoIds, setStagedAlgoIds] = useState<string[]>([])
+  const [selectedDeployIds, setSelectedDeployIds] = useState<string[]>([])
   const [deployStatus, setDeployStatus] = useState(initialManagerState.deployStatus ?? '')
   const [deploying, setDeploying] = useState(false)
+  const [regressionSnapshots, setRegressionSnapshots] = useState<Record<string, RegressionStudySnapshot>>({})
   const activeAlgoOrderCount = simOrders.filter(order => (
     order.source === 'algo'
     && order.remaining > 0
@@ -6343,16 +6601,66 @@ function AlgoManagerWindow() {
     .map(id => algos.find(algo => algo.id === id))
     .filter((algo): algo is AlgoDefinition => !!algo)
   const spreadStatsByKey = useMemo(() => {
-    const map = new Map<string, AcmeSpreadStat>()
+    const map = new Map<string, CeriousSpreadStat>()
     ;(intelligence?.spreadPack?.spreads ?? []).forEach(stat => {
       map.set(String(stat.key).toUpperCase(), stat)
     })
     return map
   }, [intelligence?.spreadPack?.spreads])
+  const stagedStudyRequests = useMemo(() => {
+    const requests = new Map<string, NonNullable<ReturnType<typeof algoRegressionStudyRequest>>>()
+    stagedAlgos.forEach(algo => {
+      const option = findProductOptionForAlgo(options, algo)
+      const request = algoRegressionStudyRequest(algo, option)
+      if (request) requests.set(request.key, request)
+    })
+    return [...requests.values()]
+  }, [options, stagedAlgos])
+  const stagedStudyRequestKey = stagedStudyRequests.map(request => request.key).sort().join('|')
   const counts = algos.reduce<Record<AlgoStatus, number>>((acc, algo) => {
     acc[algo.status] += 1
     return acc
   }, { draft: 0, held: 0, quoting: 0, paused: 0 })
+  useEffect(() => {
+    if (!stagedStudyRequests.length) {
+      setRegressionSnapshots({})
+      return
+    }
+    const controller = new AbortController()
+    let cancelled = false
+    Promise.all(stagedStudyRequests.map(async request => {
+      try {
+        const snapshot = await fetchRegressionStudySnapshot(
+          request.symbol,
+          request.interval,
+          request.lookback,
+          request.standardDeviations,
+          controller.signal,
+        )
+        return [request.key, snapshot] as const
+      } catch (err) {
+        const snapshot: RegressionStudySnapshot = {
+          ok: false,
+          symbol: request.symbol,
+          interval: request.interval,
+          lookback: request.lookback,
+          standardDeviations: request.standardDeviations,
+          bars: 0,
+          includesLiveMark: false,
+          updatedAt: 0,
+          error: err instanceof Error ? err.message : 'regression unavailable',
+        }
+        return [request.key, snapshot] as const
+      }
+    })).then(entries => {
+      if (cancelled) return
+      setRegressionSnapshots(Object.fromEntries(entries))
+    })
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
+  }, [stagedStudyRequestKey])
   useEffect(() => {
     saveAlgoManagerWorkspaceState({
       stagedAlgoIds,
@@ -6366,8 +6674,8 @@ function AlgoManagerWindow() {
     const sync = () => {
       const next = loadAlgoManagerWorkspaceState()
       setStatusFilter(next.statusFilter ?? 'all')
-      setStagedAlgoIds(next.stagedAlgoIds)
-      setSelectedDeployIds(next.selectedDeployIds)
+      setStagedAlgoIds([])
+      setSelectedDeployIds([])
       setDeployStatus(next.deployStatus ?? '')
     }
     window.addEventListener(ALGO_MANAGER_STATE_EVENT, sync)
@@ -6417,7 +6725,7 @@ function AlgoManagerWindow() {
       selected.forEach(algo => updateAlgo(algo.id, { status: 'quoting' }))
       const accepted = Number(payload.acceptedCount ?? 0)
       const notes = Array.isArray(payload.notes) ? payload.notes.filter(Boolean) : []
-      setDeployStatus(`Released ${accepted} algo order${accepted === 1 ? '' : 's'} from server LR27.${notes.length ? ` ${notes[0]}` : ''}`)
+      setDeployStatus(`Released ${accepted} algo order${accepted === 1 ? '' : 's'} from server study engine.${notes.length ? ` ${notes[0]}` : ''}`)
       return accepted
     } catch (err) {
       setDeployStatus(`DEPLOY ERROR: ${err instanceof Error ? err.message : 'deployment failed'}`)
@@ -6433,7 +6741,7 @@ function AlgoManagerWindow() {
   const killAllAlgos = async () => {
     const pausedCount = algos.filter(algo => algo.status !== 'draft').length
     try {
-      const response = await ceriousFetch('/api/acme/orders/cancel-all', {
+      const response = await ceriousFetch('/api/cerious/orders/cancel-all', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ source: 'algo' }),
@@ -6513,7 +6821,8 @@ function AlgoManagerWindow() {
           {stagedAlgos.map(algo => {
             const option = findProductOptionForAlgo(options, algo)
             const marketKey = resolveAlgoMarketKey(algo, option)
-            const deploymentBuild = buildAlgoDeploymentOrders(algo, option, spreadStatsByKey.get(marketKey))
+            const studyRequest = algoRegressionStudyRequest(algo, option)
+            const deploymentBuild = buildAlgoDeploymentOrders(algo, option, spreadStatsByKey.get(marketKey), studyRequest ? regressionSnapshots[studyRequest.key] : undefined)
             const firstBid = deploymentBuild.orders.find(order => order.side === 'bid')
             const firstAsk = deploymentBuild.orders.find(order => order.side === 'offer')
             const activeRules = (algo.signalRules ?? []).filter(rule => rule.enabled).length
@@ -6881,8 +7190,10 @@ function AlertsWindow({
       : moneyProduct
         ? option?.spot
         : lastTick?.price ?? (market?.up_pct ?? option?.yes)
+    const lastFillPrice = executionNumber(lastFill?.price)
+    const lastFillSize = executionNumber(lastFill?.size)
     const fillMessage = lastFill
-      ? `${providerLabel(option?.provider ?? 'cme')} ${option?.label ?? option?.symbol ?? 'product'} ${executionSideLabel(lastFill, option?.marketKey ?? option?.symbol ?? lastFill.marketKey, lastFill as PolyTradeTick & Record<string, unknown>)} fill ${lastFill.size.toFixed(0)} @ ${option?.provider === 'cme' ? fmtLadderPrice(lastFill.price) : `${lastFill.price.toFixed(1)}c`}`
+      ? `${providerLabel(option?.provider ?? 'cme')} ${option?.label ?? option?.symbol ?? 'product'} ${executionSideLabel(lastFill, option?.marketKey ?? option?.symbol ?? lastFill.marketKey, lastFill as PolyTradeTick & Record<string, unknown>)} fill ${lastFillSize.toFixed(0)} @ ${option?.provider === 'cme' ? fmtLadderPrice(lastFillPrice) : `${lastFillPrice.toFixed(1)}c`}`
       : 'No fills yet'
     const fillKey = lastFill
       ? `${option?.marketKey ?? option?.symbol ?? 'product'}-${lastFill.timestamp}-${lastFill.price}-${lastFill.size}-${lastFill.side}-${(lastFill as PolyTradeTick & Record<string, unknown>).orderId ?? (lastFill as PolyTradeTick & Record<string, unknown>).order_id ?? ''}`
@@ -7140,16 +7451,16 @@ function ServiceMapWindow() {
   )
 }
 
-const ACME_SPREAD_PRODUCTS = [
+const CERIOUS_SPREAD_PRODUCTS = [
   { symbol: 'ES_NQ', label: 'ES / NQ', legs: 'ES - 0.2666667 x NQ', service: 'price.synthetic-spread' },
   { symbol: 'YM_ES', label: 'YM / ES', legs: 'YM - 6.6666667 x ES', service: 'price.synthetic-spread' },
   { symbol: 'RTY_ES', label: 'RTY / ES', legs: 'RTY - 0.4285714 x ES', service: 'price.synthetic-spread' },
 ]
 
-const ACME_PANEL_DETAILS: Partial<Record<WorkspaceWindowKind, { service: string; body: string; bullets: string[] }>> = {
+const CERIOUS_PANEL_DETAILS: Partial<Record<WorkspaceWindowKind, { service: string; body: string; bullets: string[] }>> = {
   goose: {
     service: 'advisor.goose',
-    body: 'Macro advisor window from Polyman. This is parked as its own boundary so the advisor feed can run independently of the trading canvas.',
+    body: 'Macro advisor window restored as a native Cerious window. This is parked as its own boundary so the advisor feed can run independently of the trading canvas.',
     bullets: ['Macro context', 'Operator notes', 'Signal commentary'],
   },
   streamingNews: {
@@ -7174,13 +7485,13 @@ const ACME_PANEL_DETAILS: Partial<Record<WorkspaceWindowKind, { service: string;
   },
   auditTrail: {
     service: 'audit.journal',
-    body: 'Audit Trail from Polyman, intended to capture every operator action, algo state change, order event, and fill.',
+    body: 'Audit Trail restored as a native Cerious window, intended to capture every operator action, algo state change, order event, and fill.',
     bullets: ['Operator activity', 'Algo events', 'Gateway responses'],
   },
   spreadConfigurations: {
     service: 'product-library',
     body: 'Spread Configurations window for Cerious synthetic products and leg definitions.',
-    bullets: ACME_SPREAD_PRODUCTS.map(product => `${product.symbol}: ${product.legs}`),
+    bullets: CERIOUS_SPREAD_PRODUCTS.map(product => `${product.symbol}: ${product.legs}`),
   },
   relativeSpreadVisuals: {
     service: 'visuals.relative-spread',
@@ -7189,7 +7500,7 @@ const ACME_PANEL_DETAILS: Partial<Record<WorkspaceWindowKind, { service: string;
   },
   notionalCalculator: {
     service: 'risk.notional',
-    body: 'Notional Calculator from Polyman, kept as an operator utility and future risk-service client.',
+    body: 'Notional Calculator restored as a native Cerious operator utility and future risk-service client.',
     bullets: ['Leg ratio sizing', 'Dollar notional', 'Spread exposure'],
   },
   macroRegimeSummary: {
@@ -7229,7 +7540,7 @@ const ACME_PANEL_DETAILS: Partial<Record<WorkspaceWindowKind, { service: string;
   },
   riskChecklist: {
     service: 'risk.checklist',
-    body: 'Risk Checklist window from Polyman, preserved for operator workflow and pre-release checks.',
+    body: 'Risk Checklist window restored for operator workflow and pre-release checks.',
     bullets: ['Data live', 'Risk armed', 'Algo state checked'],
   },
   sourceNotes: {
@@ -7244,7 +7555,7 @@ const ACME_PANEL_DETAILS: Partial<Record<WorkspaceWindowKind, { service: string;
   },
 }
 
-function AcmeDepthTraderWindow({
+function CeriousDepthTraderWindow({
   symbol,
   onSelect,
   operatorName,
@@ -7256,19 +7567,20 @@ function AcmeDepthTraderWindow({
   return <LadderWindow provider="polymarket" symbol={symbol} onSelect={onSelect} operatorName={operatorName} />
 }
 
-function acmeChartStudyLabel(study: AcmeChartStudy) {
-  if (study.type === 'atr') return `ATR ${study.lookback} x${(study.atrMultiplier ?? 2).toFixed(2)}`
+function ceriousChartStudyLabel(study: CeriousChartStudy) {
+  if (study.type === 'atr') return `ATR ${study.lookback ?? 'X'} x${(study.atrMultiplier ?? 2).toFixed(2)}`
   if (study.type === 'volume-at-price') return `Volume at Price ${study.bins ?? 28}`
-  return `Linear Regression ${study.lookback} +${(study.upperDeviation ?? 2).toFixed(2)}/-${(study.lowerDeviation ?? 2).toFixed(2)}`
+  return `Linear Regression lookback ${study.lookback ?? 'X'} +${(study.upperDeviation ?? 2).toFixed(2)}/-${(study.lowerDeviation ?? 2).toFixed(2)}`
 }
 
-function acmeAverage(values: number[]) {
+function ceriousAverage(values: number[]) {
   return values.length ? values.reduce((total, value) => total + value, 0) / values.length : 0
 }
 
-function acmeRegressionChannel(bars: Bar[], study: AcmeChartStudy) {
+function ceriousRegressionChannel(bars: Bar[], study: CeriousChartStudy) {
   if (study.type !== 'regression-channel') return null
-  const lookback = Math.max(2, Math.floor(study.lookback || 27))
+  const lookback = normalizedLookback(study.lookback)
+  if (lookback === null) return null
   const endIndex = bars.length - 1
   const startIndex = endIndex - lookback + 1
   if (startIndex < 0) return null
@@ -7276,7 +7588,7 @@ function acmeRegressionChannel(bars: Bar[], study: AcmeChartStudy) {
   if (!sample.every(Number.isFinite)) return null
   const n = sample.length
   const xMean = (n - 1) / 2
-  const yMean = acmeAverage(sample)
+  const yMean = ceriousAverage(sample)
   let numerator = 0
   let denominator = 0
   sample.forEach((value, index) => {
@@ -7286,7 +7598,7 @@ function acmeRegressionChannel(bars: Bar[], study: AcmeChartStudy) {
   const slope = denominator ? numerator / denominator : 0
   const intercept = yMean - slope * xMean
   const residuals = sample.map((value, index) => value - (intercept + slope * index))
-  const sigma = Math.sqrt(acmeAverage(residuals.map(value => value ** 2)) || 0)
+  const sigma = Math.sqrt(ceriousAverage(residuals.map(value => value ** 2)) || 0)
   const points = sample.map((_value, sampleIndex) => {
     const barIndex = startIndex + sampleIndex
     const mean = intercept + slope * sampleIndex
@@ -7303,42 +7615,62 @@ function acmeRegressionChannel(bars: Bar[], study: AcmeChartStudy) {
   return { study, points }
 }
 
-function publishedRegressionChannel(rows: Bar[], stat?: AcmeSpreadStat) {
-  if (!rows.length) return null
-  const mean = finiteOptional(stat?.lr27Mean)
-  const upper = finiteOptional(stat?.lr27Upper2)
-  const lower = finiteOptional(stat?.lr27Lower2)
-  if (upper === undefined || lower === undefined) return null
-  const slope = finiteOptional(stat?.lr27Slope) ?? 0
-  const upperDistance = mean !== undefined ? Math.max(0, upper - mean) : Math.abs(upper - lower) / 2
-  const lowerDistance = mean !== undefined ? Math.max(0, mean - lower) : Math.abs(upper - lower) / 2
-  const latestMean = mean ?? (upper + lower) / 2
-  const period = Math.max(2, Math.floor(Number(stat?.lr27Period ?? stat?.lr27Bars ?? 27) || 27))
-  const updatedAt = finiteOptional(stat?.lr27UpdatedAt)
-  const eligibleRows = updatedAt !== undefined
+function chartRegressionStudyRequest(symbol: string, timeframe: CeriousChartTimeframe, study: CeriousChartStudy) {
+  if (study.type !== 'regression-channel') return null
+  const lookback = normalizedLookback(study.lookback)
+  if (lookback === null) return null
+  const upper = Number(study.upperDeviation ?? 2)
+  const lower = Number(study.lowerDeviation ?? 2)
+  const standardDeviations = Math.max(
+    0,
+    Number.isFinite(upper) ? upper : 2,
+    Number.isFinite(lower) ? lower : 2,
+  )
+  const interval = String(timeframe || '30m').toLowerCase()
+  return {
+    key: regressionStudyKey(symbol, interval, lookback, standardDeviations),
+    symbol,
+    interval,
+    lookback,
+    standardDeviations,
+  }
+}
+
+function serverRegressionChannel(rows: Bar[], study: CeriousChartStudy, snapshot?: RegressionStudySnapshot) {
+  if (study.type !== 'regression-channel' || !snapshot?.ok || !rows.length) return null
+  const latestMean = finiteOptional(snapshot.mean)
+  const sigma = finiteOptional(snapshot.sigma)
+  if (latestMean === undefined || sigma === undefined) return null
+  const slope = finiteOptional(snapshot.slope) ?? 0
+  const lookback = normalizedLookback(snapshot.lookback ?? study.lookback)
+  if (lookback === null) return null
+  const updatedAt = finiteOptional(snapshot.updatedAt)
+  const eligibleRows = updatedAt !== undefined && updatedAt > 0
     ? rows.filter(row => row.timestamp <= updatedAt)
     : rows
-  const studyRows = eligibleRows.slice(-period)
+  const studyRows = eligibleRows.slice(-lookback)
   if (studyRows.length < 2) return null
+  const upperDeviation = Math.max(0, Number(study.upperDeviation ?? snapshot.standardDeviations ?? 2) || 0)
+  const lowerDeviation = Math.max(0, Number(study.lowerDeviation ?? snapshot.standardDeviations ?? 2) || 0)
   const lastIndex = studyRows.length - 1
   const points = studyRows.map((row, index) => {
-    const value = latestMean - slope * (lastIndex - index)
+    const mean = latestMean - slope * (lastIndex - index)
     return {
-      time: acmeChartTime(row),
-      mean: value,
-      upper: value + upperDistance,
-      lower: value - lowerDistance,
+      time: ceriousChartTime(row),
+      mean,
+      upper: mean + upperDeviation * sigma,
+      lower: mean - lowerDeviation * sigma,
     }
   })
   return {
     mean: points.map(point => ({ time: point.time, value: point.mean })),
     upper: points.map(point => ({ time: point.time, value: point.upper })),
     lower: points.map(point => ({ time: point.time, value: point.lower })),
-    label: `Server LR27 ${stat?.lr27Interval || '30m'} +/-2`,
+    label: snapshot.label || `Linear Regression lookback ${lookback} ${snapshot.interval || ''}`.trim(),
   }
 }
 
-function acmeChartBucketMs(timeframe: AcmeChartTimeframe): number {
+function ceriousChartBucketMs(timeframe: CeriousChartTimeframe): number {
   if (timeframe === '1m') return 60_000
   if (timeframe === '5m') return 5 * 60_000
   if (timeframe === '30m') return 30 * 60_000
@@ -7346,17 +7678,17 @@ function acmeChartBucketMs(timeframe: AcmeChartTimeframe): number {
   return 24 * 60 * 60_000
 }
 
-function acmeChartBucketStart(timestamp: number, timeframe: AcmeChartTimeframe): number {
-  if (timeframe !== '1d') return Math.floor(timestamp / acmeChartBucketMs(timeframe)) * acmeChartBucketMs(timeframe)
+function ceriousChartBucketStart(timestamp: number, timeframe: CeriousChartTimeframe): number {
+  if (timeframe !== '1d') return Math.floor(timestamp / ceriousChartBucketMs(timeframe)) * ceriousChartBucketMs(timeframe)
   const date = new Date(timestamp)
   return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
 }
 
-function acmeChartSeriesBars(rows: Bar[], timeframe: AcmeChartTimeframe): Bar[] {
+function ceriousChartSeriesBars(rows: Bar[], timeframe: CeriousChartTimeframe): Bar[] {
   const bucketed = new Map<number, Bar>()
   for (const row of rows) {
     if (![row.open, row.high, row.low, row.close, row.timestamp].every(Number.isFinite)) continue
-    const timestamp = acmeChartBucketStart(row.timestamp, timeframe)
+    const timestamp = ceriousChartBucketStart(row.timestamp, timeframe)
     const existing = bucketed.get(timestamp)
     if (!existing) {
       bucketed.set(timestamp, { ...row, timestamp })
@@ -7370,14 +7702,14 @@ function acmeChartSeriesBars(rows: Bar[], timeframe: AcmeChartTimeframe): Bar[] 
   return [...bucketed.values()].sort((a, b) => a.timestamp - b.timestamp)
 }
 
-function acmeCompletedStudyRows(rows: Bar[], timeframe: AcmeChartTimeframe): Bar[] {
-  const periodMs = acmeChartBucketMs(timeframe)
+function ceriousCompletedStudyRows(rows: Bar[], timeframe: CeriousChartTimeframe): Bar[] {
+  const periodMs = ceriousChartBucketMs(timeframe)
   const now = Date.now()
   return rows.filter(row => Number.isFinite(row.timestamp) && row.timestamp + periodMs <= now)
 }
 
-function acmeChartWithLiveLast(rows: Bar[], timeframe: AcmeChartTimeframe, book: PolyBook | undefined, ticks: PolyTradeTick[]): Bar[] {
-  const prepared = acmeChartSeriesBars(rows, timeframe)
+function ceriousChartWithLiveLast(rows: Bar[], timeframe: CeriousChartTimeframe, book: PolyBook | undefined, ticks: PolyTradeTick[]): Bar[] {
+  const prepared = ceriousChartSeriesBars(rows, timeframe)
   const latestTick = ticks.at(-1)
   const tickPrice = finiteOptional(latestTick?.price)
   const bookPrice = finiteOptional(book?.ltp) ?? finiteOptional(book?.up_pct)
@@ -7389,7 +7721,7 @@ function acmeChartWithLiveLast(rows: Bar[], timeframe: AcmeChartTimeframe, book:
   const liveSize = tickPrice !== undefined && tickTimestamp >= bookTimestamp
     ? Math.max(0, latestTick?.size ?? 0)
     : Math.max(0, book?.ltp_size ?? latestTick?.size ?? 0)
-  const bucket = acmeChartBucketStart(liveTimestamp, timeframe)
+  const bucket = ceriousChartBucketStart(liveTimestamp, timeframe)
   const latest = prepared.at(-1)
   if (latest && latest.timestamp === bucket) {
     return [
@@ -7416,12 +7748,52 @@ function acmeChartWithLiveLast(rows: Bar[], timeframe: AcmeChartTimeframe, book:
   ]
 }
 
-function acmeChartTime(row: Pick<Bar, 'timestamp'>) {
+function ceriousChartTime(row: Pick<Bar, 'timestamp'>) {
   return Math.floor(row.timestamp / 1000) as any
 }
 
-function acmeAtrBands(rows: Bar[], study: AcmeChartStudy) {
-  const lookback = Math.max(2, Math.floor(study.lookback || 14))
+const CERIOUS_CHART_TIME_ZONE = 'America/Chicago'
+const CERIOUS_INTRADAY_TIME_FORMATTER = new Intl.DateTimeFormat('en-US', {
+  timeZone: CERIOUS_CHART_TIME_ZONE,
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+})
+const CERIOUS_HOVER_TIME_FORMATTER = new Intl.DateTimeFormat('en-US', {
+  timeZone: CERIOUS_CHART_TIME_ZONE,
+  month: 'short',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+})
+const CERIOUS_DAILY_TIME_FORMATTER = new Intl.DateTimeFormat('en-US', {
+  timeZone: CERIOUS_CHART_TIME_ZONE,
+  month: 'short',
+  day: '2-digit',
+})
+
+function ceriousChartDateFromLightweightTime(time: unknown): Date | null {
+  if (typeof time === 'number' && Number.isFinite(time)) return new Date(time * 1000)
+  if (time && typeof time === 'object') {
+    const row = time as { year?: number; month?: number; day?: number }
+    if (Number.isFinite(row.year) && Number.isFinite(row.month) && Number.isFinite(row.day)) {
+      return new Date(Date.UTC(Number(row.year), Number(row.month) - 1, Number(row.day)))
+    }
+  }
+  return null
+}
+
+function ceriousFormatChartTime(time: unknown, timeframe: CeriousChartTimeframe, includeDate = false): string {
+  const date = ceriousChartDateFromLightweightTime(time)
+  if (!date) return ''
+  if (timeframe === '1d') return CERIOUS_DAILY_TIME_FORMATTER.format(date)
+  return includeDate ? CERIOUS_HOVER_TIME_FORMATTER.format(date) : CERIOUS_INTRADAY_TIME_FORMATTER.format(date)
+}
+
+function ceriousAtrBands(rows: Bar[], study: CeriousChartStudy) {
+  const lookback = normalizedLookback(study.lookback, 2, 500)
+  if (lookback === null) return []
   const multiplier = Math.max(0, Number(study.atrMultiplier ?? 2))
   if (rows.length < lookback + 1) return []
   const trueRanges: number[] = []
@@ -7436,16 +7808,16 @@ function acmeAtrBands(rows: Bar[], study: AcmeChartStudy) {
   }
   return rows.map((row, index) => {
     if (index < lookback) return null
-    const atr = acmeAverage(trueRanges.slice(index - lookback, index))
+    const atr = ceriousAverage(trueRanges.slice(index - lookback, index))
     return {
-      time: acmeChartTime(row),
+      time: ceriousChartTime(row),
       upper: row.close + atr * multiplier,
       lower: row.close - atr * multiplier,
     }
   }).filter((row): row is { time: any; upper: number; lower: number } => Boolean(row))
 }
 
-function acmeVolumeAtPriceBuckets(rows: Bar[], studies: AcmeChartStudy[]) {
+function ceriousVolumeAtPriceBuckets(rows: Bar[], studies: CeriousChartStudy[]) {
   const study = studies.find(item => item.type === 'volume-at-price')
   if (!study || rows.length < 2) return []
   const prices = rows.flatMap(row => [row.low, row.high, row.close]).filter(Number.isFinite)
@@ -7479,16 +7851,14 @@ function CeriousStudyChart({
   showGrid,
   solidCandles,
   studies,
-  publishedStudy,
 }: {
   symbol: string
-  timeframe: AcmeChartTimeframe
-  mode: AcmeChartMode
+  timeframe: CeriousChartTimeframe
+  mode: CeriousChartMode
   compressBlankSessions: boolean
   showGrid: boolean
   solidCandles: boolean
-  studies: AcmeChartStudy[]
-  publishedStudy?: AcmeSpreadStat
+  studies: CeriousChartStudy[]
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const chartRef = useRef<any>(null)
@@ -7501,6 +7871,7 @@ function CeriousStudyChart({
   const [bars, setBars] = useState<Bar[]>([])
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [regressionSnapshots, setRegressionSnapshots] = useState<Record<string, RegressionStudySnapshot>>({})
   const normalizedSymbol = String(symbol || 'ES_NQ').trim().toUpperCase()
   const chartSubscriptionSymbols = useMemo(() => [normalizedSymbol], [normalizedSymbol])
   useCmeMarketDataSubscriptions(chartSubscriptionSymbols)
@@ -7508,6 +7879,15 @@ function CeriousStudyChart({
   const ticks = useStore(state => state.polyTicks[normalizedSymbol] ?? EMPTY_TRADE_TICKS)
   const axisMode = compressBlankSessions ? 'service-session-axis' : 'calendar-axis'
   const showVolumeStudy = studies.some(study => study.type === 'volume-at-price')
+  const regressionStudyRequests = useMemo(() => {
+    const requests = new Map<string, NonNullable<ReturnType<typeof chartRegressionStudyRequest>>>()
+    studies.forEach(study => {
+      const request = chartRegressionStudyRequest(normalizedSymbol, timeframe, study)
+      if (request) requests.set(request.key, request)
+    })
+    return [...requests.values()]
+  }, [normalizedSymbol, studies, timeframe])
+  const regressionStudyRequestKey = regressionStudyRequests.map(request => request.key).sort().join('|')
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -7515,6 +7895,9 @@ function CeriousStudyChart({
       layout: {
         background: { type: ColorType.Solid, color: '#05070b' },
         textColor: '#a8b4c4',
+      },
+      localization: {
+        timeFormatter: (time: unknown) => ceriousFormatChartTime(time, timeframe, true),
       },
       grid: {
         vertLines: { color: showGrid ? 'rgba(46, 63, 87, .62)' : 'rgba(46, 63, 87, .12)', style: LineStyle.Dotted },
@@ -7530,6 +7913,7 @@ function CeriousStudyChart({
         timeVisible: timeframe !== '1d',
         secondsVisible: false,
         rightOffset: 4,
+        tickMarkFormatter: (time: unknown) => ceriousFormatChartTime(time, timeframe),
       },
       autoSize: true,
     })
@@ -7572,11 +7956,17 @@ function CeriousStudyChart({
 
   useEffect(() => {
     chartRef.current?.applyOptions({
+      localization: {
+        timeFormatter: (time: unknown) => ceriousFormatChartTime(time, timeframe, true),
+      },
       grid: {
         vertLines: { color: showGrid ? 'rgba(46, 63, 87, .62)' : 'rgba(46, 63, 87, .12)', style: LineStyle.Dotted },
         horzLines: { color: showGrid ? 'rgba(46, 63, 87, .62)' : 'rgba(46, 63, 87, .12)', style: LineStyle.Dotted },
       },
-      timeScale: { timeVisible: timeframe !== '1d' },
+      timeScale: {
+        timeVisible: timeframe !== '1d',
+        tickMarkFormatter: (time: unknown) => ceriousFormatChartTime(time, timeframe),
+      },
     })
     candleRef.current?.applyOptions({
       visible: mode === 'candles',
@@ -7617,18 +8007,66 @@ function CeriousStudyChart({
     }
   }, [normalizedSymbol, timeframe])
 
+  useEffect(() => {
+    if (!regressionStudyRequests.length) {
+      setRegressionSnapshots({})
+      return
+    }
+    const controller = new AbortController()
+    let cancelled = false
+    let timeoutId = 0
+    const pull = async () => {
+      try {
+        const entries = await Promise.all(regressionStudyRequests.map(async request => {
+          try {
+            const snapshot = await fetchRegressionStudySnapshot(
+              request.symbol,
+              request.interval,
+              request.lookback,
+              request.standardDeviations,
+              controller.signal,
+            )
+            return [request.key, snapshot] as const
+          } catch (err) {
+            const snapshot: RegressionStudySnapshot = {
+              ok: false,
+              symbol: request.symbol,
+              interval: request.interval,
+              lookback: request.lookback,
+              standardDeviations: request.standardDeviations,
+              bars: 0,
+              includesLiveMark: false,
+              updatedAt: 0,
+              error: err instanceof Error ? err.message : 'regression unavailable',
+            }
+            return [request.key, snapshot] as const
+          }
+        }))
+        if (!cancelled) setRegressionSnapshots(Object.fromEntries(entries))
+      } finally {
+        if (!cancelled) timeoutId = window.setTimeout(pull, 30_000)
+      }
+    }
+    pull()
+    return () => {
+      cancelled = true
+      controller.abort()
+      if (timeoutId) window.clearTimeout(timeoutId)
+    }
+  }, [regressionStudyRequestKey])
+
   const historicalDisplayBars = useMemo(
-    () => acmeChartSeriesBars(bars, timeframe),
+    () => ceriousChartSeriesBars(bars, timeframe),
     [bars, timeframe],
   )
 
   const displayBars = useMemo(
-    () => acmeChartWithLiveLast(bars, timeframe, book, ticks),
+    () => ceriousChartWithLiveLast(bars, timeframe, book, ticks),
     [bars, book, ticks, timeframe],
   )
 
   const volumeProfile = useMemo(
-    () => acmeVolumeAtPriceBuckets(displayBars.slice(-240), studies),
+    () => ceriousVolumeAtPriceBuckets(displayBars.slice(-240), studies),
     [displayBars, studies],
   )
 
@@ -7642,15 +8080,15 @@ function CeriousStudyChart({
     for (const row of historicalDisplayBars) unique.set(row.timestamp, row)
     const rows = [...unique.values()].sort((a, b) => a.timestamp - b.timestamp)
     const candleData = rows.map(row => ({
-      time: acmeChartTime(row),
+      time: ceriousChartTime(row),
       open: row.open,
       high: row.high,
       low: row.low,
       close: row.close,
     }))
-    const lineData = rows.map(row => ({ time: acmeChartTime(row), value: row.close }))
+    const lineData = rows.map(row => ({ time: ceriousChartTime(row), value: row.close }))
     const volumeData = rows.map(row => ({
-      time: acmeChartTime(row),
+      time: ceriousChartTime(row),
       value: Math.max(0, row.volume ?? 0),
       color: row.close >= row.open ? 'rgba(0, 109, 255, .28)' : 'rgba(255, 48, 69, .28)',
     }))
@@ -7663,14 +8101,14 @@ function CeriousStudyChart({
       try { chart.removeSeries(series) } catch { /* ignore */ }
     }
     studySeriesRef.current = []
-    const studyRows = acmeCompletedStudyRows(rows, timeframe)
+    const studyRows = ceriousCompletedStudyRows(rows, timeframe)
 
     studies.forEach((study, index) => {
       if (study.type === 'regression-channel') {
-        const usePublishedDefault = isDefaultRegressionChartStudy(study)
-          && String(publishedStudy?.lr27Interval || '30m').toLowerCase() === timeframe
-        if (usePublishedDefault) {
-          const channel = publishedRegressionChannel(studyRows, publishedStudy)
+        const request = chartRegressionStudyRequest(normalizedSymbol, timeframe, study)
+        const snapshot = request ? regressionSnapshots[request.key] : undefined
+        if (snapshot?.ok) {
+          const channel = serverRegressionChannel(studyRows, study, snapshot)
           if (!channel) return
           const mean = channel.mean
             ? chart.addSeries(LineSeries, { color: '#facc15', lineWidth: 2, lineStyle: LineStyle.Dashed, priceLineVisible: false, lastValueVisible: false })
@@ -7683,7 +8121,7 @@ function CeriousStudyChart({
           studySeriesRef.current.push(...[mean, upper, lower].filter(Boolean))
           return
         }
-        const channel = acmeRegressionChannel(studyRows, study)
+        const channel = ceriousRegressionChannel(studyRows, study)
         if (!channel) return
         const palette = ['#facc15', '#fde68a', '#f59e0b', '#fff0b3'][index % 4]
         const mean = chart.addSeries(LineSeries, { color: palette, lineWidth: 2, lineStyle: LineStyle.Dashed, priceLineVisible: false, lastValueVisible: false })
@@ -7694,7 +8132,7 @@ function CeriousStudyChart({
         lower.setData(channel.points.map(point => ({ time: Math.floor(point.time / 1000) as any, value: point.lower })))
         studySeriesRef.current.push(mean, upper, lower)
       } else if (study.type === 'atr') {
-        const bands = acmeAtrBands(studyRows, study)
+        const bands = ceriousAtrBands(studyRows, study)
         if (!bands.length) return
         const upper = chart.addSeries(LineSeries, { color: '#38bdf8', lineWidth: 1, lineStyle: LineStyle.Dotted, priceLineVisible: false, lastValueVisible: false })
         const lower = chart.addSeries(LineSeries, { color: '#fb7185', lineWidth: 1, lineStyle: LineStyle.Dotted, priceLineVisible: false, lastValueVisible: false })
@@ -7711,14 +8149,7 @@ function CeriousStudyChart({
   }, [
     historicalDisplayBars,
     normalizedSymbol,
-    publishedStudy?.lr27Interval,
-    publishedStudy?.lr27Lower2,
-    publishedStudy?.lr27Mean,
-    publishedStudy?.lr27Period,
-    publishedStudy?.lr27Sigma,
-    publishedStudy?.lr27Slope,
-    publishedStudy?.lr27Upper2,
-    publishedStudy?.lr27UpdatedAt,
+    regressionSnapshots,
     showVolumeStudy,
     studies,
     timeframe,
@@ -7731,7 +8162,7 @@ function CeriousStudyChart({
     if (!candle || !line || !displayBars.length) return
     const latest = displayBars.at(-1)
     if (!latest || ![latest.open, latest.high, latest.low, latest.close, latest.timestamp].every(Number.isFinite)) return
-    const time = acmeChartTime(latest)
+    const time = ceriousChartTime(latest)
     candle.update({
       time,
       open: latest.open,
@@ -7794,7 +8225,7 @@ function CeriousStudyChart({
   )
 }
 
-function AcmeSingleChartWindow({
+function CeriousSingleChartWindow({
   provider,
   symbol,
   onSelect,
@@ -7804,30 +8235,25 @@ function AcmeSingleChartWindow({
   provider: ProviderKey
   symbol: string
   onSelect: (provider: ProviderKey, symbol: string) => void
-  settings?: AcmeChartSettings
-  onSettingsChange: (settings: AcmeChartSettings) => void
+  settings?: CeriousChartSettings
+  onSettingsChange: (settings: CeriousChartSettings) => void
 }) {
-  const [mode, setMode] = useState<AcmeChartMode>(settings?.mode ?? 'candles')
-  const [timeframe, setTimeframe] = useState<AcmeChartTimeframe>(settings?.timeframe ?? '30m')
+  const [mode, setMode] = useState<CeriousChartMode>(settings?.mode ?? 'candles')
+  const [timeframe, setTimeframe] = useState<CeriousChartTimeframe>(settings?.timeframe ?? '30m')
   const [compressBlankSessions, setCompressBlankSessions] = useState(settings?.compressBlankSessions ?? true)
   const [showGrid, setShowGrid] = useState(settings?.showGrid ?? false)
   const [solidCandles, setSolidCandles] = useState(settings?.solidCandles ?? true)
-  const [displayPreset, setDisplayPreset] = useState<AcmeChartDisplayPreset>(settings?.displayPreset ?? 'clean')
+  const [displayPreset, setDisplayPreset] = useState<CeriousChartDisplayPreset>(settings?.displayPreset ?? 'clean')
   const [showStudyBuilder, setShowStudyBuilder] = useState(false)
-  const [studyType, setStudyType] = useState<AcmeChartStudyType>(settings?.studyType ?? 'regression-channel')
-  const [studyLookback, setStudyLookback] = useState(settings?.studyLookback ?? 27)
+  const [studyType, setStudyType] = useState<CeriousChartStudyType>(settings?.studyType ?? 'regression-channel')
+  const [studyLookback, setStudyLookback] = useState(settings?.studyLookback ? String(settings.studyLookback) : '')
   const [upperDeviation, setUpperDeviation] = useState(settings?.upperDeviation ?? 2)
   const [lowerDeviation, setLowerDeviation] = useState(settings?.lowerDeviation ?? 2)
   const [atrMultiplier, setAtrMultiplier] = useState(settings?.atrMultiplier ?? 2)
   const [volumePriceBins, setVolumePriceBins] = useState(settings?.volumePriceBins ?? 28)
-  const [studies, setStudies] = useState<AcmeChartStudy[]>(() => initialAcmeChartStudies(settings))
+  const [studies, setStudies] = useState<CeriousChartStudy[]>(() => initialCeriousChartStudies(settings))
   const selectedSymbol = symbol || 'ES_NQ'
-  const intelligence = useAcmeIntelligence(30000)
-  const publishedStudy = useMemo(
-    () => (intelligence?.spreadPack?.spreads ?? []).find(stat => String(stat.key).toUpperCase() === String(selectedSymbol).toUpperCase()),
-    [intelligence?.spreadPack?.spreads, selectedSymbol],
-  )
-  const studyStatus = studies.length ? studies.map(acmeChartStudyLabel).join(' | ') : 'No studies'
+  const studyStatus = studies.length ? studies.map(ceriousChartStudyLabel).join(' | ') : 'No studies'
   const optionalStudyCount = studies.filter(study => !isDefaultRegressionChartStudy(study)).length
   const settingsRef = useRef(onSettingsChange)
 
@@ -7845,7 +8271,7 @@ function AcmeSingleChartWindow({
       solidCandles,
       studies,
       studyType,
-      studyLookback,
+      studyLookback: normalizedLookback(studyLookback, 2, 500) ?? undefined,
       upperDeviation,
       lowerDeviation,
       atrMultiplier,
@@ -7854,7 +8280,8 @@ function AcmeSingleChartWindow({
   }, [atrMultiplier, compressBlankSessions, displayPreset, lowerDeviation, mode, showGrid, solidCandles, studies, studyLookback, studyType, timeframe, upperDeviation, volumePriceBins])
 
   const addStudy = () => {
-    const lookback = Math.max(2, Math.min(500, Math.floor(studyLookback || 27)))
+    const lookback = normalizedLookback(studyLookback, 2, 500)
+    if (studyType !== 'volume-at-price' && lookback === null) return
     const upper = Number(Math.max(0, Math.min(10, upperDeviation || 0)).toFixed(2))
     const lower = Number(Math.max(0, Math.min(10, lowerDeviation || 0)).toFixed(2))
     const multiplier = Number(Math.max(0, Math.min(20, atrMultiplier || 0)).toFixed(2))
@@ -7862,9 +8289,9 @@ function AcmeSingleChartWindow({
     const common = {
       id: `study-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
       type: studyType,
-      lookback,
+      ...(lookback !== null ? { lookback } : {}),
     }
-    const nextStudy: AcmeChartStudy = studyType === 'regression-channel'
+    const nextStudy: CeriousChartStudy = studyType === 'regression-channel'
       ? { ...common, type: 'regression-channel', upperDeviation: upper, lowerDeviation: lower }
       : studyType === 'atr'
         ? { ...common, type: 'atr', atrMultiplier: multiplier }
@@ -7876,13 +8303,10 @@ function AcmeSingleChartWindow({
   }
 
   const clearOptionalStudies = () => {
-    setStudies(current => {
-      const defaults = current.filter(isDefaultRegressionChartStudy)
-      return defaults.length ? defaults : defaultAcmeChartStudies()
-    })
+    setStudies(defaultCeriousChartStudies())
   }
 
-  const applyDisplayPreset = (preset: AcmeChartDisplayPreset) => {
+  const applyDisplayPreset = (preset: CeriousChartDisplayPreset) => {
     setDisplayPreset(preset)
     if (preset === 'clean') {
       setCompressBlankSessions(true)
@@ -7909,18 +8333,18 @@ function AcmeSingleChartWindow({
         <div className="min-w-[280px] flex-1">
           <ProductSelector provider={provider} symbol={selectedSymbol} onSelect={onSelect} compact />
         </div>
-        <select className="input-field h-8 w-[112px] py-1 text-[10px] font-bold uppercase" value={mode} onChange={event => setMode(event.target.value as AcmeChartMode)} title="Chart style">
+        <select className="input-field h-8 w-[112px] py-1 text-[10px] font-bold uppercase" value={mode} onChange={event => setMode(event.target.value as CeriousChartMode)} title="Chart style">
           <option value="candles">Candles</option>
           <option value="line">Line</option>
         </select>
-        <select className="input-field h-8 w-[92px] py-1 font-mono text-[10px] font-bold uppercase" value={timeframe} onChange={event => setTimeframe(event.target.value as AcmeChartTimeframe)} title="Chart timeframe">
+        <select className="input-field h-8 w-[92px] py-1 font-mono text-[10px] font-bold uppercase" value={timeframe} onChange={event => setTimeframe(event.target.value as CeriousChartTimeframe)} title="Chart timeframe">
           <option value="1m">1m</option>
           <option value="5m">5m</option>
           <option value="30m">30m</option>
           <option value="1h">1h</option>
           <option value="1d">1d</option>
         </select>
-        <select className="input-field h-8 w-[132px] py-1 text-[10px] font-bold uppercase" value={displayPreset} onChange={event => applyDisplayPreset(event.target.value as AcmeChartDisplayPreset)} title="Display preset">
+        <select className="input-field h-8 w-[132px] py-1 text-[10px] font-bold uppercase" value={displayPreset} onChange={event => applyDisplayPreset(event.target.value as CeriousChartDisplayPreset)} title="Display preset">
           <option value="clean">Clean</option>
           <option value="grid">Grid</option>
           <option value="calendar">Calendar</option>
@@ -7929,7 +8353,7 @@ function AcmeSingleChartWindow({
         <button
           className={cx('btn-neutral flex h-8 items-center gap-1 px-2 text-[10px] font-black uppercase', showStudyBuilder && 'border-accent/60 text-accent')}
           onClick={() => setShowStudyBuilder(current => !current)}
-          title={`Default 27-period linear regression stays on. Optional studies: ${optionalStudyCount}. ${studyStatus}`}
+          title={`Linear regression is controlled by chart settings. Optional studies: ${optionalStudyCount}. ${studyStatus}`}
         >
           <SlidersHorizontal size={13} /> Studies {studies.length}
         </button>
@@ -7937,13 +8361,13 @@ function AcmeSingleChartWindow({
       {showStudyBuilder && (
       <div className="flex flex-wrap items-center gap-2 border-b border-surface-border bg-[#07101b] px-2 py-1">
         <span className="font-mono text-[10px] font-black uppercase text-muted">Optional Studies</span>
-        <select className="input-field h-7 w-40 py-0 text-[10px] font-bold" value={studyType} onChange={event => setStudyType(event.target.value as AcmeChartStudyType)}>
+        <select className="input-field h-7 w-40 py-0 text-[10px] font-bold" value={studyType} onChange={event => setStudyType(event.target.value as CeriousChartStudyType)}>
           <option value="regression-channel">Linear Regression</option>
           <option value="atr">ATR</option>
           <option value="volume-at-price">Volume at Price</option>
         </select>
         {studyType !== 'volume-at-price' && <label className="flex items-center gap-1 font-mono text-[10px] text-muted">Lookback
-          <input className="input-field h-7 w-16 px-2 py-0 text-[10px]" type="number" min={2} max={500} step={1} value={studyLookback} onChange={event => setStudyLookback(Number(event.target.value))} />
+          <input className="input-field h-7 w-16 px-2 py-0 text-[10px]" type="number" min={2} max={500} step={1} value={studyLookback} onChange={event => setStudyLookback(event.target.value)} />
         </label>}
         {studyType === 'regression-channel' && <label className="flex items-center gap-1 font-mono text-[10px] text-muted">Std +
           <input className="input-field h-7 w-16 px-2 py-0 text-[10px]" type="number" min={0} max={10} step={0.01} value={upperDeviation} onChange={event => setUpperDeviation(Number(event.target.value))} />
@@ -7967,7 +8391,7 @@ function AcmeSingleChartWindow({
               onClick={() => setStudies(current => current.filter(item => item.id !== study.id))}
               title="Remove study"
             >
-              {acmeChartStudyLabel(study)}
+              {ceriousChartStudyLabel(study)}
             </button>
           ))}
         </div>
@@ -7983,7 +8407,6 @@ function AcmeSingleChartWindow({
             showGrid={showGrid}
             solidCandles={solidCandles}
             studies={studies}
-            publishedStudy={publishedStudy}
           />
         </div>
       </div>
@@ -7994,7 +8417,7 @@ function AcmeSingleChartWindow({
   )
 }
 
-function spreadTone(stat?: Partial<AcmeSpreadStat>) {
+function spreadTone(stat?: Partial<CeriousSpreadStat>) {
   const z = Number(stat?.z ?? 0)
   const bias = stat?.bias ?? (z <= -1.5 ? 'buy' : z >= 1.5 ? 'sell' : Math.abs(z) >= 1 ? 'watch' : 'neutral')
   if (bias === 'buy') {
@@ -8050,7 +8473,7 @@ function spreadSignalFromZ(z: number) {
   return z > 0 ? 'Rich, wait or fade' : 'Cheap, wait or confirm'
 }
 
-function liveSpreadLast(row: Pick<AcmeSpreadStat, 'lastTraded' | 'spread'> & { key: string }, books: Record<string, PolyBook>, ticks: Record<string, PolyTradeTick[]>) {
+function liveSpreadLast(row: Pick<CeriousSpreadStat, 'lastTraded' | 'spread'> & { key: string }, books: Record<string, PolyBook>, ticks: Record<string, PolyTradeTick[]>) {
   const liveBook = books[row.key]
   const liveTick = ticks[row.key]?.at(-1)
   const liveBookLtp = Number.isFinite(Number(liveBook?.ltp))
@@ -8061,7 +8484,7 @@ function liveSpreadLast(row: Pick<AcmeSpreadStat, 'lastTraded' | 'spread'> & { k
   return liveBookLtp ?? liveTick?.price ?? row.lastTraded ?? row.spread
 }
 
-function liveSpreadLocation(row: Partial<AcmeSpreadStat>, last: number) {
+function liveSpreadLocation(row: Partial<CeriousSpreadStat>, last: number) {
   const meanValue = finiteOptional(row.longTermMean) ?? finiteOptional(row.lookbackMean) ?? finiteOptional(row.mean) ?? last
   const atrValue = Math.max(finiteOptional(row.blendedAtr) ?? finiteOptional(row.atr) ?? 0, 0)
   const halfAtr = Math.max(finiteOptional(row.halfAtr) ?? atrValue / 2, 0)
@@ -8085,6 +8508,13 @@ function gooseTone(label: string, value?: string) {
   if (/long|buy|risk-on|high/.test(text)) return { border: 'border-blue-500/40', bg: 'bg-blue-500/10', text: 'text-blue-200', accent: 'text-blue-300' }
   if (/moderate|medium|mixed|watch|mean/.test(text)) return { border: 'border-amber-500/40', bg: 'bg-amber-500/10', text: 'text-amber-100', accent: 'text-amber-300' }
   return { border: 'border-surface-border', bg: 'bg-surface-card', text: 'text-slate-200', accent: 'text-accent' }
+}
+
+function dailySummaryPillClass(tone?: string) {
+  const raw = String(tone ?? '').toLowerCase()
+  if (raw === 'red') return 'border-red-500/35 bg-red-500/15 text-red-300'
+  if (raw === 'amber') return 'border-amber-500/35 bg-amber-500/15 text-amber-300'
+  return 'border-blue-500/35 bg-blue-500/15 text-blue-300'
 }
 
 function FormulaLightScale({ value, polarity = 'risk-on', label }: { value: number; polarity?: 'risk-on' | 'risk-off' | 'order-flow'; label?: string }) {
@@ -8116,8 +8546,86 @@ function FormulaLightScale({ value, polarity = 'risk-on', label }: { value: numb
   )
 }
 
-function AcmeGooseWindow() {
-  const data = useAcmeIntelligence(60000)
+function CeriousDailySummaryWindow() {
+  const { data, error } = useCeriousEndpoint<CeriousDailySummaryState>('/api/cerious/daily-summary', CERIOUS_ADVISORY_REFRESH_MS)
+  const topRows = data?.top ?? []
+  const classifications = data?.classification ?? []
+  const eligible = data?.eligibleSpreads ?? []
+
+  return (
+    <div className="h-full overflow-y-auto bg-surface p-3 text-xs">
+      <div className="mb-3 rounded border border-accent/35 bg-accent/10 p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <div className="text-xs font-black uppercase tracking-wide text-slate-100">Daily Summary</div>
+            <div className="mt-1 font-mono text-[10px] text-accent">{data?.service ?? 'cerious.daily.summary'}</div>
+          </div>
+          <div className="font-mono text-[10px] text-muted">
+            {error || (data?.fetchedAt ? `Updated ${new Date(data.fetchedAt).toLocaleString()}` : 'Waiting for summary payload')}
+          </div>
+        </div>
+        <p className="mt-3 text-[12px] leading-relaxed text-slate-100">{data?.summaryRead ?? 'Waiting for the daily summary payload.'}</p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
+        {topRows.map(row => (
+          <div key={row.label} className="rounded border border-surface-border bg-surface-card p-2">
+            <div className="font-mono text-[9px] font-black uppercase text-muted">{row.label}</div>
+            <div className="mt-1 font-mono text-[13px] font-black text-accent">{row.value}</div>
+            <div className="mt-1 text-[10px] leading-relaxed text-muted">{row.note}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-1">
+        {(data?.sourcePills ?? []).map(pill => (
+          <span key={pill.label} className={cx('rounded border px-2 py-1 font-mono text-[10px] font-black uppercase', dailySummaryPillClass(pill.tone))}>
+            {pill.label}
+          </span>
+        ))}
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2 xl:grid-cols-4">
+        {classifications.map(row => (
+          <div key={row.label} className="rounded border border-surface-border bg-surface-card p-2">
+            <div className="font-mono text-[9px] font-black uppercase text-muted">{row.label}</div>
+            <div className="mt-1 font-mono text-[12px] font-black text-slate-100">{row.value}</div>
+            <div className="mt-1 text-[10px] leading-relaxed text-muted">{row.note}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-3 overflow-hidden rounded border border-surface-border">
+        <div className="grid grid-cols-[92px_64px_60px_1fr_1.3fr] border-b border-surface-border bg-surface-card px-2 py-1 font-mono text-[10px] font-black uppercase text-muted">
+          <span>Spread</span>
+          <span>Score</span>
+          <span>Z</span>
+          <span>Bias</span>
+          <span>Approach</span>
+        </div>
+        {eligible.map(row => (
+          <div key={row.key} className="grid grid-cols-[92px_64px_60px_1fr_1.3fr] border-b border-surface-border/60 px-2 py-2 font-mono text-[10px]">
+            <span className="font-black text-accent">{row.label}</span>
+            <span className={row.score >= 65 ? 'font-black text-blue-300' : row.score >= 45 ? 'font-black text-amber-300' : 'text-muted'}>{row.score}/100</span>
+            <span className={row.z >= 0 ? 'text-down' : 'text-up'}>{fmtNum(row.z, 2)}</span>
+            <span className="text-slate-200">{row.bias}</span>
+            <span className="text-muted">{row.approach}</span>
+          </div>
+        ))}
+        {!eligible.length && <div className="p-4 text-center font-mono text-[10px] text-muted">Waiting for eligible spread classification.</div>}
+      </div>
+
+      {data?.gooseComplement && (
+        <div className="mt-3 rounded border border-blue-500/25 bg-blue-500/10 p-3 text-[11px] leading-relaxed text-slate-200">
+          {data.gooseComplement}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function CeriousGooseWindow() {
+  const data = useCeriousIntelligence(CERIOUS_ADVISORY_REFRESH_MS)
   const gooseData = data?.goose
   const macro = data?.macroRegime
   const strongest = data?.spreadPack?.strongest
@@ -8151,7 +8659,7 @@ function AcmeGooseWindow() {
       <div className="mt-3 rounded border border-accent/30 bg-accent/10 p-3 leading-relaxed text-slate-200">
         {gooseData?.read ?? 'GOOSE is waiting for live spread intelligence.'}
         <div className="mt-2 font-mono text-[10px] text-muted">
-          {gooseData?.updateCadence ?? 'One-minute advisory cadence'}
+          {gooseData?.updateCadence ?? CERIOUS_ADVISORY_REFRESH_LABEL}
           {gooseData?.updatedAt ? ` | last review ${new Date(gooseData.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
         </div>
       </div>
@@ -8167,38 +8675,35 @@ function AcmeGooseWindow() {
   )
 }
 
-function AcmeLiveSpreadSignalsWindow() {
-  const data = useAcmeIntelligence(60000)
+function CeriousLiveSpreadSignalsWindow() {
+  const data = useCeriousIntelligence(CERIOUS_ADVISORY_REFRESH_MS)
   const rows = data?.liveSpreadSignals ?? []
-  useCmeMarketDataSubscriptions(rows.map(row => row.key))
-  const polyBooks = useStore(s => s.polyBooks)
-  const polyTicks = useStore(s => s.polyTicks)
   return (
     <div className="flex h-full flex-col bg-surface text-xs">
       <div className="grid grid-cols-[86px_1fr_72px_72px_72px_58px_68px_1.1fr] border-b border-surface-border bg-surface-card px-2 py-1 font-mono text-[10px] font-black uppercase text-muted">
-        <span>Spread</span><span>Last vs 30D</span><span className="text-right">LR27 -2</span><span className="text-right">LR27 Mid</span><span className="text-right">LR27 +2</span><span className="text-right">Z</span><span className="text-right">Flow</span><span className="text-right">Signal</span>
+        <span>Spread</span><span>Last vs 30D</span><span className="text-right">Lin Reg -2</span><span className="text-right">Lin Reg Mid</span><span className="text-right">Lin Reg +2</span><span className="text-right">Z</span><span className="text-right">Flow</span><span className="text-right">Signal</span>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
         {rows.map(row => {
-          const last = liveSpreadLast(row, polyBooks, polyTicks)
+          const last = finiteOptional(row.lastTraded) ?? finiteOptional(row.spread) ?? 0
           const location = liveSpreadLocation(row, last)
           const tone = spreadTone({ z: location.dayZ })
           const baseline = location.meanValue
-          const lrTitle = `${row.lr27Bars ?? 0} x ${row.lr27Interval ?? '30m'}${row.lr27IsForming ? ' including active bar' : ''}`
+          const regressionTitle = `${row.linearRegressionBars ?? 0} x ${row.linearRegressionInterval ?? '30m'}${row.linearRegressionIsForming ? ' including active bar' : ''}`
           return (
             <div key={row.key} className={cx('grid grid-cols-[86px_1fr_72px_72px_72px_58px_68px_1.1fr] border-b px-2 py-2 font-mono text-[10px]', tone.border, tone.bg)}>
               <span className={cx('font-black', tone.accent)}>{row.label}</span>
               <span className="text-slate-200">
-                {last.toFixed(2)}
-                <span className="text-muted"> vs {baseline.toFixed(2)} </span>
+                {fmtNum(last, 2)}
+                <span className="text-muted"> vs {fmtNum(baseline, 2)} </span>
                 <span className={tone.accent}>({fmtNum(last - baseline, 2)})</span>
                 <span className="ml-1 text-muted">ATR {fmtNum(location.atrValue, 2)}</span>
               </span>
-              <span className="text-right text-blue-300" title={lrTitle}>{fmtNum(finiteOptional(row.lr27Lower2), 2)}</span>
-              <span className="text-right text-amber-200" title={lrTitle}>{fmtNum(finiteOptional(row.lr27Mean), 2)}</span>
-              <span className="text-right text-red-300" title={lrTitle}>{fmtNum(finiteOptional(row.lr27Upper2), 2)}</span>
-              <span className={cx('text-right font-black', tone.accent)}>{location.dayZ.toFixed(2)}</span>
-              <span className="text-right"><span className={cx('rounded px-1.5 py-0.5 font-black', tone.bg, tone.accent)}>{Math.round(row.orderFlowScore ?? Math.abs(location.z) * 42)}</span></span>
+              <span className="text-right text-blue-300" title={regressionTitle}>{fmtNum(finiteOptional(row.linearRegressionLower), 2)}</span>
+              <span className="text-right text-amber-200" title={regressionTitle}>{fmtNum(finiteOptional(row.linearRegressionMean), 2)}</span>
+              <span className="text-right text-red-300" title={regressionTitle}>{fmtNum(finiteOptional(row.linearRegressionUpper), 2)}</span>
+              <span className={cx('text-right font-black', tone.accent)}>{fmtNum(location.dayZ, 2)}</span>
+              <span className="text-right"><span className={cx('rounded px-1.5 py-0.5 font-black', tone.bg, tone.accent)}>{Math.round(displayNumber(row.orderFlowScore, Math.abs(displayNumber(location.z)) * 42))}</span></span>
               <span className="text-right text-muted">{location.signal}</span>
             </div>
           )
@@ -8208,12 +8713,9 @@ function AcmeLiveSpreadSignalsWindow() {
   )
 }
 
-function AcmeRelativeSpreadVisualsWindow() {
-  const data = useAcmeIntelligence()
+function CeriousRelativeSpreadVisualsWindow() {
+  const data = useCeriousIntelligence(CERIOUS_ADVISORY_REFRESH_MS)
   const rows = data?.spreadPack?.spreads ?? []
-  useCmeMarketDataSubscriptions(rows.map(row => row.key))
-  const polyBooks = useStore(s => s.polyBooks)
-  const polyTicks = useStore(s => s.polyTicks)
   const macro = data?.macroRegime
   const avgFlow = rows.length ? rows.reduce((sum, row) => sum + Number(row.orderFlowScore ?? Math.abs(row.z) * 42), 0) / rows.length : 0
   return (
@@ -8228,7 +8730,7 @@ function AcmeRelativeSpreadVisualsWindow() {
       </div>
       <div className="grid gap-3">
         {rows.map(row => {
-          const last = liveSpreadLast(row, polyBooks, polyTicks)
+          const last = finiteOptional(row.lastTraded) ?? finiteOptional(row.spread) ?? 0
           const location = liveSpreadLocation(row, last)
           const x = clamp(50 + clamp(location.z, -2, 2) * 25, 0, 100)
           const tone = spreadTone({ z: location.z })
@@ -8238,7 +8740,7 @@ function AcmeRelativeSpreadVisualsWindow() {
             <div key={row.key} className={cx('rounded border p-3', tone.border, tone.bg)}>
               <div className="mb-2 flex items-center justify-between font-mono text-[11px]">
                 <span className={cx('font-black', tone.accent)}>{row.label}</span>
-                <span className={cx('font-black', tone.accent)}>z {location.z.toFixed(2)} | {tone.label}</span>
+                <span className={cx('font-black', tone.accent)}>z {fmtNum(location.z, 2)} | {tone.label}</span>
               </div>
               <div className="relative h-8 rounded border border-surface-border bg-[#05070b]" style={{ background: leftZone }}>
                 <div className="absolute left-1/4 top-0 h-full w-px bg-blue-300/25" />
@@ -8248,14 +8750,14 @@ function AcmeRelativeSpreadVisualsWindow() {
               </div>
               <div className="mt-1 flex justify-between font-mono text-[9px] text-muted"><span>-2 ATR cheap</span><span>30D Mean</span><span>+2 ATR rich</span></div>
               <div className="mt-2 grid grid-cols-5 gap-2 font-mono text-[10px] text-muted">
-                <span>Last <b className="text-slate-200">{last.toFixed(3)}</b></span>
-                <span>30D <b className="text-slate-200">{baseline.toFixed(3)}</b></span>
-                <span>ATR <b className="text-slate-200">{location.atrValue.toFixed(3)}</b></span>
+                <span>Last <b className="text-slate-200">{fmtNum(last, 3)}</b></span>
+                <span>30D <b className="text-slate-200">{fmtNum(baseline, 3)}</b></span>
+                <span>ATR <b className="text-slate-200">{fmtNum(location.atrValue, 3)}</b></span>
                 <span>Vol <b className="text-slate-200">{fmtCompact(row.volume ?? 0)}</b></span>
                 <span className={tone.accent}>{location.signal}</span>
               </div>
               <div className="mt-1 font-mono text-[9px] text-muted">
-                Session anchor {fmtNum(location.vwapBasis, 3)} | 3/30 ATR {fmtNum(row.atr3, 3)} / {fmtNum(row.atr30 ?? row.atr20, 3)} | LR27 {fmtNum(row.lr27Mean, 2)}
+                Session anchor {fmtNum(location.vwapBasis, 3)} | 3/30 ATR {fmtNum(row.atr3, 3)} / {fmtNum(row.atr30 ?? row.atr20, 3)} | Lin Reg {fmtNum(row.linearRegressionMean, 2)}
               </div>
             </div>
           )
@@ -8265,10 +8767,10 @@ function AcmeRelativeSpreadVisualsWindow() {
   )
 }
 
-function AcmeSpreadConfigurationsWindow() {
-  const data = useAcmeIntelligence(60000)
+function CeriousSpreadConfigurationsWindow() {
+  const data = useCeriousIntelligence(CERIOUS_ADVISORY_REFRESH_MS)
   const rows = data?.spreadPack?.spreads ?? []
-  const fallbackConfigs: AcmeSpreadConfig[] = ACME_SPREAD_PRODUCTS.map(product => ({
+  const fallbackConfigs: CeriousSpreadConfig[] = CERIOUS_SPREAD_PRODUCTS.map(product => ({
     symbol: product.symbol,
     label: product.label,
     meaning: 'Waiting for spread configuration service.',
@@ -8294,7 +8796,7 @@ function AcmeSpreadConfigurationsWindow() {
   return (
     <div className="flex h-full flex-col bg-surface text-xs">
       <div className="grid grid-cols-[92px_1.2fr_96px_86px_88px_88px_88px_88px] border-b border-surface-border bg-surface-card px-2 py-1 font-mono text-[10px] font-black uppercase text-muted">
-        <span>Spread</span><span>Formula</span><span>Ratio</span><span className="text-right">Tick</span><span className="text-right">Last</span><span className="text-right">Bid</span><span className="text-right">Ask</span><span className="text-right">LR27 Mid</span>
+        <span>Spread</span><span>Formula</span><span>Ratio</span><span className="text-right">Tick</span><span className="text-right">Last</span><span className="text-right">Bid</span><span className="text-right">Ask</span><span className="text-right">Lin Reg Mid</span>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
         {configs.map(config => {
@@ -8320,7 +8822,7 @@ function AcmeSpreadConfigurationsWindow() {
               <span className={cx('text-right font-black', tone.accent)}>{fmtNum(last, 2)}</span>
               <span className="text-right text-blue-300">{fmtNum(bid, 2)}</span>
               <span className="text-right text-red-300">{fmtNum(ask, 2)}</span>
-              <span className="text-right text-amber-200">{fmtNum(finiteOptional(stat?.lr27Mean), 2)}</span>
+              <span className="text-right text-amber-200">{fmtNum(finiteOptional(stat?.linearRegressionMean), 2)}</span>
             </div>
           )
         })}
@@ -8330,7 +8832,7 @@ function AcmeSpreadConfigurationsWindow() {
   )
 }
 
-function AcmeRelativeSpreadSvg({ stat }: { stat: AcmeSpreadStat }) {
+function CeriousRelativeSpreadSvg({ stat }: { stat: CeriousSpreadStat }) {
   const width = 420
   const height = 170
   const left = 38
@@ -8382,12 +8884,9 @@ function AcmeRelativeSpreadSvg({ stat }: { stat: AcmeSpreadStat }) {
   )
 }
 
-function AcmeRelativeSpreadChartsWindow() {
-  const data = useAcmeIntelligence(60000)
+function CeriousRelativeSpreadChartsWindow() {
+  const data = useCeriousIntelligence(CERIOUS_ADVISORY_REFRESH_MS)
   const rows = data?.spreadPack?.spreads ?? []
-  useCmeMarketDataSubscriptions(rows.map(row => row.key))
-  const polyBooks = useStore(s => s.polyBooks)
-  const polyTicks = useStore(s => s.polyTicks)
   return (
     <div className="h-full overflow-y-auto bg-surface p-3">
       <div className="mb-3 flex items-center justify-between gap-2">
@@ -8397,21 +8896,21 @@ function AcmeRelativeSpreadChartsWindow() {
       <div className="grid gap-3">
         {rows.map(stat => {
           const bars = stat.bars ?? []
-          const liveLast = liveSpreadLast(stat, polyBooks, polyTicks)
+          const liveLast = finiteOptional(stat.lastTraded) ?? finiteOptional(stat.spread) ?? finiteOptional(bars[bars.length - 1]?.close) ?? 0
           const location = liveSpreadLocation(stat, liveLast)
           const liveStat = { ...stat, spread: liveLast, lastTraded: liveLast, z: location.z, dayZ: location.dayZ, signal: location.signal }
           return (
             <div key={stat.key} className="rounded border border-surface-border bg-surface-card p-3">
               <div className="mb-2 flex items-center justify-between">
                 <h3 className="font-mono text-[12px] font-black text-slate-100">{liveStat.label}</h3>
-                <span className={cx('font-mono text-[10px] font-black', liveStat.z >= 0 ? 'text-down' : 'text-up')}>z {liveStat.z.toFixed(2)}</span>
+                <span className={cx('font-mono text-[10px] font-black', displayNumber(liveStat.z) >= 0 ? 'text-down' : 'text-up')}>z {fmtNum(liveStat.z, 2)}</span>
               </div>
               <div className="h-44 rounded border border-surface-border bg-[#05070b]">
-                <AcmeRelativeSpreadSvg stat={liveStat} />
+                <CeriousRelativeSpreadSvg stat={liveStat} />
               </div>
               <div className="mt-2 flex justify-between font-mono text-[10px] text-muted">
                 <span>{bars.length} bars</span>
-                <span>{Number.isFinite(liveLast) ? `${liveLast.toFixed(3)} live | ${liveStat.signal}` : 'Waiting'}</span>
+                <span>{finiteOptional(liveLast) !== undefined ? `${fmtNum(liveLast, 3)} live | ${liveStat.signal}` : 'Waiting'}</span>
               </div>
             </div>
           )
@@ -8422,8 +8921,8 @@ function AcmeRelativeSpreadChartsWindow() {
   )
 }
 
-function AcmeStreamingNewsWindow() {
-  const { data, error } = useAcmeEndpoint<AcmeNewsState>('/api/acme/news', 60000)
+function CeriousStreamingNewsWindow() {
+  const { data, error } = useCeriousEndpoint<CeriousNewsState>('/api/cerious/news', 60000)
   const items = data?.items ?? []
   const statusClass = data?.status === 'ok' ? 'bg-blue-500/15 text-blue-300 border-blue-500/35' : 'bg-amber-500/15 text-amber-300 border-amber-500/35'
   return (
@@ -8455,8 +8954,8 @@ function AcmeStreamingNewsWindow() {
   )
 }
 
-function AcmeAuditTrailWindow() {
-  const { data, error } = useAcmeEndpoint<AcmeAuditState>('/api/acme/audit', 5000)
+function CeriousAuditTrailWindow() {
+  const { data, error } = useCeriousEndpoint<CeriousAuditState>('/api/cerious/audit', 5000)
   const [channel, setChannel] = useState('')
   const [severity, setSeverity] = useState('')
   const entries = (data?.entries ?? []).filter(entry => (!channel || entry.channel === channel) && (!severity || entry.severity === severity))
@@ -8496,8 +8995,8 @@ function AcmeAuditTrailWindow() {
   )
 }
 
-function AcmeMacroRegimeWindow() {
-  const { data, error } = useAcmeEndpoint<AcmeMacroState>('/api/acme/macro-regime', 10000)
+function CeriousMacroRegimeWindow() {
+  const { data, error } = useCeriousEndpoint<CeriousMacroState>('/api/cerious/macro-regime', CERIOUS_ADVISORY_REFRESH_MS)
   const rows = data?.factorRows ?? []
   const regimeTone = data?.label === 'Risk-Off' ? 'risk-off' : 'risk-on'
   const orderFlow = rows.length ? clamp(rows.reduce((sum, row) => sum + Math.abs(row.value) * row.weight * 100, 0), 0, 100) : 0
@@ -8543,16 +9042,19 @@ function AcmeMacroRegimeWindow() {
   )
 }
 
-function AcmeOpportunityMapWindow() {
-  const { data, error } = useAcmeEndpoint<AcmeOpportunityState>('/api/acme/opportunity-map', 10000)
+function CeriousOpportunityMapWindow() {
+  const { data, error } = useCeriousEndpoint<CeriousOpportunityState>('/api/cerious/opportunity-map', CERIOUS_ADVISORY_REFRESH_MS)
   const rows = data?.rows ?? []
+  const playbookRows = data?.playbookRows ?? []
+  const productRows = data?.productRows ?? []
+  const riskRows = data?.riskChecklistRows ?? []
   return (
-    <div className="flex h-full flex-col bg-surface text-xs">
+    <div className="h-full overflow-y-auto bg-surface text-xs">
       <div className="border-b border-surface-border bg-surface-panel px-3 py-2 font-mono text-[10px] text-muted">{error || 'Cross-spread ranking from z-location, leadership confirmation, regime, source breadth, and liquidity.'}</div>
       <div className="grid grid-cols-[90px_66px_70px_1fr_1.2fr] border-b border-surface-border bg-surface-card px-2 py-1 font-mono text-[10px] font-black uppercase text-muted">
         <span>Spread</span><span>Score</span><span>Z</span><span>Expression</span><span>Risk Check</span>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div>
         {rows.map(row => (
           <div key={row.key} className="grid grid-cols-[90px_66px_70px_1fr_1.2fr] border-b border-surface-border/60 px-2 py-2 font-mono text-[10px]">
             <span className="font-black text-accent">{row.label}</span>
@@ -8564,13 +9066,53 @@ function AcmeOpportunityMapWindow() {
         ))}
         {!rows.length && <div className="p-4 text-center text-muted">Waiting for spread scores.</div>}
       </div>
+      {!!playbookRows.length && (
+        <div className="mt-3 overflow-hidden rounded border border-surface-border">
+          <div className="grid grid-cols-[1fr_1.35fr_1fr_1.2fr] border-b border-surface-border bg-surface-card px-2 py-1 font-mono text-[10px] font-black uppercase text-muted">
+            <span>Signal Combination</span><span>Market Interpretation</span><span>Clean Expression</span><span>Risk Check</span>
+          </div>
+          {playbookRows.map(row => (
+            <div key={row.signalCombination} className="grid grid-cols-[1fr_1.35fr_1fr_1.2fr] border-b border-surface-border/60 px-2 py-2 font-mono text-[10px]">
+              <span className="text-slate-100">{row.signalCombination}</span>
+              <span className="text-muted">{row.interpretation}</span>
+              <span className="text-accent">{row.expression}</span>
+              <span className="text-muted">{row.risk}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {!!productRows.length && (
+        <div className="mt-3 overflow-hidden rounded border border-surface-border">
+          <div className="grid grid-cols-[86px_1fr_1fr_1.2fr] border-b border-surface-border bg-surface-card px-2 py-1 font-mono text-[10px] font-black uppercase text-muted">
+            <span>Spread</span><span>Formula / Tag</span><span>Expression</span><span>Nuance</span>
+          </div>
+          {productRows.map(row => (
+            <div key={row.spread} className="grid grid-cols-[86px_1fr_1fr_1.2fr] border-b border-surface-border/60 px-2 py-2 font-mono text-[10px]">
+              <span className="font-black text-accent">{row.spread}</span>
+              <span className="text-muted">{row.formula || row.tag}</span>
+              <span className="text-slate-200">{row.buy} / {row.sell}</span>
+              <span className="text-muted">{row.nuance}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {!!riskRows.length && (
+        <div className="mt-3 grid gap-2 p-3">
+          {riskRows.map(row => (
+            <div key={row.risk} className="rounded border border-surface-border bg-surface-card p-2">
+              <div className="font-mono text-[10px] font-black text-slate-100">{row.risk}</div>
+              <div className="mt-1 text-[11px] leading-relaxed text-muted">{row.control}</div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
 
-function AcmeTradeAnalyticsWindow() {
-  const { data, error } = useAcmeEndpoint<AcmeTradeAnalyticsState>('/api/acme/trade-analytics', 10000)
-  const [imported, setImported] = useState<AcmeTradeAnalyticsState | null>(() => loadImportedTradeAnalytics())
+function CeriousTradeAnalyticsWindow() {
+  const { data, error } = useCeriousEndpoint<CeriousTradeAnalyticsState>('/api/cerious/trade-analytics', 10000)
+  const [imported, setImported] = useState<CeriousTradeAnalyticsState | null>(() => loadImportedTradeAnalytics())
   const [importStatus, setImportStatus] = useState('')
   const fileRef = useRef<HTMLInputElement | null>(null)
   const active = imported ?? (data ? { ...data, source: 'live' as const } : null)
@@ -8734,8 +9276,8 @@ function AcmeTradeAnalyticsWindow() {
   )
 }
 
-function AcmeNotionalCalculatorWindow() {
-  const { data, error } = useAcmeEndpoint<AcmeNotionalState>('/api/acme/notional', 5000)
+function CeriousNotionalCalculatorWindow() {
+  const { data, error } = useCeriousEndpoint<CeriousNotionalState>('/api/cerious/notional', 5000)
   const rows = data?.rows ?? []
   return (
     <div className="flex h-full flex-col bg-surface text-xs">
@@ -8825,10 +9367,10 @@ function loadModelVariantLibrary(): ModelVariantDraft[] {
       ? parsed.map(normalizeModelVariant).filter((item): item is ModelVariantDraft => !!item)
       : []
     const current = parseModelVariant(window.localStorage.getItem(MODEL_VARIANT_KEY))
-    const legacy = parseModelVariant(window.localStorage.getItem(LEGACY_ACME_MODEL_VARIANT_KEY))
+    const legacy = parseModelVariant(window.localStorage.getItem(LEGACY_CERIOUS_MODEL_VARIANT_KEY))
     let merged = library
     if (current) merged = upsertModelVariantLibrary(merged, current)
-    if (legacy) merged = upsertModelVariantLibrary(merged, { ...legacy, schema: 'acme.model.variant.v1' })
+    if (legacy) merged = upsertModelVariantLibrary(merged, { ...legacy, schema: 'cerious.model.variant.v1' })
     return merged
   } catch {
     return []
@@ -8842,13 +9384,13 @@ function loadModelVariantDraft(): ModelVariantDraft {
   return library[0] ?? DEFAULT_MODEL_VARIANT
 }
 
-function AcmeModelResearchGovernanceWindow() {
-  const { data, error } = useAcmeEndpoint<AcmeContentState>('/api/acme/content/modelResearchGovernance', 30000)
+function CeriousModelResearchGovernanceWindow() {
+  const { data, error } = useCeriousEndpoint<CeriousContentState>('/api/cerious/content/modelResearchGovernance', 30000)
   const [draft, setDraft] = useState<ModelVariantDraft>(() => loadModelVariantDraft())
   const [library, setLibrary] = useState<ModelVariantDraft[]>(() => loadModelVariantLibrary())
   const [selectedVariantKey, setSelectedVariantKey] = useState(() => draft.savedAt ? modelVariantKey(draft) : '')
   const [status, setStatus] = useState(() => draft.savedAt ? `Loaded ${draft.name} ${draft.version} saved ${new Date(draft.savedAt).toLocaleString()}.` : 'No model variant saved in this browser yet.')
-  const rows = data?.rows ?? ACME_PANEL_DETAILS.modelResearchGovernance?.bullets.map(item => [item]) ?? []
+  const rows = data?.rows ?? CERIOUS_PANEL_DETAILS.modelResearchGovernance?.bullets.map(item => [item]) ?? []
   const sections = data?.sections ?? []
   const updateDraft = (field: keyof ModelVariantDraft, value: string) => {
     setDraft(current => ({ ...current, [field]: value }))
@@ -8882,7 +9424,7 @@ function AcmeModelResearchGovernanceWindow() {
     const nextLibrary = library.filter(item => modelVariantKey(item) !== selectedVariantKey)
     persistLibrary(nextLibrary)
     window.localStorage.removeItem(MODEL_VARIANT_KEY)
-    if (deleted?.schema === 'acme.model.variant.v1') window.localStorage.removeItem(LEGACY_ACME_MODEL_VARIANT_KEY)
+    if (deleted?.schema === 'cerious.model.variant.v1') window.localStorage.removeItem(LEGACY_CERIOUS_MODEL_VARIANT_KEY)
     setSelectedVariantKey('')
     if (deleted && modelVariantKey(draft) === selectedVariantKey) setDraft(DEFAULT_MODEL_VARIANT)
     setStatus(deleted ? `Deleted ${deleted.name} ${deleted.version}.` : 'Variant removed.')
@@ -8980,9 +9522,9 @@ function AcmeModelResearchGovernanceWindow() {
   )
 }
 
-function AcmeContentWindow({ kind }: { kind: WorkspaceWindowKind }) {
-  const { data, error } = useAcmeEndpoint<AcmeContentState>(`/api/acme/content/${kind}`, 30000)
-  const details = ACME_PANEL_DETAILS[kind]
+function CeriousContentWindow({ kind }: { kind: WorkspaceWindowKind }) {
+  const { data, error } = useCeriousEndpoint<CeriousContentState>(`/api/cerious/content/${kind}`, 30000)
+  const details = CERIOUS_PANEL_DETAILS[kind]
   return (
     <div className="h-full overflow-y-auto bg-surface p-3">
       <div className="mb-3 rounded border border-accent/30 bg-accent/10 p-3">
@@ -9011,8 +9553,8 @@ function AcmeContentWindow({ kind }: { kind: WorkspaceWindowKind }) {
   )
 }
 
-function AcmePositionsOrdersWindow() {
-  const { data, error, refresh } = useAcmePositionsOrders()
+function CeriousPositionsOrdersWindow() {
+  const { data, error, refresh } = useCeriousPositionsOrders()
   const options = useProductOptions()
   const simOrders = useStore(s => s.simOrders)
   const simPositions = useStore(s => s.simPositions)
@@ -9027,14 +9569,14 @@ function AcmePositionsOrdersWindow() {
   const livePositionRows = useMemo(
     () => simPositions
       .filter(position => position.status === 'open')
-      .map(position => simPositionToAcmePositionRow(position, productByKey.get(position.marketKey))),
+      .map(position => simPositionToCeriousPositionRow(position, productByKey.get(position.marketKey))),
     [productByKey, simPositions],
   )
 
   const liveOrderRows = useMemo(
     () => simOrders
       .filter(order => order.status === 'working' || order.status === 'partially_filled')
-      .map(order => simOrderToAcmeOrderRow(order, productByKey.get(order.marketKey))),
+      .map(order => simOrderToCeriousOrderRow(order, productByKey.get(order.marketKey))),
     [productByKey, simOrders],
   )
 
@@ -9059,20 +9601,28 @@ function AcmePositionsOrdersWindow() {
   }, [fillsByMarket, simOrders, simPositions])
 
   const allPositionRows = useMemo(() => {
-    const rows = new Map<string, AcmePositionRow>()
+    const rows = new Map<string, CeriousPositionRow>()
     for (const position of data?.positions ?? []) {
-      rows.set(`backend-${position.instrumentId}-${position.account ?? ''}-${position.label ?? ''}`, position)
+      const safePosition = normalizeCeriousPositionRow(position as Partial<CeriousPositionRow> & Record<string, unknown>)
+      rows.set(`backend-${safePosition.instrumentId}-${safePosition.account ?? ''}-${safePosition.label ?? ''}`, safePosition)
     }
     for (const position of livePositionRows) {
-      rows.set(`sim-${position.instrumentId}-${position.account ?? ''}-${position.label ?? ''}`, position)
+      const safePosition = normalizeCeriousPositionRow(position as Partial<CeriousPositionRow> & Record<string, unknown>)
+      rows.set(`sim-${safePosition.instrumentId}-${safePosition.account ?? ''}-${safePosition.label ?? ''}`, safePosition)
     }
     return [...rows.values()]
   }, [data?.positions, livePositionRows])
 
   const allOrderRows = useMemo(() => {
-    const rows = new Map<string, AcmeOrderRow>()
-    for (const order of data?.orders ?? []) rows.set(order.id, order)
-    for (const order of liveOrderRows) rows.set(order.id, order)
+    const rows = new Map<string, CeriousOrderRow>()
+    for (const order of data?.orders ?? []) {
+      const safeOrder = normalizeCeriousOrderRow(order as Partial<CeriousOrderRow> & Record<string, unknown>)
+      rows.set(safeOrder.id, safeOrder)
+    }
+    for (const order of liveOrderRows) {
+      const safeOrder = normalizeCeriousOrderRow(order as Partial<CeriousOrderRow> & Record<string, unknown>)
+      rows.set(safeOrder.id, safeOrder)
+    }
     return [...rows.values()]
   }, [data?.orders, liveOrderRows])
 
@@ -9113,7 +9663,7 @@ function AcmePositionsOrdersWindow() {
     }
     setActionStatus(`Cancel requested for ${orderId}`)
     try {
-      const response = await ceriousFetch(`/api/acme/orders/${encodeURIComponent(orderId)}/cancel`, { method: 'POST' })
+      const response = await ceriousFetch(`/api/cerious/orders/${encodeURIComponent(orderId)}/cancel`, { method: 'POST' })
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       await refresh()
       setActionStatus(`Cancel routed for ${orderId}`)
@@ -9125,7 +9675,7 @@ function AcmePositionsOrdersWindow() {
   const cancelAll = async () => {
     setActionStatus('Cancel-all requested')
     try {
-      const response = await ceriousFetch('/api/acme/orders/cancel-all', { method: 'POST' })
+      const response = await ceriousFetch('/api/cerious/orders/cancel-all', { method: 'POST' })
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       const payload = await response.json()
       if (payload.state) {
@@ -9236,8 +9786,8 @@ function AcmePositionsOrdersWindow() {
                   >
                     {qty > 0 ? '+' : ''}{qty.toFixed(Number.isInteger(qty) ? 0 : 2)}
                   </span>
-                  <span className="text-right text-slate-200">{position.avgPrice.toFixed(2)}</span>
-                  <span className={cx('text-right', position.markLive ? 'text-accent' : 'text-muted')}>{position.markPrice.toFixed(2)}</span>
+                  <span className="text-right text-slate-200">{fmtNum(position.avgPrice, 2)}</span>
+                  <span className={cx('text-right', position.markLive ? 'text-accent' : 'text-muted')}>{fmtNum(position.markPrice, 2)}</span>
                   <span className={cx('text-right font-black', pnl >= 0 ? 'text-up' : 'text-down')}>{fmtMoney(pnl)}</span>
                 </div>
               )
@@ -9271,8 +9821,8 @@ function AcmePositionsOrdersWindow() {
                   >
                     {order.side || '-'}
                   </span>
-                  <span className="text-right text-slate-200">{Number(order.qty || 0).toFixed(0)}</span>
-                  <span className="text-right text-slate-200">{Number(order.price || 0).toFixed(2)}</span>
+                  <span className="text-right text-slate-200">{fmtNum(order.qty, 0)}</span>
+                  <span className="text-right text-slate-200">{fmtNum(order.price, 2)}</span>
                   <span className={cx('truncate', order.held ? 'text-amber-300' : 'text-muted')}>{order.held ? `${order.status} / Held` : order.status}</span>
                   <button className="btn-danger justify-self-end px-2 py-1 text-[10px]" onClick={() => cancelOrder(order.id)}>CXL</button>
                 </div>
@@ -9293,11 +9843,11 @@ function AcmePositionsOrdersWindow() {
   )
 }
 
-function AcmeIncomingWindow({ kind }: { kind: WorkspaceWindowKind }) {
-  const details = ACME_PANEL_DETAILS[kind] ?? {
+function CeriousIncomingWindow({ kind }: { kind: WorkspaceWindowKind }) {
+  const details = CERIOUS_PANEL_DETAILS[kind] ?? {
     service: 'terminal.workspace',
     body: 'Incoming Cerious window is registered in the launcher and ready for deeper service wiring.',
-    bullets: ['Polyman source preserved', 'React window registered', 'Service boundary pending'],
+    bullets: ['Local source payload preserved', 'React window registered', 'Service boundary pending'],
   }
   return (
     <div className="h-full overflow-y-auto bg-surface p-3">
@@ -9331,7 +9881,7 @@ function renderWindowBody(
     setAlerts: React.Dispatch<React.SetStateAction<AlertRule[]>>
     cloneChart: () => void
     cloneRunway: () => void
-    updateWindowChartSettings: (id: string, settings: AcmeChartSettings) => void
+    updateWindowChartSettings: (id: string, settings: CeriousChartSettings) => void
     updateWindowDepthLadderSettings: (id: string, settings: DepthLadderSettings) => void
     saveDepthLadderDefaultForWindow: (id: string, settings: DepthLadderSettings) => void
   },
@@ -9356,30 +9906,31 @@ function renderWindowBody(
       onSaveDefault={settings => props.saveDepthLadderDefaultForWindow(item.id, settings)}
     />
   )
-  if (item.kind === 'depthTrader') return <AcmeDepthTraderWindow symbol={symbol} onSelect={selectForWindow} operatorName={props.operatorName} />
-  if (item.kind === 'depthTraderEsNq') return <AcmeDepthTraderWindow symbol="ES_NQ" onSelect={selectForWindow} operatorName={props.operatorName} />
-  if (item.kind === 'depthTraderYmEs') return <AcmeDepthTraderWindow symbol="YM_ES" onSelect={selectForWindow} operatorName={props.operatorName} />
-  if (item.kind === 'depthTraderRtyEs') return <AcmeDepthTraderWindow symbol="RTY_ES" onSelect={selectForWindow} operatorName={props.operatorName} />
-  if (item.kind === 'mdTraderEs') return <AcmeDepthTraderWindow symbol="ES" onSelect={selectForWindow} operatorName={props.operatorName} />
-  if (item.kind === 'positionsOrders') return <AcmePositionsOrdersWindow />
+  if (item.kind === 'depthTrader') return <CeriousDepthTraderWindow symbol={symbol} onSelect={selectForWindow} operatorName={props.operatorName} />
+  if (item.kind === 'depthTraderEsNq') return <CeriousDepthTraderWindow symbol="ES_NQ" onSelect={selectForWindow} operatorName={props.operatorName} />
+  if (item.kind === 'depthTraderYmEs') return <CeriousDepthTraderWindow symbol="YM_ES" onSelect={selectForWindow} operatorName={props.operatorName} />
+  if (item.kind === 'depthTraderRtyEs') return <CeriousDepthTraderWindow symbol="RTY_ES" onSelect={selectForWindow} operatorName={props.operatorName} />
+  if (item.kind === 'mdTraderEs') return <CeriousDepthTraderWindow symbol="ES" onSelect={selectForWindow} operatorName={props.operatorName} />
+  if (item.kind === 'positionsOrders') return <CeriousPositionsOrdersWindow />
   if (item.kind === 'order') return <OrderBookWindow operatorName={props.operatorName} />
   if (item.kind === 'fills') return <FillsWindow operatorName={props.operatorName} />
   if (item.kind === 'alerts') return <AlertsWindow alerts={props.alerts} setAlerts={props.setAlerts} />
   if (item.kind === 'algoBuilder') return <AlgoBuilderWindow provider={provider} symbol={symbol} operatorName={props.operatorName} onSelect={selectForWindow} />
   if (item.kind === 'algoManager') return <AlgoManagerWindow />
-  if (item.kind === 'charts') return <AcmeSingleChartWindow provider={provider} symbol={symbol} onSelect={selectForWindow} settings={item.chartSettings} onSettingsChange={settings => props.updateWindowChartSettings(item.id, settings)} />
+  if (item.kind === 'charts') return <CeriousSingleChartWindow provider={provider} symbol={symbol} onSelect={selectForWindow} settings={item.chartSettings} onSettingsChange={settings => props.updateWindowChartSettings(item.id, settings)} />
   if (item.kind === 'liquidityMap') return <LiquidityMapWindow />
-  if (item.kind === 'spreadConfigurations') return <AcmeSpreadConfigurationsWindow />
-  if (item.kind === 'relativeSpreadCharts') return <AcmeRelativeSpreadChartsWindow />
-  if (item.kind === 'goose') return <AcmeGooseWindow />
-  if (item.kind === 'liveSpreadSignals') return <AcmeLiveSpreadSignalsWindow />
-  if (item.kind === 'relativeSpreadVisuals') return <AcmeRelativeSpreadVisualsWindow />
-  if (item.kind === 'streamingNews') return <AcmeStreamingNewsWindow />
-  if (item.kind === 'tradeAnalytics') return <AcmeTradeAnalyticsWindow />
-  if (item.kind === 'auditTrail') return <AcmeAuditTrailWindow />
-  if (item.kind === 'notionalCalculator') return <AcmeNotionalCalculatorWindow />
-  if (item.kind === 'macroRegimeSummary') return <AcmeMacroRegimeWindow />
-  if (item.kind === 'crossSpreadOpportunityMap') return <AcmeOpportunityMapWindow />
+  if (item.kind === 'spreadConfigurations') return <CeriousSpreadConfigurationsWindow />
+  if (item.kind === 'relativeSpreadCharts') return <CeriousRelativeSpreadChartsWindow />
+  if (item.kind === 'dailySummary') return <CeriousDailySummaryWindow />
+  if (item.kind === 'goose') return <CeriousGooseWindow />
+  if (item.kind === 'liveSpreadSignals') return <CeriousLiveSpreadSignalsWindow />
+  if (item.kind === 'relativeSpreadVisuals') return <CeriousRelativeSpreadVisualsWindow />
+  if (item.kind === 'streamingNews') return <CeriousStreamingNewsWindow />
+  if (item.kind === 'tradeAnalytics') return <CeriousTradeAnalyticsWindow />
+  if (item.kind === 'auditTrail') return <CeriousAuditTrailWindow />
+  if (item.kind === 'notionalCalculator') return <CeriousNotionalCalculatorWindow />
+  if (item.kind === 'macroRegimeSummary') return <CeriousMacroRegimeWindow />
+  if (item.kind === 'crossSpreadOpportunityMap') return <CeriousOpportunityMapWindow />
   if (
     item.kind === 'liveApiArchitecture'
     || item.kind === 'atrZScoreEngine'
@@ -9388,17 +9939,17 @@ function renderWindowBody(
     || item.kind === 'moneyManagement'
     || item.kind === 'riskChecklist'
     || item.kind === 'sourceNotes'
-  ) return <AcmeContentWindow kind={item.kind} />
-  if (item.kind === 'modelResearchGovernance') return <AcmeModelResearchGovernanceWindow />
+  ) return <CeriousContentWindow kind={item.kind} />
+  if (item.kind === 'modelResearchGovernance') return <CeriousModelResearchGovernanceWindow />
   if (item.kind === 'fixMonitor') return <FixMonitor />
-  if (ACME_PANEL_DETAILS[item.kind]) return <AcmeIncomingWindow kind={item.kind} />
+  if (CERIOUS_PANEL_DETAILS[item.kind]) return <CeriousIncomingWindow kind={item.kind} />
   return <ServiceMapWindow />
 }
 
 export function WorkspaceDesktop() {
   useMarketBootstrap()
+  useCeriousTradingStateHydrator()
   const serviceReadiness = useCeriousServiceReadiness()
-  const desktopRuntime = isCeriousDesktopRuntime()
   const initialWorkspace = useMemo(() => {
     const workspace = loadActiveWorkspace()
     if (workspace) applyWorkspaceAlgoSnapshot(workspace)
@@ -9454,7 +10005,7 @@ export function WorkspaceDesktop() {
     if (!accepted) return
     setSaveStatus('Reset requested')
     try {
-      const response = await ceriousFetch('/api/acme/session/reset', {
+      const response = await ceriousFetch('/api/cerious/session/reset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -9518,16 +10069,11 @@ export function WorkspaceDesktop() {
       const payload = await response.json().catch(() => ({}))
       if (!response.ok || !payload.ok) throw new Error(String(payload.detail || payload.message || `HTTP ${response.status}`))
       window.dispatchEvent(new CustomEvent('cerious-auth-lock', {
-        detail: { reason: 'Cerious shutdown requested. Relaunch from the desktop shortcut when ready.' },
+        detail: { reason: 'Cerious shutdown requested. Open http://127.0.0.1:8000/ when ready.' },
       }))
     } catch (err) {
       setSaveStatus(`Shutdown failed: ${err instanceof Error ? err.message : 'unknown error'}`)
     }
-  }
-
-  const downloadDesktopClient = () => {
-    setSaveStatus('Downloading desktop installer')
-    window.location.assign('/api/downloads/desktop/win64')
   }
 
   useEffect(() => {
@@ -9967,7 +10513,7 @@ export function WorkspaceDesktop() {
     setWindows(current => current.map(item => item.id === id ? { ...item, provider: nextProvider, symbol } : item))
   }
 
-  const updateWindowChartSettings = (id: string, chartSettings: AcmeChartSettings) => {
+  const updateWindowChartSettings = (id: string, chartSettings: CeriousChartSettings) => {
     setWindows(current => current.map(item => {
       if (item.id !== id) return item
       if (JSON.stringify(item.chartSettings) === JSON.stringify(chartSettings)) return item
@@ -10106,23 +10652,6 @@ export function WorkspaceDesktop() {
               </div>
             )}
           </div>
-          {!desktopRuntime && (
-            <button
-              className="flex items-center gap-1 rounded-sm border border-accent/50 bg-surface-card px-2 py-1 text-[11px] font-bold uppercase text-accent hover:bg-accent/10"
-              onClick={downloadDesktopClient}
-              title="Download the Win64 Cerious Systems desktop installer."
-            >
-              <Download size={13} /> Desktop Client
-            </button>
-          )}
-          {desktopRuntime && (
-            <span
-              className="flex items-center gap-1 rounded-sm border border-[#22c55e]/40 bg-[#07120a] px-2 py-1 text-[11px] font-bold uppercase text-[#74ff8d]"
-              title="Running in the native Cerious Systems desktop client."
-            >
-              <Download size={13} /> Desktop
-            </span>
-          )}
         </div>
       </header>
 

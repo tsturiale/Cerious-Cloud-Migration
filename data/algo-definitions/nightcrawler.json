@@ -1,131 +1,126 @@
-{
-  "id": "nightcrawler",
-  "name": "Mean Reversion RTY",
-  "templateId": "mean-reversion-v2",
-  "status": "draft",
-  "version": "2.0",
-  "createdAt": "2026-06-04T04:58:44.555Z",
-  "updatedAt": "2026-06-07T22:55:48.601Z",
-  "engineContract": {
-    "version": "acme.algo-definition.v1",
-    "executionHome": "server-near-exchange",
-    "orderRouting": "disabled-until-deployed",
-    "marketDataSource": "server-subscription",
-    "savedBy": "acme-trader-ui"
-  },
-  "instruments": [
-    "RTY_ES"
-  ],
-  "signalRules": [
-    {
-      "id": "regression-bands-ready",
-      "field": "recursiveLeastSquares27Bands",
-      "operator": "=",
-      "value": true,
-      "action": "pegEntryBands",
-      "enabled": true
-    },
-    {
-      "id": "entry-touch",
-      "field": "marketCanTradeTarget",
-      "operator": "=",
-      "value": true,
-      "action": "releaseSniperEntry",
-      "enabled": true
-    },
-    {
-      "id": "oco-cover",
-      "field": "entryFilled",
-      "operator": "=",
-      "value": true,
-      "action": "attachOcoCover",
-      "enabled": true
-    }
-  ],
-  "risk": {
-    "maxPosition": 1,
-    "maxLossAtr": 22,
-    "clipSchedule": "layered",
-    "requireMarketOpen": true
-  },
-  "midpointPeg": {
-    "enabled": false,
-    "source": "30m-vwap",
-    "label": "Peg VWAP for midpoint",
-    "previousClose": false
-  },
-  "entryPeg": {
-    "source": "recursive-least-squares",
-    "period": 27,
-    "standardDeviations": 2,
-    "pegSellSideToPlus2": true,
-    "pegBuySideToMinus2": true
-  },
-  "layerPlan": {
-    "ticksOffMidpoint": 0,
-    "buyTicksOffMidpoint": 0,
-    "sellTicksOffMidpoint": 0,
-    "layerCount": 4,
-    "layerSpacingTicks": 4,
-    "maxLayers": 5,
-    "applySymmetrically": true,
-    "workBuySide": true,
-    "workSellSide": true
-  },
-  "syntheticOrderManager": {
-    "enabled": true,
-    "containerizedOrders": true,
-    "entryTechnique": "sniper-market-if-target-price-achievable",
-    "holdUntilTriggered": true,
-    "releaseDestination": "exchange-gateway"
-  },
-  "exitPolicy": {
-    "attachOnEntryFill": true,
-    "oco": true,
-    "coverTicksFromFill": 6,
-    "profitTicksFromEntry": 6,
-    "stopTicksFromEntry": 11111,
-    "stopType": "market",
-    "coverLimitPlacement": "above-bid-or-below-offer"
-  },
-  "orderPolicy": {
-    "mode": "synthetic-sniper",
-    "orderType": "synthetic-held-market-release",
-    "priceReference": "27-rls-regression-bands",
-    "doNotCrossInside": false,
-    "doNotCrossSelf": false,
-    "liveOrderEntryEnabled": false
-  },
-  "notes": "",
-  "productMetadata": [
-    {
-      "id": "RTY_ES",
-      "label": "RTY / ES",
-      "marketType": "synthetic-spread",
-      "symbol": null,
-      "nativeSymbol": "RTY_ES",
-      "exchange": "CME",
-      "venue": "cme-globex",
-      "assetClass": "synthetic",
-      "productType": "spread",
-      "legs": [
-        "RTY",
-        "ES"
-      ],
-      "legQty": [
-        7,
-        -3
-      ],
-      "coef": -0.4285714286,
-      "formula": "RTY - 0.4285714 * ES",
-      "tickSize": 0.1,
-      "sizeIncrement": null,
-      "multiplier": 350,
-      "tickValue": 35,
-      "tickValueFormula": "0.1 * (7 * RTY multiplier 50)",
-      "ratio": "7 RTY / -3 ES"
-    }
-  ],
-  "symbol": "RTY_ES",
-  "marketKey": "RTY_ES"
+﻿{
+    "id":  "nightcrawler",
+    "name":  "Mean Reversion RTY",
+    "templateId":  "mean-reversion-v2",
+    "status":  "draft",
+    "version":  "2.0",
+    "createdAt":  "2026-06-04T04:58:44.555Z",
+    "updatedAt":  "2026-06-07T22:55:48.601Z",
+    "engineContract":  {
+                           "version":  "cerious.algo-definition.v1",
+                           "executionHome":  "server-near-exchange",
+                           "orderRouting":  "disabled-until-deployed",
+                           "marketDataSource":  "server-subscription",
+                           "savedBy":  "cerious-terminal"
+                       },
+    "instruments":  [
+                        "RTY_ES"
+                    ],
+    "signalRules":  [
+                        {
+                            "id":  "regression-bands-ready",
+                            "field":  "linearRegressionBands",
+                            "operator":  "=",
+                            "value":  true,
+                            "action":  "pegEntryBands",
+                            "enabled":  true
+                        },
+                        {
+                            "id":  "entry-touch",
+                            "field":  "marketCanTradeTarget",
+                            "operator":  "=",
+                            "value":  true,
+                            "action":  "releaseSniperEntry",
+                            "enabled":  true
+                        },
+                        {
+                            "id":  "oco-cover",
+                            "field":  "entryFilled",
+                            "operator":  "=",
+                            "value":  true,
+                            "action":  "attachOcoCover",
+                            "enabled":  true
+                        }
+                    ],
+    "risk":  {
+                 "maxPosition":  1,
+                 "maxLossAtr":  22,
+                 "clipSchedule":  "layered",
+                 "requireMarketOpen":  true
+             },
+    "midpointPeg":  {
+                        "enabled":  false,
+                        "source":  "30m-vwap",
+                        "label":  "Peg VWAP for midpoint",
+                        "previousClose":  false
+                    },
+    "entryPeg":  {
+                     "source":  "linear-regression",
+                     "standardDeviations":  2,
+                     "lookback":  27
+                 },
+    "layerPlan":  {
+                      "layerCount":  4,
+                      "layerSpacingTicks":  4,
+                      "maxLayers":  5,
+                      "applySymmetrically":  true,
+                      "workBuySide":  true,
+                      "workSellSide":  true
+                  },
+    "syntheticOrderManager":  {
+                                  "enabled":  true,
+                                  "containerizedOrders":  true,
+                                  "entryTechnique":  "sniper-market-if-target-price-achievable",
+                                  "holdUntilTriggered":  true,
+                                  "releaseDestination":  "exchange-gateway"
+                              },
+    "exitPolicy":  {
+                       "attachOnEntryFill":  true,
+                       "oco":  true,
+                       "coverTicksFromFill":  6,
+                       "profitTicksFromEntry":  6,
+                       "stopTicksFromEntry":  11111,
+                       "stopType":  "market",
+                       "coverLimitPlacement":  "above-bid-or-below-offer"
+                   },
+    "orderPolicy":  {
+                        "mode":  "synthetic-sniper",
+                        "orderType":  "synthetic-held-market-release",
+                        "priceReference":  "linear-regression-bands",
+                        "doNotCrossInside":  false,
+                        "doNotCrossSelf":  false,
+                        "liveOrderEntryEnabled":  false
+                    },
+    "notes":  "",
+    "productMetadata":  [
+                            {
+                                "id":  "RTY_ES",
+                                "label":  "RTY / ES",
+                                "marketType":  "synthetic-spread",
+                                "symbol":  null,
+                                "nativeSymbol":  "RTY_ES",
+                                "exchange":  "CME",
+                                "venue":  "cme-globex",
+                                "assetClass":  "synthetic",
+                                "productType":  "spread",
+                                "legs":  [
+                                             "RTY",
+                                             "ES"
+                                         ],
+                                "legQty":  [
+                                               7,
+                                               -3
+                                           ],
+                                "coef":  -0.4285714286,
+                                "formula":  "RTY - 0.4285714 * ES",
+                                "tickSize":  0.1,
+                                "sizeIncrement":  null,
+                                "multiplier":  350,
+                                "tickValue":  35,
+                                "tickValueFormula":  "0.1 * (7 * RTY multiplier 50)",
+                                "ratio":  "7 RTY / -3 ES"
+                            }
+                        ],
+    "symbol":  "RTY_ES",
+    "marketKey":  "RTY_ES"
 }

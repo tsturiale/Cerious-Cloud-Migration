@@ -19,7 +19,7 @@
       "matchEventTs": 1781874608098,
       "matchSource": "book",
       "multiplier": 15.0,
-      "operator": "Acme Trader",
+      "operator": "Cerious Trader",
       "orderId": "algo-algo-1781872811359-bid-L1-3d057f12",
       "orderSide": "bid",
       "orderTag": "ALGO ENTRY",
@@ -37,7 +37,7 @@
       "tickSize": 1.0,
       "tickValue": 15.0,
       "timestamp": "2026-06-19T13:10:08.098000Z",
-      "trigger": "Server LR27 30m -2"
+      "trigger": "Server Linear Regression 30m -2"
     }
   ],
   "source": "sim exchange matching backend",

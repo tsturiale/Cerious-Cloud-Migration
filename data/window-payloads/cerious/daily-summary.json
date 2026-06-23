@@ -1,0 +1,82 @@
+{
+  "service": "cerious.daily.summary",
+  "fetchedAt": "2026-06-21T14:21:00.000Z",
+  "summaryRead": "Native Cerious page-summary cockpit: use the summary as a fast operator read before opening GOOSE and the spread windows. Focus is driven by spread ranking, macro/news context, source quality, and eligible mean-reversion setups.",
+  "top": [
+    {
+      "label": "Suggested Focus",
+      "value": "Relative Value",
+      "note": "Refresh spread ranking, then prioritize the cleanest z-location with macro confirmation."
+    },
+    {
+      "label": "Trade Bias",
+      "value": "Selective Risk-On",
+      "note": "Volatility contained, but rates and credit remain gating inputs for RTY leadership."
+    },
+    {
+      "label": "Macro / News",
+      "value": "Watch",
+      "note": "GOOSE and headline feeds should confirm before full-size layering."
+    },
+    {
+      "label": "Data Quality",
+      "value": "Local",
+      "note": "Cerious serves this payload locally from the copied Cerious artifacts."
+    }
+  ],
+  "classification": [
+    {
+      "label": "Current Bias",
+      "value": "Selective Risk-On",
+      "note": "Favor trades where breadth, rates, credit, and spread z-score agree."
+    },
+    {
+      "label": "Eligible Spreads",
+      "value": "ES/NQ, YM/ES, RTY/ES",
+      "note": "Rank by z-score location, liquidity, macro confirmation, and order-flow status."
+    },
+    {
+      "label": "Algorithmic Approach",
+      "value": "Mean Reversion First",
+      "note": "Layer from qualified bands; reduce size when ATR percentile is elevated."
+    },
+    {
+      "label": "Risk-On / Off Strength",
+      "value": "Neutral to Risk-On",
+      "note": "The old dashboard used rates, volatility, credit, breadth, leadership, volume, and headlines."
+    }
+  ],
+  "sourcePills": [
+    { "label": "Cerious Page Summary", "tone": "blue" },
+    { "label": "GOOSE Companion", "tone": "blue" },
+    { "label": "Spread Pack", "tone": "amber" },
+    { "label": "Macro News", "tone": "amber" }
+  ],
+  "eligibleSpreads": [
+    {
+      "key": "ES_NQ",
+      "label": "ES/NQ",
+      "score": 72,
+      "z": -1.42,
+      "bias": "Buy weakness when GOOSE agrees",
+      "approach": "Passive first clip, then extension layers only after stabilization."
+    },
+    {
+      "key": "RTY_ES",
+      "label": "RTY/ES",
+      "score": 66,
+      "z": -1.18,
+      "bias": "Small-cap relative value watch",
+      "approach": "Require rates/credit confirmation before full-size exposure."
+    },
+    {
+      "key": "YM_ES",
+      "label": "YM/ES",
+      "score": 58,
+      "z": 0.82,
+      "bias": "Value/cyclical confirmation",
+      "approach": "Use smaller clip unless Dow leadership and breadth improve."
+    }
+  ],
+  "gooseComplement": "Daily Summary is the static operator briefing imported from Cerious. GOOSE remains the active advisory layer that should confirm or reject the plan as market data, headlines, and spread state update."
+}

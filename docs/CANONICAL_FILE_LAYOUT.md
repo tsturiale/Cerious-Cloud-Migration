@@ -8,20 +8,12 @@ Canonical local root:
 
 `Cerious local`
 
-The complete local application build. This folder contains the native C++ gateway, native market data/studies/order services, Tauri terminal client assets, preserved Acme intelligence/assets, workspace state, local `.env`, `apps/terminal/node_modules`, and `.tools`.
-
-`Cerious Desktop`
-
-The Windows thin-client launcher package. It resolves the sibling `Cerious local` folder and starts `Start-CeriousApp.ps1`.
+The complete local application build. This folder contains the native C++ gateway, native market data/studies/order services, browser terminal assets, preserved Cerious intelligence/assets, workspace state, local `.env`, `apps/terminal/node_modules`, and `.tools`.
 
 ## Launch Safety
 
 Browser/local portal launch loads Ted S as saved and does not minimize windows.
 
-Desktop-client launch opens the Cerious Desktop toolbar. The toolbar can open individual floating widget windows outside the canvas, open the full floating workspace, save the workspace, or reopen the canvas when needed.
-
-Desktop-client first launch can minimize windows one time as an order-safety measure. Once the trader arranges/floats windows and saves the workspace, that saved layout becomes the default for future desktop launches.
-
 ## Dependency Rule
 
-Runtime code should not depend on old external worktrees, dated Codex worktrees, or desktop data folders. If a local file dependency is needed, put it under `data` or `.tools` in `Cerious local`, or use an explicit environment variable documented in `.env`.
+Runtime code should not depend on old external worktrees, dated Codex worktrees, or desktop-client data folders. If a local file dependency is needed, put it under `data` or `.tools` in `Cerious local`, or use an explicit environment variable documented in `.env`.

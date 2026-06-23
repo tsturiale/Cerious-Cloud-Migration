@@ -1,0 +1,23 @@
+{
+  "service": "knowledge.governance",
+  "fetchedAt": "2026-06-21T14:18:00.000Z",
+  "sections": [
+    {
+      "title": "Objective Process Record",
+      "body": "Objective process record for quantitative signal development, review, monitoring, and variant control. This is intentionally strategy-neutral so it can support partner, investor, regulator, and internal model-review conversations."
+    },
+    {
+      "title": "Variant Control",
+      "body": "Every material methodology, feature, weight, threshold, data-source, or execution-policy change should create a new model variant with owner, version, changelog, review criteria, activation date, and deprecation rule."
+    }
+  ],
+  "rows": [
+    ["Research hypothesis", "State the economic rationale before scoring. A model should explain why an observable variable may forecast risk, return, liquidity, or execution quality.", "Named hypothesis, target horizon, eligible markets, expected failure modes."],
+    ["Data intake", "Separate raw collection, normalization, scoring, and decision display. Vendor, public, and internal feeds must be source-labeled and timestamped.", "Provider, refresh cadence, timestamp, transformation notes, missing-data policy."],
+    ["Feature design", "Prefer independent factor families over duplicate measures. Current families: trend/momentum, relative strength, volatility, credit/rates, positioning, breadth, news pressure, and liquidity.", "Feature list, lookback, directionality, cap/winsorization rule, correlation review."],
+    ["Scoring", "Convert each feature into bounded scores, combine with documented weights, and expose both composite score and factor-level attribution.", "Weights, factor contribution, confidence tier, score version, threshold table."],
+    ["Decision policy", "Advice must distinguish observation, watch, action, sizing, invalidation, and review horizon. Execution remains separate from signal generation.", "Day plan, week plan, trigger, stop/invalidation, confidence downgrade rule."],
+    ["Validation", "Backtest and forward-monitor separately. Require out-of-sample checks, turnover/slippage assumptions, stale-data tests, and adverse-regime review.", "Backtest window, holdout window, hit rate, drawdown, turnover, slippage, exceptions."],
+    ["Governance", "Every model variant gets a stable name, owner, version, changelog, activation date, and deprecation rule.", "Registry entry, approval status, change reason, reviewer notes."]
+  ]
+}

@@ -1,6 +1,6 @@
 # Cerious Systems Cloud Migration Audit
 
-Last updated: 2026-06-17
+Last updated: 2026-06-21
 
 ## Canonical Package
 
@@ -12,9 +12,11 @@ The deployable local/cloud application is:
 
 `C:\Users\tstur\Documents\Codex\Cerious Systems\Cerious local`
 
-The Windows thin-client package is:
+The active UI is the React/Vite terminal in:
 
-`C:\Users\tstur\Documents\Codex\Cerious Systems\Cerious Desktop`
+`C:\Users\tstur\Documents\Codex\Cerious Systems\Cerious local\apps\terminal`
+
+It is served by the C++ gateway at the local/cloud browser entrypoint.
 
 ## Runtime Data Kept Under Cerious Local
 
@@ -23,24 +25,21 @@ The Windows thin-client package is:
 - `data/fills`, `data/runtime`, `data/session-backups`, and `data/recovered-workspaces` contain local trading-session state and recovery material.
 - `data/downloads` contains packaged client artifacts served by the local/cloud portal.
 - `data/credentials` is the expected local location for service-account files. Do not commit secrets.
+- `data/acme-imports` contains copied Acme/RVEX/Joule source artifacts needed to reconstruct legacy intelligence, rules, and research content.
+- `data/window-payloads/acme` contains generated Cerious-native JSON payloads served by `/api/acme/...` widget endpoints. Runtime widgets must use these local payloads or service read models, not old workspace paths.
 - `.env` is local-only and ignored by git. `.env.example` documents the variables required by cloud secrets.
 
 ## Preserved Legacy Source
 
 The Acme/RVEX/Joule materials that may still matter for intelligence, rules, widgets, definitions, research, and reconstruction are copied into:
 
-`data/legacy-source`
+`data/acme-imports`
 
-Captured source roots:
-
-- `ACME`
-- `Joule`
-- `RVEX`
-- `Stable Build Backup`
+Captured source material is stored as Cerious-local archive files under `data/acme-imports`; no runtime service should read from the original source folders.
 
 Generated dependency folders and browser caches were excluded or pruned from the preserved copy. The preserved set is source/history material only; runtime code should import from the active Cerious folders or from documented package-local data paths.
 
-Nested `.gitignore` files from copied legacy repositories were removed from `data/legacy-source` so a Git-based migration does not silently skip preserved exports or research data.
+Generated runtime JSON for the current terminal lives in `data/window-payloads/acme`. That folder is Cerious-native and may be deployed with the app. The UI and gateway should never read directly from old RevX/Joule folders outside this project root.
 
 ## Endpoint Configuration
 
@@ -65,19 +64,9 @@ Databento CME settings are environment-driven through:
 
 Do not hard-code exchange-specific price math or product definitions in UI widgets. Product definitions, tick size, multipliers, book state, last trade, top of book, positions, fills, and PnL must come from service-layer subscriptions or documented package-local data files.
 
-## Desktop Client
+## Browser UI
 
-The current thin-client scripts were synced into `Cerious Desktop` and the zip was refreshed:
-
-`Cerious Desktop\CeriousSystems-Win64-ThinClient.zip`
-
-The thin client resolves the application by:
-
-1. `CERIOUS_SYSTEMS_ROOT`
-2. sibling `Cerious local`
-3. package-relative fallback
-
-This keeps the desktop package relocatable with the Cerious Systems folder.
+The active client workflow is the React web terminal. Tauri desktop packaging was removed from this active branch. Startup should bring up the C++ gateway and native services, then the browser/Chrome launcher should open the React terminal.
 
 ## Cloud Migration Rules
 
@@ -86,4 +75,4 @@ This keeps the desktop package relocatable with the Cerious Systems folder.
 3. Do not upload the real `.env` or private credentials.
 4. Do not depend on old `ACME`, `RVEX`, `Joule`, dated Codex worktrees, desktop paths, or browser cache folders.
 5. If a future service needs a file, put it under `Cerious local\data` or document the environment variable that points to it.
-6. If migrating through GitHub, include the untracked `data/legacy-source` tree and `.env.example`; keep `.env` and `data/credentials/*.json` out of source control.
+6. If migrating through GitHub, include `data/acme-imports`, `data/window-payloads/acme`, and `.env.example`; keep `.env` and `data/credentials/*` out of source control.

@@ -1,0 +1,130 @@
+{
+  "service": "signal.cross-spread",
+  "fetchedAt": "2026-06-21T14:18:00.000Z",
+  "rows": [
+    {
+      "key": "ES_NQ",
+      "label": "ES/NQ",
+      "score": 72,
+      "z": -0.97,
+      "spread": -560.25,
+      "signal": "Cheap vs 20D mean; wait for confirmation.",
+      "expression": "Buy ES / sell NQ when the spread re-enters from below the band.",
+      "risk": "Avoid premature fades when Nasdaq momentum persists.",
+      "location": 72,
+      "confirmation": 61,
+      "regime": 57,
+      "liquidity": 82
+    },
+    {
+      "key": "RTY_ES",
+      "label": "RTY/ES",
+      "score": 66,
+      "z": -0.82,
+      "spread": -606.5,
+      "signal": "Cheap but requires rates and credit confirmation.",
+      "expression": "Buy RTY / sell ES only if rates and credit do not deteriorate.",
+      "risk": "Small-cap cheap can stay cheap in risk-off regimes.",
+      "location": 66,
+      "confirmation": 52,
+      "regime": 55,
+      "liquidity": 68
+    },
+    {
+      "key": "YM_ES",
+      "label": "YM/ES",
+      "score": 58,
+      "z": 0.73,
+      "spread": 1008.0,
+      "signal": "Value leadership watch; avoid forcing.",
+      "expression": "Long YM / short ES if Dow leadership confirms.",
+      "risk": "Often defensive value, not true risk-on.",
+      "location": 58,
+      "confirmation": 49,
+      "regime": 57,
+      "liquidity": 63
+    }
+  ],
+  "playbookRows": [
+    {
+      "signalCombination": "RTY/ES up + ES/NQ up",
+      "interpretation": "Small caps outperform while Nasdaq underperforms. Broadening or domestic cyclicals.",
+      "expression": "Long RTY / short NQ",
+      "risk": "Watch rates and credit. This can reverse violently on hawkish shocks."
+    },
+    {
+      "signalCombination": "RTY/ES down + ES/NQ down",
+      "interpretation": "Small caps lag while Nasdaq leads. Narrow mega-cap growth regime.",
+      "expression": "Long NQ / short RTY",
+      "risk": "Momentum can persist. Avoid premature fades."
+    },
+    {
+      "signalCombination": "YM/ES up + RTY/ES up",
+      "interpretation": "Value, cyclicals, and small caps all improving.",
+      "expression": "Long YM and RTY basket / short ES",
+      "risk": "Confirm with market breadth and regional banks."
+    },
+    {
+      "signalCombination": "YM/ES up + RTY/ES down",
+      "interpretation": "Dow/value outperforms, but small-cap credit beta remains suspect.",
+      "expression": "Long YM / short RTY",
+      "risk": "Often defensive value, not true risk-on."
+    },
+    {
+      "signalCombination": "ES/NQ down + YM/ES down",
+      "interpretation": "Nasdaq and S&P growth leadership over Dow value.",
+      "expression": "Long NQ / short YM",
+      "risk": "Size carefully around earnings concentration in mega-cap tech."
+    }
+  ],
+  "productRows": [
+    {
+      "spread": "ES/NQ",
+      "label": "S&P versus Nasdaq",
+      "tag": "Growth leadership",
+      "formula": "ES - 0.2666667 * NQ",
+      "buy": "Buy ES / sell NQ",
+      "sell": "Sell ES / buy NQ",
+      "nuance": "Tracks broad market versus mega-cap growth leadership."
+    },
+    {
+      "spread": "RTY/ES",
+      "label": "Russell versus S&P",
+      "tag": "Small-cap beta",
+      "formula": "RTY - 0.4285714 * ES",
+      "buy": "Buy RTY / sell ES",
+      "sell": "Sell RTY / buy ES",
+      "nuance": "Most sensitive to credit, rates, regional banks, and domestic cyclical tone."
+    },
+    {
+      "spread": "YM/ES",
+      "label": "Dow versus S&P",
+      "tag": "Value/cyclical leadership",
+      "formula": "YM - 6.6666667 * ES",
+      "buy": "Buy YM / sell ES",
+      "sell": "Sell YM / buy ES",
+      "nuance": "Can be defensive value, so confirm with breadth before calling it risk-on."
+    }
+  ],
+  "tradePlanRows": [
+    {
+      "title": "Entry",
+      "body": "Enter at +/-1.5 ATR only when macro regime, GOOSE direction, and live spread signal agree."
+    },
+    {
+      "title": "Layering",
+      "body": "Use three clips: 40% at trigger, 30% at extension, 30% only after stabilization."
+    },
+    {
+      "title": "Exit",
+      "body": "Take 1/3 at the rolling mean, another 1/3 at +0.5 ATR, and trail the final 1/3."
+    }
+  ],
+  "riskChecklistRows": [
+    { "risk": "Tail beta mismatch", "control": "Measure dollar delta by leg and rebalance when index levels move materially." },
+    { "risk": "Hidden ES exposure", "control": "When combining spreads, net all ES legs before sizing." },
+    { "risk": "Volatility regime shift", "control": "Use ATR percentile to reduce size above the 80th percentile." },
+    { "risk": "Macro invalidation", "control": "Stop buying small-cap weakness if rates and credit both deteriorate." },
+    { "risk": "Execution slippage", "control": "Use legging settings conservatively around data releases and cash open." }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "service": "risk.money-management",
+  "fetchedAt": "2026-06-21T14:18:00.000Z",
+  "sections": [],
+  "rows": [
+    ["Risk unit", "Define 1R as the dollar loss from entry to invalidation on the full layered position."],
+    ["Daily loss stop", "Stop trading new entries after -2R realized or after two failed attempts in the same spread."],
+    ["Correlation cap", "Do not hold multiple spread trades that leave the same hidden ES exposure unless the net ES leg is intentional."],
+    ["Size cap", "Size from the thinner leg. For RTY/ES, RTY liquidity is usually the bottleneck; for YM/ES, watch YM liquidity."],
+    ["Regime cap", "If GOOSE confidence is Low, max size is one starter clip. Medium permits two clips. High permits full layering."],
+    ["Event cap", "Before CPI, FOMC, NFP, or major megacap earnings, either flatten or reduce to a size you can hold through a gap."]
+  ]
+}

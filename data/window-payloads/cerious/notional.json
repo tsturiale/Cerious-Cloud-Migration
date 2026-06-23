@@ -1,0 +1,33 @@
+{
+  "service": "risk.notional",
+  "fetchedAt": "2026-06-21T14:18:00.000Z",
+  "rows": [
+    {
+      "symbol": "ES_NQ",
+      "label": "ES/NQ",
+      "meaning": "Dollar-notional normalized S&P 500 versus Nasdaq relative value spread.",
+      "ttRatio": "3 ES : 2 NQ",
+      "syntheticTickValue": 37.5,
+      "displayValue": -560.25,
+      "basketDollarDiff": -84037.5
+    },
+    {
+      "symbol": "RTY_ES",
+      "label": "RTY/ES",
+      "meaning": "Small-cap beta and domestic cyclicals versus S&P 500.",
+      "ttRatio": "7 RTY : 3 ES",
+      "syntheticTickValue": 50,
+      "displayValue": -606.5,
+      "basketDollarDiff": -212275
+    },
+    {
+      "symbol": "YM_ES",
+      "label": "YM/ES",
+      "meaning": "Dow value/cyclical leadership versus S&P 500.",
+      "ttRatio": "10 YM : 1 ES",
+      "syntheticTickValue": 50,
+      "displayValue": 1008,
+      "basketDollarDiff": 50400
+    }
+  ]
+}

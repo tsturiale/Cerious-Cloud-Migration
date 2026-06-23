@@ -68,13 +68,13 @@ Live MBP-1 smoke:
 
 ```powershell
 $env:DATABENTO_API_KEY="..."
-.\native\price-feed-cpp\build\cerious_price_feed.exe --symbols ES.v.0,NQ.v.0,YM.v.0,RTY.v.0,CL.v.0,GC.v.0,ZM.v.0,ZS.v.0 --stype continuous --max-records 3
+.\native\price-feed-cpp\build\cerious_price_feed.exe --symbols ES.v.0,MES.v.0,NQ.v.0,MNQ.v.0,YM.v.0,MYM.v.0,RTY.v.0,M2K.v.0,CL.v.0,GC.v.0,ZM.v.0,ZS.v.0 --stype continuous --max-records 3
 ```
 
 Optional watchdog controls:
 
 ```powershell
-.\native\price-feed-cpp\build\cerious_price_feed.exe --symbols ES.v.0,NQ.v.0 --stype continuous --stale-ms 30000 --reconnect-ms 5000 --max-reconnect-ms 60000
+.\native\price-feed-cpp\build\cerious_price_feed.exe --symbols ES.v.0,MES.v.0,NQ.v.0,MNQ.v.0 --stype continuous --stale-ms 30000 --reconnect-ms 5000 --max-reconnect-ms 60000
 ```
 
 The gateway passes `CERIOUS_PRICE_FEED_STALE_MS`, `CERIOUS_PRICE_FEED_RECONNECT_MS`, and `CERIOUS_PRICE_FEED_MAX_RECONNECT_MS` through to this process. Defaults are 30 seconds stale threshold, 5 seconds normal reconnect delay, and 60 seconds max backoff.

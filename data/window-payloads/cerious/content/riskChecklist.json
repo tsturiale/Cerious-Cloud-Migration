@@ -1,0 +1,12 @@
+{
+  "service": "risk.checklist",
+  "fetchedAt": "2026-06-21T14:18:00.000Z",
+  "sections": [],
+  "rows": [
+    ["Tail beta mismatch", "Measure dollar delta by leg and rebalance when index levels move materially."],
+    ["Hidden ES exposure", "When combining spreads, net all ES legs before sizing."],
+    ["Volatility regime shift", "Use ATR percentile to reduce size above the 80th percentile."],
+    ["Macro invalidation", "Stop buying small-cap weakness if rates and credit both deteriorate."],
+    ["Execution slippage", "Use legging settings conservatively around data releases and cash open."]
+  ]
+}
